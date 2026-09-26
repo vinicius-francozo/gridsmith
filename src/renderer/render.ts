@@ -19,7 +19,7 @@
  */
 
 import type { AssetDef, AssetLibrary, Rotation, Scene } from '../core/types';
-import { validateBitmapSize, validatePlacement } from '../assets/contract';
+import { validateBitmapSize, validateCatalog, validatePlacement } from '../assets/contract';
 import { buildDrawList } from './drawlist';
 import type { DrawList, PixelLine } from './drawlist';
 
@@ -31,6 +31,70 @@ type Context2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
 /** Drawn in place of an asset the library could not supply. */
 const MISSING_ASSET_COLOR = '#ff00c8';
+
+/**
+ * Rejects a library whose own definitions break the asset contract.
+ *
+ * `contract.ts` calls the library an untrusted boundary — the one place where
+ * data the engine did not produce walks in — and that is exactly why
+ * `validateAssetDef` and `validateCatalog` exist. They were only ever run
+ * inside `createPlaceholderLibrary`, that is, over the catalogue this
+ * repository writes itself, and never over the library an author supplies.
+ *
+ * What slipped through: a floor tile whose definition claims a 2x2 footprint.
+ * `validateBitmapSize` accepts its 140x140px bitmap, because the expected size
+ * honours `def.footprint` — while a `fill` command always paints one cell. The
+ * pack is scaled 2:1 onto the map, with no error and no magenta, which is the
+ * very class of misalignment the size guard was written to stop. The clause
+ * that catches it, "a tile covers exactly one cell", lives in
+ * `validateAssetDef` and had nowhere to run.
+ *
+ * This runs it, over every definition the list will actually consult. It
+ * refuses instead of drawing a marker, because a malformed definition is a
+ * fault in the supplied data rather than one missing piece of art, and it is
+ * the author's to fix before the map means anything.
+ *
+ * Definitions are gathered per distinct id the list asks for, which is also
+ * what makes `validateCatalog`'s between-entries clause worth running here: a
+ * library that answers two different ids with one definition would draw the
+ * same prop in both places forever, and that shows up as a duplicate id in the
+ * gathered list. The same reasoning covers a definition whose own `id`
+ * disagrees with the id it was fetched under.
+ *
+ * @throws {TypeError} listing every fault at once.
+ */
+function assertLibraryDefs(list: DrawList, library: AssetLibrary): void {
+  const issues: string[] = [];
+  const defs: AssetDef[] = [];
+  const asked = new Set<string>();
+
+  for (const command of list.commands) {
+    if (command.kind !== 'asset' && command.kind !== 'fill') {
+      continue;
+    }
+    if (asked.has(command.assetId)) {
+      continue;
+    }
+    asked.add(command.assetId);
+
+    const def = library.get(command.assetId);
+    if (def === undefined) {
+      continue;
+    }
+    if (def.id !== command.assetId) {
+      issues.push(
+        `${command.assetId}: the library answers with a definition for ` +
+          `${JSON.stringify(def.id)}`,
+      );
+    }
+    defs.push(def);
+  }
+
+  issues.push(...validateCatalog(defs));
+  if (issues.length > 0) {
+    throw new TypeError(`the asset library breaks the contract: ${issues.join('; ')}`);
+  }
+}
 
 /**
  * Resolves every bitmap the list needs, once per (id, rotation) pair.
@@ -49,37 +113,47 @@ const MISSING_ASSET_COLOR = '#ff00c8';
  * come out *looking aligned* and be wrong by six pixels a cell all the way
  * across the map. The check costs one comparison per distinct (id, rotation)
  * pair per render — not per frame, since nothing here runs in a loop.
+ *
+ * Art is only ever asked for under an id the library will also *describe*. A
+ * library that serves a bitmap from `bitmap()` and says nothing from `get()`
+ * leaves the size clause with no expected size to compare against, and the
+ * guard would be skipped on exactly the library it exists for; drawing that
+ * bitmap anyway stretched a 9x9px image across 350x140px in silence. Such an
+ * id is treated as missing, which the magenta rectangle already answers.
+ *
+ * A bitmap that is turned away is closed. `ImageBitmap` holds decoded pixels
+ * outside the JavaScript heap, and dropping the reference leaves them to the
+ * collector's whim — one leak per distinct (id, rotation) pair, per render,
+ * for as long as the badly sized pack is in use.
  */
 async function resolveBitmaps(
   list: DrawList,
   library: AssetLibrary,
 ): Promise<Map<string, ImageBitmap>> {
-  const wanted = new Map<string, { id: string; rotation: Rotation }>();
+  const wanted = new Map<string, { id: string; rotation: Rotation; def: AssetDef }>();
 
   for (const command of list.commands) {
-    if (command.kind === 'asset') {
-      wanted.set(`${command.assetId}@${command.rotation}`, {
-        id: command.assetId,
-        rotation: command.rotation,
-      });
-    } else if (command.kind === 'fill' && library.get(command.assetId) !== undefined) {
-      wanted.set(`${command.assetId}@${command.rotation}`, {
-        id: command.assetId,
-        rotation: command.rotation,
-      });
+    if (command.kind !== 'asset' && command.kind !== 'fill') {
+      continue;
     }
+    const def = library.get(command.assetId);
+    if (def === undefined) {
+      continue;
+    }
+    wanted.set(`${command.assetId}@${command.rotation}`, {
+      id: command.assetId,
+      rotation: command.rotation,
+      def,
+    });
   }
 
   const resolved = new Map<string, ImageBitmap>();
   await Promise.all(
-    [...wanted].map(async ([key, { id, rotation }]) => {
+    [...wanted].map(async ([key, { id, rotation, def }]) => {
       try {
         const bitmap = await library.bitmap(id, rotation);
-        const def = library.get(id);
-        if (
-          def !== undefined &&
-          validateBitmapSize(def, rotation, { w: bitmap.width, h: bitmap.height }).length > 0
-        ) {
+        if (validateBitmapSize(def, rotation, { w: bitmap.width, h: bitmap.height }).length > 0) {
+          bitmap.close();
           return;
         }
         resolved.set(key, bitmap);
@@ -116,13 +190,15 @@ function paintGrid(
 /**
  * Executes `list` onto `canvas`, resizing it to the list's own dimensions.
  *
- * @throws {TypeError} if the canvas has no 2d context.
+ * @throws {TypeError} if the supplied library's definitions break the asset
+ *                     contract, or if the canvas has no 2d context.
  */
 export async function executeDrawList(
   list: DrawList,
   library: AssetLibrary,
   canvas: RenderTarget,
 ): Promise<void> {
+  assertLibraryDefs(list, library);
   const bitmaps = await resolveBitmaps(list, library);
 
   // Assigning the size also clears the canvas, so a second render never shows
@@ -232,8 +308,8 @@ function assertPlacements(scene: Scene, library: AssetLibrary): void {
  * virtual tabletop's own.
  *
  * @throws {RangeError} if the scene is inconsistent — see `buildDrawList`.
- * @throws {TypeError} if a placement breaks the asset contract, or if the
- *                     canvas has no 2d context.
+ * @throws {TypeError} if a placement or a library definition breaks the asset
+ *                     contract, or if the canvas has no 2d context.
  */
 export async function renderScene(
   scene: Scene,

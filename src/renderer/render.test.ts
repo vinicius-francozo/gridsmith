@@ -246,6 +246,70 @@ describe('the floor', () => {
   });
 });
 
+describe('the library the renderer was handed', () => {
+  it('refuses a tile definition that claims more than one cell', async () => {
+    // The size clause alone cannot see this one. A 2x2 tile definition makes
+    // `validateBitmapSize` expect 140x140px, the library hands back exactly
+    // that, and the guard is satisfied — while a `fill` command always paints
+    // one 70x70 cell, so `drawImage` scales the whole floor pack 2:1 with no
+    // error and no magenta. The clause that catches it, "a tile covers
+    // exactly one cell", lives in `validateAssetDef`, which until now ran
+    // only over the catalogue this repository generates for itself and never
+    // over the library an author supplies — which is the whole reason the
+    // contract calls the library an untrusted boundary.
+    const tile = assetDef({ id: 'tile/wood_plank/0', kind: 'tile', footprint: { w: 2, h: 2 } });
+    const canvas = new RecordingCanvas();
+    await expect(
+      renderScene(sceneOf({ w: 1, h: 1 }), libraryOf([tile]), canvas.asTarget()),
+    ).rejects.toThrow(/a tile covers exactly one cell/);
+  });
+
+  it('names every fault in the definitions the scene reaches for', async () => {
+    const canvas = new RecordingCanvas();
+    await expect(
+      renderScene(
+        sceneOf({ w: 3, h: 1 }, { props: [prop()] }),
+        libraryOf([
+          assetDef({ id: 'tile/wood_plank/0', kind: 'tile', footprint: { w: 2, h: 2 } }),
+          assetDef({ tags: ['wood', 'wood'] }),
+        ]),
+        canvas.asTarget(),
+      ),
+    ).rejects.toThrow(/a tile covers exactly one cell.*listed twice|listed twice.*a tile covers/s);
+  });
+
+  it('says so when the library answers an id with somebody else’s definition', async () => {
+    // The duplicate-id clause of `validateCatalog` is about two entries
+    // resolving to one; through `AssetLibrary.get` that shows up as a lookup
+    // answering with a definition that is not the one asked for, and the map
+    // then draws the wrong art forever without a word. A floor tile is where
+    // it has to be caught: `validatePlacement` has the same clause, but it
+    // only ever sees props, and a tile has no placement to check.
+    const canvas = new RecordingCanvas();
+    const wrong: AssetLibrary = {
+      ...libraryOf([]),
+      get: (): AssetDef | undefined =>
+        assetDef({ id: 'tile/flagstone/2', kind: 'tile', footprint: { w: 1, h: 1 } }),
+    };
+    await expect(
+      renderScene(sceneOf({ w: 1, h: 1 }), wrong, canvas.asTarget()),
+    ).rejects.toThrow(/tile\/wood_plank\/0: the library answers with a definition for "tile\/flagstone\/2"/);
+  });
+
+  it('leaves a definition the library never claimed alone', async () => {
+    // A prop the library does not know is already answered by the magenta
+    // rectangle, and there is no definition to judge. Refusing the whole
+    // render over it would turn one missing asset into no map at all.
+    const canvas = new RecordingCanvas();
+    await renderScene(
+      sceneOf({ w: 3, h: 1 }, { props: [prop({ assetId: 'group/unknown' })] }),
+      libraryOf([]),
+      canvas.asTarget(),
+    );
+    expect(canvas.fillStyleAt(canvas.last('fillRect'))).toBe('#ff00c8');
+  });
+});
+
 describe('the props', () => {
   it('draws the prop’s bitmap over the rectangle it reserved', async () => {
     const canvas = new RecordingCanvas();
@@ -285,6 +349,50 @@ describe('the props', () => {
     );
     expect(canvas.of('drawImage')).toEqual([]);
     expect(canvas.fillStyleAt(canvas.last('fillRect'))).toBe('#ff00c8');
+  });
+
+  it('draws no art the library will not also describe', async () => {
+    // Both size guards hang off `get()`. A library that serves a bitmap and
+    // says nothing about the id leaves them with no expected size to compare
+    // against, so they were skipped on exactly the library they exist for: a
+    // 9x9px image was stretched across 350x140px, no magenta, no error.
+    const canvas = new RecordingCanvas();
+    const silent: AssetLibrary = {
+      get: (): AssetDef | undefined => undefined,
+      query: (): AssetDef[] => [],
+      bitmap: async (): Promise<ImageBitmap> => fakeBitmap({ w: 9, h: 9 }),
+    };
+    await renderScene(
+      sceneOf({ w: 5, h: 2 }, {
+        props: [prop({ assetId: 'anchor/bar_counter', layer: 'anchor', footprint: { w: 5, h: 2 } })],
+      }),
+      silent,
+      canvas.asTarget(),
+    );
+    expect(canvas.of('drawImage')).toEqual([]);
+    expect(canvas.of('fillRect').at(-1)?.args).toEqual([0, 0, 350, 140]);
+    expect(canvas.fillStyleAt(canvas.last('fillRect'))).toBe('#ff00c8');
+  });
+
+  it('closes a bitmap it turns away, instead of leaking its pixels', async () => {
+    // `ImageBitmap` holds decoded pixels off the JavaScript heap; a dropped
+    // reference leaves them to the collector's whim. One per distinct
+    // (id, rotation) pair, per render, for as long as the badly sized pack is
+    // in use.
+    const closed: ImageBitmap[] = [];
+    const canvas = new RecordingCanvas();
+    const def = assetDef();
+    const library: AssetLibrary = {
+      ...libraryOf([def]),
+      bitmap: async (): Promise<ImageBitmap> => {
+        const bitmap = fakeBitmap({ w: 3 * 64, h: 64 });
+        Reflect.set(bitmap, 'close', () => closed.push(bitmap));
+        return bitmap;
+      },
+    };
+    await renderScene(sceneOf({ w: 3, h: 1 }, { props: [prop()] }), library, canvas.asTarget());
+    expect(canvas.of('drawImage')).toEqual([]);
+    expect(closed).toHaveLength(1);
   });
 
   it('refuses a placement whose footprint disagrees with the library’s own', async () => {
