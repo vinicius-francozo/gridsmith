@@ -82,7 +82,10 @@ export type ClaudeInterpreterOptions = {
   model?: string;
   /** A client to use instead of building one. Test seam. */
   client?: Anthropic;
-  /** What the environment looks like, for telling CORS from a dead connection. Test seam. */
+  /**
+   * What the environment looks like, instead of reading it when a request
+   * fails, for telling CORS from a dead connection. Test seam.
+   */
   runtime?: Runtime;
 };
 
@@ -102,13 +105,14 @@ export function createClaudeClient(apiKey: string): Anthropic {
 export class ClaudeInterpreter implements Interpreter {
   private readonly apiKey: string;
   private readonly model: string;
-  private readonly runtime: Runtime;
+  /** Set only when a caller supplied one; otherwise the environment is read at the failure. */
+  private readonly fixedRuntime: Runtime | undefined;
   private client: Anthropic | undefined;
 
   constructor(options: ClaudeInterpreterOptions) {
     this.apiKey = options.apiKey;
     this.model = options.model ?? INTERPRETER_MODEL;
-    this.runtime = options.runtime ?? detectRuntime();
+    this.fixedRuntime = options.runtime;
     this.client = options.client;
   }
 
@@ -137,7 +141,15 @@ export class ClaudeInterpreter implements Interpreter {
     try {
       return this.readAnswer(await this.request(text));
     } catch (error) {
-      throw classifyRequestFailure(error, this.runtime);
+      // The environment is read here rather than in the constructor. The page
+      // builds an interpreter the moment a key is pasted and may not call it
+      // for minutes, and what is being told apart — a blocked cross-origin
+      // response from a dead connection — is a fact about the moment the
+      // request died. A reading taken earlier would report a connection that
+      // dropped in between as a `CorsError`, blaming a proxy or an extension
+      // for an ordinary loss of signal: exactly the wrong diagnosis this
+      // classification exists to avoid.
+      throw classifyRequestFailure(error, this.fixedRuntime ?? detectRuntime());
     }
   }
 

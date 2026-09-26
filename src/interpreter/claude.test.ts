@@ -270,6 +270,39 @@ describe('failing in a way the interface can explain', () => {
   });
 });
 
+describe('telling a blocked response from a dead connection', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const connectionFailure = (): Anthropic => failingClient(new Anthropic.APIConnectionError({ message: 'Connection error.' }));
+
+  it('reads the environment when the request fails, not when the interpreter was built', async () => {
+    // The page builds this the moment a key is pasted, and may not call it
+    // for minutes. Photographed in the constructor, a connection that dropped
+    // in between comes back as a CORS block telling the person to look at
+    // their proxy or their extensions, which is the one diagnosis this
+    // classification exists to keep them from being given.
+    vi.stubGlobal('window', { document: {} });
+    vi.stubGlobal('navigator', { onLine: true });
+    const interpreter = new ClaudeInterpreter({ apiKey: 'sk-ant-test', client: connectionFailure() });
+
+    vi.stubGlobal('navigator', { onLine: false });
+
+    await expect(interpreter.interpret('a hall')).rejects.toBeInstanceOf(NetworkError);
+  });
+
+  it('still calls it a blocked response when the browser has a connection at the failure', async () => {
+    vi.stubGlobal('window', { document: {} });
+    vi.stubGlobal('navigator', { onLine: false });
+    const interpreter = new ClaudeInterpreter({ apiKey: 'sk-ant-test', client: connectionFailure() });
+
+    vi.stubGlobal('navigator', { onLine: true });
+
+    await expect(interpreter.interpret('a hall')).rejects.toBeInstanceOf(CorsError);
+  });
+});
+
 describe('reading a response that arrived but says nothing', () => {
   it('reports a response with no text to read', async () => {
     const { client } = stubClient(respondsWith(null));
