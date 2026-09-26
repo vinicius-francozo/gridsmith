@@ -150,7 +150,15 @@ export function validateAssetDef(def: AssetDef): ContractIssue[] {
   }
 
   if (typeof def.footprint !== 'object' || def.footprint === null) {
-    issues.push(`footprint must be a size in cells, got ${typeof def.footprint}`);
+    // `typeof null` is "object", which is the one answer that tells the reader
+    // of the report nothing: a footprint that is an object is a shape problem
+    // and a footprint that is absent is a missing field, and they are fixed in
+    // different places.
+    issues.push(
+      `footprint must be a size in cells, got ${
+        def.footprint === null ? 'null' : typeof def.footprint
+      }`,
+    );
   } else {
     issues.push(...footprintIssues(def.footprint));
 

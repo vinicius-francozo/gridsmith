@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { hashString, hslToHex, inkOn, markerColor, materialColor } from './palette';
+import {
+  VARIANT_LADDER_RUNGS,
+  hashString,
+  hslToHex,
+  inkOn,
+  markerColor,
+  materialColor,
+} from './palette';
 
 describe('hashString', () => {
   it('returns the same hash for the same text', () => {
@@ -99,6 +106,17 @@ describe('materialColor', () => {
   it('separates the variants of one material', () => {
     const shades = [0, 1, 2, 3].map((variant) => materialColor('oak_plank', variant));
     expect(new Set(shades).size).toBe(4);
+  });
+
+  it('folds variant 4 back onto variant 0, which is the known limit', () => {
+    // The lightness ladder has four rungs and then repeats. No material in the
+    // frozen vocabulary declares a fifth variant — `wood_plank` and
+    // `flagstone` are the richest, at four — so nothing reaches this today.
+    // Pinned rather than left implicit so that a material gaining a fifth
+    // variant is a visible decision about the palette and not two cuts of one
+    // floor quietly coming out the same colour.
+    expect(materialColor('oak_plank', VARIANT_LADDER_RUNGS)).toBe(materialColor('oak_plank', 0));
+    expect(VARIANT_LADDER_RUNGS).toBe(4);
   });
 
   it('rejects an empty material name', () => {

@@ -88,9 +88,22 @@ function assertVariant(variant: number): void {
   }
 }
 
+/** How many variants the lightness ladder tells apart before it repeats. */
+export const VARIANT_LADDER_RUNGS = 4;
+
 /**
  * The marker colour for a material, with variants of one material separated by
  * lightness only — they are the same floor, cut differently.
+ *
+ * **Known limit: the ladder has four rungs.** The lightness shift steps
+ * through `VARIANT_LADDER_RUNGS` offsets and then repeats, so variant 4 is
+ * drawn exactly as variant 0. Any pure map from an unbounded integer into a
+ * bounded lightness range has to fold somewhere; this is where. It is not
+ * reachable today — the richest materials in the frozen vocabulary,
+ * `wood_plank` and `flagstone`, declare four variants each — and it becomes
+ * reachable the moment one declares five, at which point two cuts of the same
+ * floor become indistinguishable on the map. `palette.test.ts` pins the fold
+ * so that it is a known limit rather than a surprise.
  *
  * @throws {RangeError} if `material` is empty, or `variant` is not a
  *                      non-negative integer.
@@ -109,7 +122,7 @@ export function materialColor(material: string, variant: number): string {
   // Muted on purpose: a battlemap floor is a backdrop, and saturated fills
   // would fight the props drawn on top of them.
   const saturation = 22 + ((hash >>> 9) % 16);
-  const lightness = 30 + ((hash >>> 17) % 14) + ((variant % 4) * 4 - 6);
+  const lightness = 30 + ((hash >>> 17) % 14) + ((variant % VARIANT_LADDER_RUNGS) * 4 - 6);
   return hslToHex(hue, saturation, lightness);
 }
 

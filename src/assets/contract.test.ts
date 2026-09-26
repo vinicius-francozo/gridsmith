@@ -222,10 +222,19 @@ describe('validateAssetDef', () => {
   it('names a missing footprint and a missing tag list for what they are', () => {
     expect(
       validateAssetDef({ ...def(), footprint: undefined } as unknown as AssetDef).join(' '),
-    ).toContain('footprint must be a size in cells');
+    ).toContain('footprint must be a size in cells, got undefined');
     expect(
       validateAssetDef({ ...def(), tags: undefined } as unknown as AssetDef).join(' '),
     ).toContain('tags must be an array');
+  });
+
+  it('says null rather than object for a footprint that is null', () => {
+    // `typeof null` is "object", which is the one answer the reader of a
+    // report cannot act on: a footprint that really is an object has a shape
+    // to fix, and one that is null has a field to supply.
+    expect(
+      validateAssetDef({ ...def(), footprint: null } as unknown as AssetDef).join(' '),
+    ).toContain('footprint must be a size in cells, got null');
   });
 
   it('rejects a tag that is not a string', () => {

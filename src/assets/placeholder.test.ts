@@ -96,8 +96,15 @@ describe('PLACEHOLDER_CATALOG', () => {
     // `prop.footprint === rotatedFootprint(def.footprint, rotation)` — 3x2 can
     // never satisfy that for 2x1. Two sizes therefore need two names, which is
     // why `hearth` and `hearth_small` are separate entries rather than one.
-    // Names are checked without their `<kind>/` prefix too: the same name
-    // under two kinds is two ids, and would be the same trap wearing a hat.
+    //
+    // Names are checked without their `<kind>/` prefix too, and for a
+    // different reason than the ids are — not the same trap wearing a hat.
+    // Under the `<kind>/<name>` scheme `group/crate` and `scatter/crate`
+    // are two ids that resolve independently, so nothing is drawn wrong and
+    // no footprint check is confused. What breaks is the map: `readableName`
+    // strips the prefix, so both markers are labelled `crate`, and a library
+    // whose entire purpose is to say on the image which asset landed where
+    // stops being able to say it.
     const ids = PLACEHOLDER_CATALOG.map((def) => def.id);
     expect([...new Set(ids)]).toEqual(ids);
 
@@ -137,7 +144,12 @@ describe('PLACEHOLDER_CATALOG', () => {
 });
 
 describe('MATERIAL_VARIANTS', () => {
-  it('is the frozen material vocabulary, with each material’s variant count', () => {
+  it('records the frozen material vocabulary, unchanged, and nothing more', () => {
+    // The literal is deliberately a copy: this pins the record against an
+    // accidental edit, which is all a table with no consumer can be pinned
+    // against. It does not and cannot catch the generator adding a material —
+    // nothing here would fail — and the docstring says so rather than
+    // claiming otherwise.
     expect(MATERIAL_VARIANTS).toEqual({
       void: 1,
       wood_plank: 4,

@@ -73,15 +73,22 @@ const BORDER_WIDTH_PX = 3;
 
 /**
  * The floor and wall materials the generator emits, and how many variants each
- * one has.
+ * one has, as this side of the frozen agreement recorded them.
  *
- * This is a **vocabulary, not a catalogue**: the marking library serves no tile
- * bitmap at all (see `PLACEHOLDER_CATALOG`), so nothing here is ever drawn. It
- * is written down so the two halves of the frozen agreement — the names the
- * generator emits and the names this side expects — can be read against each
- * other in one place instead of drifting apart silently, which is the failure
- * that ends with a whole floor rendering as the wrong colour and nobody
- * knowing why.
+ * It is a **record, not a mechanism**, and the distinction is worth stating
+ * plainly because the two look alike in a diff. The marking library serves no
+ * tile bitmap at all (see `PLACEHOLDER_CATALOG`), and `materialColor` derives
+ * a colour from any material name it is handed, so nothing in this repository
+ * consults this table and nothing fails if it is wrong. It does **not** stop
+ * the two vocabularies drifting apart: if the generator gains a material
+ * tomorrow, every test here still passes.
+ *
+ * What it does is make the drift *readable*. The frozen list lives in the
+ * plan, in prose; this is the same list in one place in the code, next to the
+ * catalogue it belongs with, so that a person comparing the two sides has
+ * somewhere to look. `placeholder.test.ts` pins it against an explicit
+ * literal, which catches an accidental edit to the record — not a
+ * disagreement with the generator, which only a person can see.
  */
 export const MATERIAL_VARIANTS: Readonly<Record<string, number>> = {
   void: 1,
