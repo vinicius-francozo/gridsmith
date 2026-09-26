@@ -379,10 +379,12 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
     // meant this one.
     writeApiKey(services.storage, apiKey.value);
 
-    setBusy(true);
-    status.textContent = UI_TEXT.interpreting;
-    downloadButton.disabled = true;
+    // The stage is not announced here: `generateMap` reports `interpreting`
+    // before it does anything else, and saying it twice would mutate a polite
+    // live region twice with the same words — one announcement per generation
+    // is the point of the region.
     drawn = undefined;
+    setBusy(true);
     // Only here, and not with the failure above. The refusals in between leave
     // the previous map on the canvas and the download button live on purpose,
     // and a map still offered for saving has to keep the notices that say what
@@ -397,7 +399,18 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
           library: services.library,
           target,
           onStage: (stage) => {
-            status.textContent = stage === 'drawing' ? UI_TEXT.drawing : UI_TEXT.interpreting;
+            switch (stage) {
+              case 'interpreting':
+                status.textContent = UI_TEXT.interpreting;
+                break;
+              case 'drawing':
+                status.textContent = UI_TEXT.drawing;
+                break;
+              default: {
+                const unreachable: never = stage;
+                throw new TypeError(`unknown stage: ${JSON.stringify(unreachable)}`);
+              }
+            }
           },
         },
       );
