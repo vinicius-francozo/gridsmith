@@ -126,19 +126,38 @@ describe('bfs', () => {
     expect(bfs({ x: 0, y: 0 }, size, isPassable)).toHaveLength(6);
   });
 
-  it('visits in breadth-first order, nearest ring first', () => {
+  it('visits every cell in breadth-first order, nearest first', () => {
+    // A square grid flooded from a corner: the full order is asserted, not
+    // just the first ring, because the first ring of a flood is the same
+    // under any traversal that records a cell as it is discovered. Only
+    // breadth-first produces the whole sequence below — a stack-based flood
+    // would dive down one column first. Distance order is a contract: F2's
+    // circulation clearance reads it, and a map generated once has to be
+    // reproducible.
     const { size, isPassable } = gridFrom([
-      '...',
-      '...',
-      '...',
+      '....',
+      '....',
+      '....',
+      '....',
     ]);
-    const order = bfs({ x: 1, y: 1 }, size, isPassable);
-    expect(order[0]).toEqual({ x: 1, y: 1 });
-    expect(order.slice(1, 5)).toEqual([
-      { x: 1, y: 0 },
-      { x: 2, y: 1 },
-      { x: 1, y: 2 },
-      { x: 0, y: 1 },
+    const order = bfs({ x: 0, y: 0 }, size, isPassable);
+    expect(order.map(cellKey)).toEqual([
+      '0,0',
+      '1,0',
+      '0,1',
+      '2,0',
+      '1,1',
+      '0,2',
+      '3,0',
+      '2,1',
+      '1,2',
+      '0,3',
+      '3,1',
+      '2,2',
+      '1,3',
+      '3,2',
+      '2,3',
+      '3,3',
     ]);
   });
 
