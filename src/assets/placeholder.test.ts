@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import type { AssetDef, AssetKind, Rotation } from '../core/types';
+import type { AssetDef, AssetKind, AssetLibrary, Rotation } from '../core/types';
 import { PIXELS_PER_CELL, validateCatalog } from './contract';
 import {
   MATERIAL_VARIANTS,
@@ -239,7 +239,14 @@ describe('createPlaceholderLibrary', () => {
 });
 
 describe('query', () => {
-  const library = createPlaceholderLibrary();
+  // Built inside a hook, not in the describe body. A catalogue fault raised
+  // while vitest is collecting is not a test failure: the file is dropped, the
+  // 32 tests in it are never counted, and the run still reports every
+  // remaining test passing.
+  let library: AssetLibrary;
+  beforeAll(() => {
+    library = createPlaceholderLibrary();
+  });
 
   it('covers every kind of prop the generator places', () => {
     // The marking library exists so the engine can be exercised end to end. A
@@ -277,7 +284,10 @@ describe('query', () => {
 });
 
 describe('get', () => {
-  const library = createPlaceholderLibrary();
+  let library: AssetLibrary;
+  beforeAll(() => {
+    library = createPlaceholderLibrary();
+  });
 
   it('finds a catalogued asset', () => {
     expect(library.get('anchor/hearth')?.footprint).toEqual({ w: 3, h: 2 });
@@ -294,9 +304,16 @@ describe('bitmap', () => {
     await expect(library.bitmap('anchor/throne', 0)).rejects.toThrow(RangeError);
   });
 
-  it('rejects a rotation outside the closed set', async () => {
+  it('rejects a rotation outside the closed set, in its own words', async () => {
+    // The message matters, not just the type. `rotatedFootprint` refuses the
+    // same value a frame deeper with wording that used to be identical, so
+    // deleting the library's own guard left this test green: it could see
+    // that *something* threw and not which guard it was, which is the same
+    // way a test passes for the wrong reason.
     const library = createPlaceholderLibrary();
-    await expect(library.bitmap('anchor/hearth', 45 as Rotation)).rejects.toThrow(RangeError);
+    await expect(library.bitmap('anchor/hearth', 45 as Rotation)).rejects.toThrow(
+      /the placeholder library was asked for rotation 45/,
+    );
   });
 
   it('says plainly that it needs a browser when there is no canvas', async () => {

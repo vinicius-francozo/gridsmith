@@ -301,8 +301,18 @@ export function createPlaceholderLibrary(
       if (def === undefined) {
         throw new RangeError(`no asset ${JSON.stringify(id)} in the placeholder catalogue`);
       }
+      // Worded differently from `rotatedFootprint`'s identical check on
+      // purpose. Both refuse the same value, so a test that only matched
+      // "rotation must be 0, 90, 180 or 270" could not say which one fired,
+      // and deleting this guard left the suite green — the call simply fell
+      // through to the same message from two frames deeper. Naming the
+      // library is what makes the boundary guard identifiable, in a report as
+      // well as in a test.
       if (!ROTATIONS.includes(rotation)) {
-        throw new RangeError(`rotation must be 0, 90, 180 or 270, got ${String(rotation)}`);
+        throw new RangeError(
+          `the placeholder library was asked for rotation ${String(rotation)}; ` +
+            'rotations are 0, 90, 180 and 270',
+        );
       }
       const marker = placeholderMarker(def, rotation);
       // Belt and braces: the contract says the bitmap is the footprint times
