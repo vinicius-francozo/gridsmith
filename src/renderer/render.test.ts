@@ -15,8 +15,15 @@ import type {
 } from '../core/types';
 import { expectedBitmapSize } from '../assets/contract';
 import { materialColor } from '../assets/palette';
-import { buildDrawList } from './drawlist';
-import type { DrawCommand, DrawList } from './drawlist';
+import {
+  DOOR_COLOR,
+  DOOR_THRESHOLD_COLOR,
+  GRID_LINE_COLOR,
+  GRID_LINE_WIDTH,
+  buildDrawList,
+} from './drawlist';
+import type { DrawCommand, DrawList, ShadeCommand } from './drawlist';
+import { SHADOW_COLOR } from './shadow';
 import { executeDrawList, renderScene } from './render';
 import type { RenderTarget } from './render';
 
@@ -79,15 +86,39 @@ class RecordingCanvas {
     return found;
   }
 
-  /** The value the last `set fillStyle` before `index` left in place. */
-  fillStyleAt(index: number): unknown {
+  /** Every index at which `method` was called, in order. */
+  indexesOf(method: string): number[] {
+    const found: number[] = [];
+    this.calls.forEach((call, index) => {
+      if (call.method === method) {
+        found.push(index);
+      }
+    });
+    return found;
+  }
+
+  /**
+   * The value the last `set <property>` before `index` left in place.
+   *
+   * Paint state is the half of the executor that geometry assertions cannot
+   * see: a canvas draws with whatever colour, width and alpha were last
+   * assigned, so dropping an assignment changes every pixel and not one call
+   * argument. This reads the state that was standing when a given call was
+   * made.
+   */
+  valueAt(property: string, index: number): unknown {
     let value: unknown;
     this.calls.slice(0, index).forEach((call) => {
-      if (call.method === 'set fillStyle') {
+      if (call.method === `set ${property}`) {
         value = call.args[0];
       }
     });
     return value;
+  }
+
+  /** The value the last `set fillStyle` before `index` left in place. */
+  fillStyleAt(index: number): unknown {
+    return this.valueAt('fillStyle', index);
   }
 
   asTarget(): RenderTarget {
@@ -286,6 +317,38 @@ describe('the props', () => {
 });
 
 describe('the shadows', () => {
+  it('darkens in the shadow’s own colour, at the alpha the list measured', async () => {
+    // The two assignments this pins are invisible to every other assertion
+    // here: the rectangle, its order and the save/restore pair are all the
+    // same whichever colour and alpha are standing when `fillRect` runs.
+    //
+    // Dropping `fillStyle` leaves the shadow painted in whatever the previous
+    // fill left behind — the floor's own colour, or a door's brown — and
+    // `shadow.ts` says plainly that a shadow darkens and never tints. Pinning
+    // the alpha to a literal instead of to the list's own number would let a
+    // constant sail through: the whole distance-falloff model that
+    // `shadow.test.ts` fixes on the pure layer is thrown away by an executor
+    // that paints every shadow at one fixed alpha.
+    const scene = sceneOf({ w: 5, h: 1 }, {
+      props: [prop({ assetId: 'anchor/hearth', layer: 'anchor', footprint: { w: 1, h: 1 }, cell: { x: 3, y: 0 } })],
+      lights: [{ cell: { x: 0, y: 0 }, radiusCells: 8, colorHex: '#ffd9a0' }],
+    });
+    const shade = buildDrawList(scene).commands.find(
+      (command): command is ShadeCommand => command.kind === 'shade',
+    );
+    expect(shade).toBeDefined();
+
+    const canvas = new RecordingCanvas();
+    await renderScene(scene, libraryOf([]), canvas.asTarget());
+
+    // The shade is the one fill between `save` and `restore`.
+    const shadeFill = canvas.indexesOf('fillRect').find((index) => index > canvas.first('save'));
+    expect(shadeFill).toBeDefined();
+    expect(shadeFill).toBeLessThan(canvas.first('restore'));
+    expect(canvas.fillStyleAt(shadeFill as number)).toBe(SHADOW_COLOR);
+    expect(canvas.valueAt('globalAlpha', shadeFill as number)).toBe(shade?.alpha);
+  });
+
   it('darkens under a saved alpha and restores it, so nothing else is dimmed', async () => {
     const canvas = new RecordingCanvas();
     await renderScene(
@@ -321,6 +384,24 @@ describe('the doors', () => {
       [70, 0, 70, 14],
     ]);
   });
+
+  it('paints the threshold in its own colour, not the door’s', async () => {
+    // Both rectangles are painted whatever happens; only the colour standing
+    // when each one runs tells them apart. With the second `fillStyle`
+    // dropped, the threshold is painted in the door's own brown — invisible —
+    // and the band exists precisely so that a door drawn facing the wrong way
+    // is obvious on the image.
+    const canvas = new RecordingCanvas();
+    await renderScene(
+      sceneOf({ w: 2, h: 2 }, { doors: [{ cell: { x: 1, y: 0 }, facing: 'n' }] }),
+      libraryOf([]),
+      canvas.asTarget(),
+    );
+    const [door, threshold] = canvas.indexesOf('fillRect').slice(4);
+    expect(canvas.fillStyleAt(door)).toBe(DOOR_COLOR);
+    expect(canvas.fillStyleAt(threshold)).toBe(DOOR_THRESHOLD_COLOR);
+    expect(DOOR_THRESHOLD_COLOR).not.toBe(DOOR_COLOR);
+  });
 });
 
 describe('the grid', () => {
@@ -349,6 +430,20 @@ describe('the grid', () => {
       [140.5, 140],
       [210, 70.5],
     ]);
+  });
+
+  it('strokes in the colour and the width the list chose, not the canvas defaults', async () => {
+    // A canvas with no `strokeStyle` set strokes opaque black, and the test
+    // above would not notice: the lines, their order and their half-pixel
+    // nudge are identical either way. Every rule on every exported map would
+    // come out as hard black ink over the floor instead of the faint grey
+    // `GRID_LINE_COLOR` decided on — and `lineWidth` only looks harmless
+    // because the canvas default happens to agree with the list today.
+    const canvas = new RecordingCanvas();
+    await renderScene(sceneOf({ w: 2, h: 1 }), libraryOf([]), canvas.asTarget());
+    const stroke = canvas.last('stroke');
+    expect(canvas.valueAt('strokeStyle', stroke)).toBe(GRID_LINE_COLOR);
+    expect(canvas.valueAt('lineWidth', stroke)).toBe(GRID_LINE_WIDTH);
   });
 
   it('is the last thing on the canvas, over everything else', async () => {
