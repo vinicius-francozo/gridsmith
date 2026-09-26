@@ -18,14 +18,42 @@ import type { Cell, Size } from './types';
 /**
  * Builds a grid from ASCII art, one character per cell, for readable tests.
  * `#` is impassable, anything else is passable.
+ *
+ * The width comes from the first row, so a row that is a character short would
+ * read past its end as `undefined`, which is not `'#'` and would therefore be
+ * *passable* — a typo in the art would quietly punch a hole through a wall and
+ * the very invariant `bfs` guards would go untested. Every row is checked
+ * against the first instead.
  */
 function gridFrom(rows: string[]): { size: Size; isPassable: (cell: Cell) => boolean } {
   const size: Size = { w: rows[0].length, h: rows.length };
+  rows.forEach((row, y) => {
+    if (row.length !== size.w) {
+      throw new Error(
+        `gridFrom(): row ${y} is ${row.length} characters, expected ${size.w} — ragged art`,
+      );
+    }
+  });
   return {
     size,
     isPassable: (cell) => inBounds(cell, size) && rows[cell.y][cell.x] !== '#',
   };
 }
+
+describe('gridFrom', () => {
+  it('rejects ragged art, which would read as passable past a short row', () => {
+    // A room split by a solid wall column, with the middle row a character
+    // short. Without the check, cell (2, 1) reads `undefined`, counts as
+    // passable, and the flood crosses the wall: 7 cells reached instead of 3.
+    expect(() =>
+      gridFrom([
+        '.#.',
+        '..',
+        '.#.',
+      ]),
+    ).toThrow('row 1 is 2 characters, expected 3');
+  });
+});
 
 describe('cellKey and sameCell', () => {
   it('gives equal cells the same key', () => {
