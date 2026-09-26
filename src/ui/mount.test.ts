@@ -971,4 +971,39 @@ describe('saving the map that was encoded', () => {
     expect(app.generate.disabled).toBe(false);
     expect(app.download.disabled).toBe(false);
   });
+
+  it('takes down the failure of the save that failed, once a save works', async () => {
+    // An encode that failed left its red box on the screen and nothing ever
+    // took it down. The next click wrote the file, and the page went on saying
+    // “Algo deu errado ao montar o mapa” to a person who had just been handed
+    // the map — so the sequence is the whole test: it has to fail first and
+    // succeed second, because an empty box after a clean run proves nothing.
+    let attempt = 0;
+    const app = mountHarness({
+      toPng: () => {
+        attempt += 1;
+        return attempt === 1
+          ? Promise.reject(new Error('o canvas não pôde ser lido'))
+          : Promise.resolve({ size: 1, type: 'image/png' } as Blob);
+      },
+    });
+    app.description.value = 'um salão de taverna';
+    app.seed.value = '4242';
+    app.generate.click();
+    await settle();
+
+    app.download.click();
+    await settle();
+    expect(app.saved).toHaveLength(0);
+    expect(app.failure.hidden).toBe(false);
+    expect(app.text()).toContain('Algo deu errado ao montar o mapa.');
+
+    app.download.click();
+    await settle();
+
+    expect(app.saved).toHaveLength(1);
+    expect(app.failure.hidden).toBe(true);
+    expect(app.failure.children).toEqual([]);
+    expect(app.text()).not.toContain('Algo deu errado ao montar o mapa.');
+  });
 });

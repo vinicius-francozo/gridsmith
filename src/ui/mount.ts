@@ -439,12 +439,19 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
    * reading a canvas of another size. The encode throws, the catch below turns
    * that into "algo deu errado" — for a map that came out perfectly and is
    * still on the screen.
+   *
+   * The failure box is cleared on the way in, the way `run` clears it, and
+   * after the guard rather than before it: a click that does nothing should
+   * leave the screen alone. Without this, an encode that failed once left its
+   * red box up for ever — the next click wrote the file and the screen went on
+   * saying the map had gone wrong, to a person who had just been handed it.
    */
   const download = async (): Promise<void> => {
     const saving = drawn;
     if (saving === undefined || busy) {
       return;
     }
+    showFailure(undefined);
     busy = true;
     refreshButtons();
     try {
