@@ -124,6 +124,20 @@ describe('inkOn', () => {
     expect(inkOn('#0000ff')).toBe('#f2f4f7');
   });
 
+  it('weighs green far above blue, as the eye does', () => {
+    // Pure green and pure magenta have the same channel count lit. Only the
+    // per-channel weighting separates them, and an unweighted average gets
+    // both backwards.
+    expect(inkOn('#00ff00')).toBe('#101215');
+    expect(inkOn('#ff00ff')).toBe('#f2f4f7');
+  });
+
+  it('reads mid grey as dark, because sRGB is not linear', () => {
+    // #808080 is half way up the byte range and about a fifth of the way up in
+    // light. Skipping the gamma decode calls it light and puts dark ink on it.
+    expect(inkOn('#808080')).toBe('#f2f4f7');
+  });
+
   it('rejects anything that is not an #rrggbb colour', () => {
     expect(() => inkOn('#fff')).toThrow(RangeError);
     expect(() => inkOn('white')).toThrow(RangeError);
