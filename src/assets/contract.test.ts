@@ -173,6 +173,67 @@ describe('validateAssetDef', () => {
     expect(validateAssetDef(def({ tags: ['table', 'table'] })).join(' ')).toContain('listed twice');
   });
 
+  it('rejects a definition with no id at all, which the slug test would pass', () => {
+    // `RegExp.test` coerces: an absent id becomes the string "undefined",
+    // which is a valid slug. Tracked end to end, such an asset is reported
+    // clean, accepted by the library, returned by `query()` so the generator
+    // picks it — and never resolves through `get()`, because it was indexed
+    // under the key `undefined`. It lands on the map as a magenta rectangle,
+    // out of a library the validator called sound.
+    const issues = validateAssetDef({ ...def(), id: undefined } as unknown as AssetDef);
+    expect(issues.join(' ')).toContain('id must be a string');
+  });
+
+  it('rejects an id that is not a string at all', () => {
+    for (const id of [undefined, null, 7, {}]) {
+      const issues = validateAssetDef({ ...def(), id } as unknown as AssetDef);
+      expect(issues.join(' ')).toContain('id must be a string');
+    }
+  });
+
+  it('rejects a missing or malformed againstWall instead of reading it as false', () => {
+    // It steers prop placement: an asset that never says whether it belongs
+    // against a wall would be placed as if it did not, silently.
+    for (const againstWall of [undefined, null, 'true', 1]) {
+      const issues = validateAssetDef({ ...def(), againstWall } as unknown as AssetDef);
+      expect(issues.join(' ')).toContain('againstWall must be a boolean');
+    }
+    expect(validateAssetDef(def({ againstWall: true }))).toEqual([]);
+  });
+
+  it('reports a malformed shape instead of throwing on it', () => {
+    // The whole point of returning a list is that a report over a library
+    // names every fault at once. Throwing on a missing field means one bad
+    // line in a manifest takes the entire report down with it.
+    for (const broken of [
+      { ...def(), footprint: undefined },
+      { ...def(), footprint: null },
+      { ...def(), footprint: 'big' },
+      { ...def(), tags: undefined },
+      { ...def(), tags: 'table' },
+      { ...def(), tags: 7 },
+    ]) {
+      const call = (): string[] => validateAssetDef(broken as unknown as AssetDef);
+      expect(call).not.toThrow();
+      expect(call().length).toBeGreaterThan(0);
+    }
+  });
+
+  it('names a missing footprint and a missing tag list for what they are', () => {
+    expect(
+      validateAssetDef({ ...def(), footprint: undefined } as unknown as AssetDef).join(' '),
+    ).toContain('footprint must be a size in cells');
+    expect(
+      validateAssetDef({ ...def(), tags: undefined } as unknown as AssetDef).join(' '),
+    ).toContain('tags must be an array');
+  });
+
+  it('rejects a tag that is not a string', () => {
+    expect(
+      validateAssetDef({ ...def(), tags: ['table', 7] } as unknown as AssetDef).join(' '),
+    ).toContain('tags must be strings');
+  });
+
   it('reports every fault at once rather than only the first', () => {
     const issues = validateAssetDef(
       def({ id: 'Bad Id', kind: 'prop' as AssetKind, footprint: { w: 0, h: 0 } }),
@@ -195,6 +256,20 @@ describe('assertAssetDef', () => {
 describe('validateCatalog', () => {
   it('passes a clean catalogue', () => {
     expect(validateCatalog([def(), def({ id: 'anchor/hearth', kind: 'anchor' })])).toEqual([]);
+  });
+
+  it('catches an asset with no id, which would be indexed under `undefined`', () => {
+    const issues = validateCatalog([{ ...def(), id: undefined } as unknown as AssetDef]);
+    expect(issues.join(' ')).toContain('id must be a string');
+  });
+
+  it('survives a malformed entry and still reports the rest of the library', () => {
+    const issues = validateCatalog([
+      { ...def(), id: 'group/a', footprint: undefined } as unknown as AssetDef,
+      def({ id: 'group/b', tags: ['a', 'a'] }),
+    ]);
+    expect(issues.join(' ')).toContain('group/a: footprint must be a size in cells');
+    expect(issues.join(' ')).toContain('group/b: tag "a" is listed twice');
   });
 
   it('catches a duplicate id, which no single definition can be wrong about', () => {

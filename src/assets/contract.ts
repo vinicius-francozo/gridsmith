@@ -127,7 +127,20 @@ function footprintIssues(footprint: Size): ContractIssue[] {
 export function validateAssetDef(def: AssetDef): ContractIssue[] {
   const issues: ContractIssue[] = [];
 
-  if (!ID_PATTERN.test(def.id)) {
+  // Every field is checked with `typeof` before it is used, because a manifest
+  // entry can be missing one outright and the checks themselves coerce: passing
+  // an absent id to `RegExp.test` turns it into the string "undefined", which
+  // matches the slug pattern. Such an asset would be reported as clean, be
+  // accepted by the library, be indexed under the key `undefined`, be returned
+  // by `query()` — and then never resolve through `get()`, landing on the map
+  // as a magenta rectangle out of a library the validator called sound.
+  //
+  // The guards are also what keeps this function's promise: it reports rather
+  // than throws, so one bad line in a manifest names itself instead of taking
+  // the whole report down with a TypeError on a missing property.
+  if (typeof def.id !== 'string') {
+    issues.push(`id must be a string, got ${typeof def.id}`);
+  } else if (!ID_PATTERN.test(def.id)) {
     issues.push(
       `id ${JSON.stringify(def.id)} is not a slug: lowercase letters, digits, and "._/-" only`,
     );
@@ -135,33 +148,47 @@ export function validateAssetDef(def: AssetDef): ContractIssue[] {
   if (!ASSET_KINDS.includes(def.kind)) {
     issues.push(`kind ${JSON.stringify(def.kind)} is not one of ${ASSET_KINDS.join(', ')}`);
   }
-  issues.push(...footprintIssues(def.footprint));
 
-  // A `TileRef` describes exactly one cell, so a tile that claimed a larger
-  // footprint would be drawn once per cell it covers and overlap itself.
-  if (def.kind === 'tile' && (def.footprint.w !== 1 || def.footprint.h !== 1)) {
-    issues.push(
-      `a tile covers exactly one cell, but ${def.id} declares ` +
-        `${def.footprint.w}x${def.footprint.h}`,
-    );
+  if (typeof def.footprint !== 'object' || def.footprint === null) {
+    issues.push(`footprint must be a size in cells, got ${typeof def.footprint}`);
+  } else {
+    issues.push(...footprintIssues(def.footprint));
+
+    // A `TileRef` describes exactly one cell, so a tile that claimed a larger
+    // footprint would be drawn once per cell it covers and overlap itself.
+    if (def.kind === 'tile' && (def.footprint.w !== 1 || def.footprint.h !== 1)) {
+      issues.push(
+        `a tile covers exactly one cell, but ${String(def.id)} declares ` +
+          `${def.footprint.w}x${def.footprint.h}`,
+      );
+    }
   }
+
   // `againstWall` steers prop placement. On a floor tile it would be read by
   // nothing and silently mean nothing, so it is a mistake, not a no-op.
-  if (def.kind === 'tile' && def.againstWall) {
-    issues.push(`a tile cannot be against a wall: ${def.id} sets againstWall`);
+  if (def.kind === 'tile' && def.againstWall === true) {
+    issues.push(`a tile cannot be against a wall: ${String(def.id)} sets againstWall`);
   }
   if (typeof def.againstWall !== 'boolean') {
     issues.push(`againstWall must be a boolean, got ${typeof def.againstWall}`);
   }
 
-  const seen = new Set<string>();
-  for (const tag of def.tags) {
-    if (tag.length === 0) {
-      issues.push('tags must not contain an empty string');
-    } else if (seen.has(tag)) {
-      issues.push(`tag ${JSON.stringify(tag)} is listed twice`);
+  if (!Array.isArray(def.tags)) {
+    issues.push(`tags must be an array of strings, got ${typeof def.tags}`);
+  } else {
+    const seen = new Set<string>();
+    for (const tag of def.tags) {
+      if (typeof tag !== 'string') {
+        issues.push(`tags must be strings, got ${typeof tag}`);
+        continue;
+      }
+      if (tag.length === 0) {
+        issues.push('tags must not contain an empty string');
+      } else if (seen.has(tag)) {
+        issues.push(`tag ${JSON.stringify(tag)} is listed twice`);
+      }
+      seen.add(tag);
     }
-    seen.add(tag);
   }
 
   return issues;
