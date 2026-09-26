@@ -89,6 +89,22 @@ describe('PLACEHOLDER_CATALOG', () => {
     }
   });
 
+  it('gives every id one footprint, and every name one id', () => {
+    // The mirror of the generator's own guard, and the failure that slipped
+    // through the frozen vocabulary: one name carrying two footprints. The
+    // library is a map keyed by id, and `validatePlacement` demands
+    // `prop.footprint === rotatedFootprint(def.footprint, rotation)` — 3x2 can
+    // never satisfy that for 2x1. Two sizes therefore need two names, which is
+    // why `hearth` and `hearth_small` are separate entries rather than one.
+    // Names are checked without their `<kind>/` prefix too: the same name
+    // under two kinds is two ids, and would be the same trap wearing a hat.
+    const ids = PLACEHOLDER_CATALOG.map((def) => def.id);
+    expect([...new Set(ids)]).toEqual(ids);
+
+    const names = PLACEHOLDER_CATALOG.map((def) => def.id.slice(def.id.indexOf('/') + 1));
+    expect([...new Set(names)]).toEqual(names);
+  });
+
   it('carries the generator’s names and footprints, which are the structural ones', () => {
     // Placement is computed from these: a 5x2 counter behaves differently from
     // a 4x1 one, and a disagreement here fails `validatePlacement` on every
@@ -108,6 +124,7 @@ describe('PLACEHOLDER_CATALOG', () => {
     expect(footprint('anchor/shelf_row_short')).toBe('3x1');
     expect(footprint('group/table_round')).toBe('2x2');
     expect(footprint('group/table_long')).toBe('3x1');
+    expect(footprint('group/table_small')).toBe('1x1');
     expect(footprint('group/chair')).toBe('1x1');
     expect(footprint('group/bench')).toBe('3x1');
     expect(footprint('group/crate')).toBe('2x1');

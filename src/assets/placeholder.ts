@@ -125,6 +125,7 @@ export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   // Groups: arrangements placed in the open, with room around them.
   { id: 'group/table_round', kind: 'group', footprint: { w: 2, h: 2 }, tags: ['table', 'seating', 'wood'], againstWall: false },
   { id: 'group/table_long', kind: 'group', footprint: { w: 3, h: 1 }, tags: ['table', 'seating', 'wood'], againstWall: false },
+  { id: 'group/table_small', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['table', 'seating', 'wood'], againstWall: false },
   { id: 'group/chair', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['seating', 'wood'], againstWall: false },
   { id: 'group/bench', kind: 'group', footprint: { w: 3, h: 1 }, tags: ['seating', 'wood'], againstWall: false },
   { id: 'group/crate', kind: 'group', footprint: { w: 2, h: 1 }, tags: ['storage', 'crate', 'wood'], againstWall: false },
