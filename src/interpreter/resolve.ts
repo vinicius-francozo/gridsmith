@@ -16,6 +16,7 @@
  */
 
 import { createRng } from '../core/prng';
+import { MAX_SIDE } from '../core/types';
 import type { Constraints, Params, PlaceType, Rng, Size } from '../core/types';
 
 import {
@@ -28,9 +29,6 @@ import {
 } from './codes';
 import { featureSuits, isFeature } from './vocabulary';
 import type { Feature } from './vocabulary';
-
-/** No map is larger than this on either side. From the map's business rules. */
-const MAX_SIDE = 20;
 
 /**
  * Floor cells a place needs before it can carry one more feature.
