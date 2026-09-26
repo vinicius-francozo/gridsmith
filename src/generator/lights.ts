@@ -11,6 +11,7 @@
 
 import { cellAt } from '../core/grid';
 import type { Floorplan, Light, LightSource, PlacedProp } from '../core/types';
+import { assetIdFor } from './profiles';
 import type { PlaceProfile } from './profiles';
 
 /** Lamp spacing and reach per ambient level. `dark` gets no lamps at all. */
@@ -47,7 +48,9 @@ export function deriveLights(
     if (prop.layer !== 'anchor') {
       continue;
     }
-    const spec = profile.anchors.find((anchor) => anchor.assetId === prop.assetId);
+    const spec = profile.anchors.find(
+      (anchor) => assetIdFor('anchor', anchor.assetId) === prop.assetId,
+    );
     if (spec?.light === undefined) {
       continue;
     }

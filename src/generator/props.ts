@@ -40,7 +40,7 @@ import type {
   Size,
 } from '../core/types';
 import { floorCells, opposite } from './floorplan';
-import { ROTATIONS, pickRotation } from './profiles';
+import { assetIdFor, ROTATIONS, pickRotation } from './profiles';
 import type { AnchorSpec, GroupPart, GroupSpec, PlaceProfile, ScatterSpec } from './profiles';
 import type { Rect } from './shapes';
 
@@ -358,7 +358,7 @@ function anchorCandidates(room: Room, spec: AnchorSpec, size: Size): Placement[]
           rects: [rect],
           parts: [
             {
-              assetId: spec.assetId,
+              assetId: assetIdFor('anchor', spec.assetId),
               cell: { x, y },
               footprint: placedFootprint(footprint),
               rotation,
@@ -391,7 +391,7 @@ function groupCandidates(room: Room, spec: GroupSpec, size: Size): Placement[] {
         found.push({
           rects,
           parts: template.parts.map((part, i) => ({
-            assetId: part.assetId,
+            assetId: assetIdFor('group', part.assetId),
             cell: { x: rects[i].x, y: rects[i].y },
             footprint: placedFootprint(part.footprint),
             rotation,
@@ -512,7 +512,7 @@ function scatterProps(
       continue;
     }
     props.push({
-      assetId: weightedPick(specs, rng).assetId,
+      assetId: assetIdFor('scatter', weightedPick(specs, rng).assetId),
       cell,
       footprint: { w: 1, h: 1 },
       rotation: pickRotation(rng),

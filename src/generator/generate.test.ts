@@ -182,7 +182,7 @@ describe('the scene generate returns', () => {
 describe('the lights of a scene', () => {
   it('lights a hearth from where the hearth stands', () => {
     const scene = generate(busy('tavern_hall', { light: 'dark' }), createRng(2));
-    const hearth = scene.props.filter((prop) => prop.assetId === 'hearth');
+    const hearth = scene.props.filter((prop) => prop.assetId === 'anchor/hearth');
     expect(hearth).toHaveLength(1);
     expect(scene.lights).toHaveLength(1);
     expect(scene.lights[0].cell.x).toBeGreaterThanOrEqual(hearth[0].cell.x);

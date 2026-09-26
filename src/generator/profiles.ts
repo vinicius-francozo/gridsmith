@@ -12,7 +12,7 @@
  * Every measurement here is in grid cells.
  */
 
-import type { Cell, PlaceType, Rotation, Size } from '../core/types';
+import type { Cell, PlacedProp, PlaceType, Rotation, Size } from '../core/types';
 import type { Rng } from '../core/types';
 
 /** The four rotations, in clockwise order. */
@@ -104,6 +104,21 @@ export const ALCOVE_FEATURE = 'alcove';
 
 /** The feature that asks stage one for free-standing columns. */
 export const PILLARS_FEATURE = 'pillars';
+
+// --- Asset ids -------------------------------------------------------------
+
+/**
+ * The asset-library id of a placed prop: `<kind>/<name>`.
+ *
+ * The library is indexed by this string and `AssetLibrary.bitmap` throws on
+ * an id it does not know, so the scheme is a contract with the renderer
+ * rather than a convention. The profiles below declare only the *name*; the
+ * layer a prop is placed in supplies the kind, so a shelf declared as an
+ * anchor can never be emitted under a group id.
+ */
+export function assetIdFor(layer: PlacedProp['layer'], name: string): string {
+  return `${layer}/${name}`;
+}
 
 // --- Footprint grammar -----------------------------------------------------
 

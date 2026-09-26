@@ -4,7 +4,7 @@ import { cellAt, cellKey, inBounds, step } from '../core/grid';
 import { createRng } from '../core/prng';
 import type { Cell, Facing, Floorplan, PlaceType, PlacedProp, Rotation, Size } from '../core/types';
 import { buildFloorplan, opposite } from './floorplan';
-import { profileFor, ROTATIONS } from './profiles';
+import { assetIdFor, profileFor, ROTATIONS } from './profiles';
 import type { GroupPart, PlaceProfile } from './profiles';
 import { placeProps, rotateFootprint, rotateTemplate } from './props';
 import { paramsFor, planFrom } from './testing';
@@ -207,7 +207,7 @@ describe('the anchor layer', () => {
       PLACE_TYPES.flatMap((placeType) =>
         profileFor(placeType)
           .anchors.filter((spec) => spec.placement === 'corner')
-          .map((spec) => spec.assetId),
+          .map((spec) => assetIdFor('anchor', spec.assetId)),
       ),
     );
     expect(cornerAnchors.size).toBeGreaterThan(0);
@@ -245,7 +245,9 @@ describe('the anchor layer', () => {
       for (let seed = 0; seed < 15; seed += 1) {
         const { profile, props } = furnished(placeType, seed);
         for (const prop of props.filter((p) => p.layer === 'anchor')) {
-          const [spec] = profile.anchors.filter((a) => a.assetId === prop.assetId);
+          const [spec] = profile.anchors.filter(
+            (a) => assetIdFor('anchor', a.assetId) === prop.assetId,
+          );
           expect(spec).toBeDefined();
           expect(prop.footprint).toEqual(rotateFootprint(spec.footprint, prop.rotation));
         }
@@ -255,7 +257,7 @@ describe('the anchor layer', () => {
 
   it('places an anchor a feature asked for by name', () => {
     const { props } = furnished('tavern_hall', 2, { features: ['bar'] });
-    expect(props.map((prop) => prop.assetId)).toContain('bar_counter');
+    expect(props.map((prop) => prop.assetId)).toContain('anchor/bar_counter');
   });
 });
 
@@ -303,6 +305,31 @@ describe('the whole prop set', () => {
           const approach = step(door.cell, opposite(door.facing));
           expect(taken.has(cellKey(door.cell))).toBe(false);
           expect(taken.has(cellKey(approach))).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('names every prop with the `<kind>/<name>` id the asset library is indexed by', () => {
+    // The library resolves a prop by this exact string and `bitmap()` throws
+    // on an id it does not know, so a bare name here is not a cosmetic
+    // difference: it is every prop of every scene failing to render.
+    for (const placeType of PLACE_TYPES) {
+      for (let seed = 0; seed < 15; seed += 1) {
+        const { profile, props } = furnished(placeType, seed, { clutter: 1 });
+        const declared = new Set([
+          ...profile.anchors.map((spec) => assetIdFor('anchor', spec.assetId)),
+          ...profile.groups.flatMap((group) =>
+            group.parts.map((part) => assetIdFor('group', part.assetId)),
+          ),
+          ...profile.scatter.map((spec) => assetIdFor('scatter', spec.assetId)),
+        ]);
+        expect(props.length).toBeGreaterThan(0);
+        for (const prop of props) {
+          expect(`${prop.assetId} (${prop.layer} layer)`).toBe(
+            `${prop.layer}/${prop.assetId.split('/').slice(1).join('/')} (${prop.layer} layer)`,
+          );
+          expect([...declared]).toContain(prop.assetId);
         }
       }
     }
@@ -375,7 +402,7 @@ describe('the scatter layer', () => {
   it('only ever names a prop its profile declares', () => {
     for (const placeType of PLACE_TYPES) {
       const { profile, props } = furnished(placeType, 7, { clutter: 1 });
-      const declared = profile.scatter.map((spec) => spec.assetId);
+      const declared = profile.scatter.map((spec) => assetIdFor('scatter', spec.assetId));
       for (const prop of props.filter((p) => p.layer === 'scatter')) {
         expect(declared).toContain(prop.assetId);
         expect(prop.footprint).toEqual({ w: 1, h: 1 });
