@@ -1,9 +1,10 @@
 // `./ui/mount` belongs to the UI front and does not exist yet, so the import
-// cannot resolve. The directive suppresses exactly that, and no more: once the
-// module lands, TypeScript reports the directive itself as unused (TS2578) and
-// this file has to be revisited. Excluding it from the program instead would
-// hide the call below forever, and a `mount` of the wrong arity would compile,
-// build and ship a blank page.
+// cannot resolve. The directive suppresses every error on this import line,
+// including a wrong export name: if F4 exports `mountApp` instead of `mount`,
+// nothing here complains. What it does buy is that once a `mount` export lands,
+// TypeScript reports the directive as unused (TS2578) and the wrong arity as
+// TS2554, so this file has to be revisited. Excluding it from the program
+// instead would hide the call below forever and ship a blank page in silence.
 // @ts-expect-error `./ui/mount` is delivered by F4; see the note above.
 import { mount } from './ui/mount';
 

@@ -3,5 +3,6 @@ dist/
 .DS_Store
 *.local
 
-# Third-party asset libraries are never versioned. See docs/assets.md
+# Third-party asset libraries are never versioned: the generator reads a
+# library you supply locally. See README.md.
 assets/library/

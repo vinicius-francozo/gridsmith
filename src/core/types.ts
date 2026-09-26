@@ -51,12 +51,13 @@ export type Floorplan = {
 };
 
 export type Zone = { material: string; cells: Cell[] };
-export type TileRef = { material: string; variant: number; rotation: 0|90|180|270 };
+export type Rotation = 0 | 90 | 180 | 270;
+export type TileRef = { material: string; variant: number; rotation: Rotation };
 export type PlacedProp = {
   assetId: string;
   cell: Cell;                   // anchor cell
   footprint: Size;
-  rotation: 0|90|180|270;
+  rotation: Rotation;
   layer: 'anchor' | 'group' | 'scatter';
 };
 export type LightSource = { cell: Cell; radiusCells: number; colorHex: string };
@@ -81,7 +82,7 @@ export type AssetDef = {
 export interface AssetLibrary {
   get(id: string): AssetDef | undefined;
   query(tags: string[], kind?: AssetKind): AssetDef[];
-  bitmap(id: string, rotation: number): Promise<ImageBitmap>;
+  bitmap(id: string, rotation: Rotation): Promise<ImageBitmap>;
 }
 
 export interface Rng { int(min: number, max: number): number; float(): number; pick<T>(xs: T[]): T; }
