@@ -112,6 +112,49 @@ describe('propShadow', () => {
     expect(propShadow(prop(), [light({ cell: { x: 5, y: 5 } })])).toBeUndefined();
   });
 
+  it('measures from the middle of the footprint, not from the anchor cell', () => {
+    // A 5x2 counter anchored at (0, 0) has its middle at x=2.5. A hearth in
+    // cell (1, 0) sits at x=1.5, west of that middle, so the counter throws
+    // its shadow east. Measured from the anchor cell instead, the middle would
+    // be x=0.5, the sign of dx flips, and the counter throws its shadow *west,
+    // towards the fire that lit it* — on every prop wider than one cell, which
+    // is every anchor the generator places.
+    const counter = prop({
+      assetId: 'anchor/bar_counter',
+      cell: { x: 0, y: 0 },
+      footprint: { w: 5, h: 2 },
+    });
+    const hearth = light({ cell: { x: 1, y: 0 }, radiusCells: 6 });
+    const shadow = propShadow(counter, [hearth]);
+    expect(shadow).toBeDefined();
+    expect(shadow?.rect.x).toBeGreaterThan(propRect(counter).x);
+  });
+
+  it('throws a short dark shadow near the light and a long faint one far off', () => {
+    // The documented rule, and the direction real shadows run. Reversed, props
+    // by the fire trail long shadows and props in the gloom barely cast one;
+    // flattened, the throw says nothing about where the light is.
+    const body = propRect(prop());
+    const thrown = (x: number): number => {
+      const shadow = propShadow(prop(), [light({ cell: { x, y: 5 }, radiusCells: 6 })]);
+      if (shadow === undefined) {
+        throw new Error(`no shadow with the light at x=${x}`);
+      }
+      return shadow.rect.x - body.x;
+    };
+    const alphaAt = (x: number): number =>
+      propShadow(prop(), [light({ cell: { x, y: 5 }, radiusCells: 6 })])?.alpha ?? 0;
+
+    // The light walks west, away from the prop at x=5: each step is farther.
+    expect(thrown(4)).toBeGreaterThan(0);
+    expect(thrown(3)).toBeGreaterThan(thrown(4));
+    expect(thrown(2)).toBeGreaterThan(thrown(3));
+    expect(thrown(1)).toBeGreaterThan(thrown(2));
+
+    expect(alphaAt(3)).toBeLessThan(alphaAt(4));
+    expect(alphaAt(1)).toBeLessThan(alphaAt(3));
+  });
+
   it('darkens more the closer the light is', () => {
     const near = propShadow(prop(), [light({ cell: { x: 4, y: 5 } })]);
     const far = propShadow(prop(), [light({ cell: { x: 1, y: 5 } })]);
