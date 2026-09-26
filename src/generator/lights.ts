@@ -67,6 +67,11 @@ export function deriveLights(
   const lights: LightSource[] = [];
 
   for (const prop of props) {
+    // Defensive, and known to be: only anchors have specs, so the `spec?.light`
+    // test below already drops every group and scatter prop and this line
+    // changes no output. Kept because "light comes from an anchor" is this
+    // module's rule and belongs where the rule is, rather than falling out
+    // of a lookup that happens to miss. No test covers it on its own.
     if (prop.layer !== 'anchor') {
       continue;
     }

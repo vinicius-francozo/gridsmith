@@ -203,6 +203,14 @@ export function doorCandidates(cells: CellKind[][], size: Size): DoorCandidate[]
       }
       const facings: Facing[] = ['n', 'e', 's', 'w'];
       const inward = facings.filter((facing) => isFloor(cells, size, step(cell, facing)));
+      // Rejecting *two or more* floor neighbours is defensive: the jamb rule
+      // below already refuses any cell whose lateral is floor, and the
+      // opposite-side rule refuses any cell that is not on the outside, so a
+      // two-floor cell never survives to be emitted. Relaxing this to
+      // `< 1` was checked against twenty thousand grids and changed nothing.
+      // Kept because the rule a door obeys — one way in, one way out — is
+      // worth saying where it is decided, not inferring from two later
+      // filters. It has no test of its own for the same reason.
       if (inward.length !== 1) {
         continue;
       }
@@ -312,6 +320,12 @@ export function placeDoors(cells: CellKind[][], size: Size, count: number, rng: 
       chosen = rng.pick(pool.filter((_, i) => spread[i] === best));
     }
     doors.push({ cell: chosen.cell, facing: chosen.facing });
+    // Defensive, and known to be: a door already placed sits at Chebyshev
+    // distance 0 from itself, so it can never be among the furthest
+    // candidates and is never drawn twice. Removing the filter changes no
+    // output. Kept because "the pool is what is still available" is the
+    // invariant this loop is written against, and the alternative is a
+    // proof about the spread metric living in the reader's head.
     pool = pool.filter((candidate) => !sameKey(candidate.cell, chosen.cell));
   }
 

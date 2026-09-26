@@ -50,7 +50,16 @@ const CIRCULATION_CLEARANCE = 1;
 /** How far into the room the ground in front of a door is kept clear. */
 const DOOR_CLEARANCE_DEPTH = 2;
 
-/** A room can only be so messy before the floor stops being walkable. */
+/**
+ * A room can only be so messy before the floor stops being walkable.
+ *
+ * Defensive, and known to be unreached as the profiles stand: the largest
+ * product of `scatterChance`, clutter and the condition factor is 0.252, in a
+ * ruined storeroom at clutter 1. Kept deliberately — it is the ceiling a
+ * future profile is held to, not a clamp today's ones hit, so raising a
+ * `scatterChance` cannot quietly carpet a room. No test covers it, because
+ * there is no input that reaches it.
+ */
 const MAX_SCATTER_CHANCE = 0.6;
 
 /** How much debris each state of repair invites, as a factor on the clutter. */
@@ -213,6 +222,13 @@ class Room {
     this.doorClear = filledGrid(size, false);
     this.doorCells = floorplan.doors.map((door) => door.cell);
 
+    // Defensive, and known to be: `fits` tests `isFloor` on its own, so
+    // reserving the non-floor cells changes no placement and the loop
+    // survives being deleted. Kept so that `reserved` holds what the class
+    // comment says it holds — everything the anchor and group layers must
+    // stay out of — instead of holding it only by accident of which other
+    // method happens to check what. No test covers it; there is no
+    // behaviour to cover.
     for (let y = 0; y < size.h; y += 1) {
       for (let x = 0; x < size.w; x += 1) {
         if (cellAt(cells, { x, y }) !== 'floor') {
@@ -245,7 +261,17 @@ class Room {
     return inBounds(cell, this.floorplan.size) && cellAt(this.floorplan.cells, cell) === 'wall';
   }
 
-  /** Whether every cell of `rect` is open floor no earlier layer has claimed. */
+  /**
+   * Whether every cell of `rect` is open floor no earlier layer has claimed.
+   *
+   * The `blocked` test is defensive and known to be: by the time the anchor
+   * and group layers call this, `commit` has already grown every blocked
+   * rectangle by the circulation gap into `reserved`, so dropping it changes
+   * no placement. Kept because `fits` should read as a question about the
+   * room rather than as a conclusion about the order two other methods run
+   * in, and because the scatter layer does mark `blocked` without reserving.
+   * No test covers it on its own.
+   */
   fits(rect: Rect): boolean {
     return rectCells(rect).every(
       (cell) => this.isFloor(cell) && !cellAt(this.reserved, cell) && !cellAt(this.blocked, cell),

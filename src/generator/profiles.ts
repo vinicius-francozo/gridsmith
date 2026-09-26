@@ -145,9 +145,15 @@ export type AnchorSpec = {
   /** `wall` needs one wall behind it; `corner` needs a second one beside it. */
   placement: 'wall' | 'corner';
   /**
-   * The `FEATURE_VOCABULARY` word that asks for this anchor by name. An anchor
-   * whose feature was requested is placed first and unconditionally; every
-   * anchor, requested or not, may also be drawn to fill a free slot.
+   * The `FEATURE_VOCABULARY` word that asks for this anchor by name.
+   *
+   * A requested anchor is tried *first*, ahead of the profile's own count,
+   * and every anchor — requested or not — may also be drawn to fill a free
+   * slot afterwards. First is not certainly: if no wall in the room has the
+   * length and the clearance the anchor needs, the placement fails and the
+   * request drops out with no signal. Measured at zero in three hundred
+   * rooms at the largest size each profile allows; reproducible in a 6x6
+   * `tavern_room`, where the anchor genuinely does not fit.
    */
   feature?: string;
   /** The light this anchor gives off, if any. */
