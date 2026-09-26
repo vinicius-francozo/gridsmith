@@ -27,12 +27,18 @@ function slug(value: string): string {
 /**
  * What to call the PNG of `params`.
  *
+ * Every word in it is English, like the rest of the code. `messages.ts` is the
+ * one module that speaks Portuguese, because it is the one whose strings a
+ * person reads as a sentence; a file name is read by a shell, sorted by a file
+ * manager and typed at a prompt, and half of one in each language is a name
+ * that reads as neither.
+ *
  * The seed is written as an unsigned decimal. A negative seed would otherwise
  * open the name with a hyphen, which some shells read as the start of a flag.
  */
 export function mapFilename(params: Params): string {
   const seed = slug(String(params.seed));
-  return `${FILENAME_PREFIX}-${slug(params.placeType)}-semente-${seed}.png`;
+  return `${FILENAME_PREFIX}-${slug(params.placeType)}-seed-${seed}.png`;
 }
 
 /** Hands `blob` to the browser to save under `filename`. */

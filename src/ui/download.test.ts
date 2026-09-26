@@ -29,6 +29,14 @@ describe('naming the exported map', () => {
     expect(name).toContain('4242');
   });
 
+  it('is written in one language, the same one the rest of the code is in', () => {
+    // `messages.ts` is the only module that speaks Portuguese, because it is
+    // the only one whose strings are read as a sentence. A file name is read by
+    // a shell and sorted by a file manager, and half of one in each language
+    // reads as neither.
+    expect(mapFilename(paramsFor())).toBe('gridsmith-tavern-hall-seed-4242.png');
+  });
+
   it('is a PNG, under the project prefix', () => {
     const name = mapFilename(paramsFor());
 
@@ -59,7 +67,7 @@ describe('naming the exported map', () => {
   });
 
   it('does not open the distinguishing part with a hyphen', () => {
-    // A negative seed would otherwise produce `gridsmith-tavern-hall-semente--7`,
+    // A negative seed would otherwise produce `gridsmith-tavern-hall-seed--7`,
     // and a name beginning a segment with a hyphen is read as a flag by some
     // shells.
     const name = mapFilename(paramsFor({ seed: -7 }));

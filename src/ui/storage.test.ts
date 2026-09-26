@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { API_KEY_ITEM, nullKeyStore, readApiKey, writeApiKey } from './storage';
+import { API_KEY_ITEM, browserKeyStore, nullKeyStore, readApiKey, writeApiKey } from './storage';
 import type { KeyStore } from './storage';
 
 /** A `localStorage` that lives in a Map, and records what it was asked to do. */
@@ -101,5 +101,52 @@ describe('a browser that will not lend its storage', () => {
     writeApiKey(store, 'sk-ant-api03-exemplo');
 
     expect(readApiKey(store)).toBe('');
+  });
+});
+
+describe('reaching for the browser\u2019s own storage', () => {
+  // The one thing in this module a stand-in cannot exercise. What
+  // `browserKeyStore` guards against is `localStorage` throwing from the
+  // property getter \u2014 a fact about the global, not about any object handed in
+  // \u2014 so the tests above, which all pass a store, never ran either half of it.
+  // Both halves are the difference between the key being remembered and the
+  // page refusing to open at all.
+
+  const had = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+
+  afterEach(() => {
+    if (had === undefined) {
+      delete (globalThis as { localStorage?: unknown }).localStorage;
+    } else {
+      Object.defineProperty(globalThis, 'localStorage', had);
+    }
+  });
+
+  it('hands back the storage the browser lends it', () => {
+    const lent = nullKeyStore();
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: lent });
+
+    expect(browserKeyStore()).toBe(lent);
+  });
+
+  it('answers with nothing when merely naming localStorage throws', () => {
+    // A browser with site data blocked raises from the getter, before any call
+    // is made. An unguarded read there is an exception on the way up, and a
+    // blank page with no reason on it.
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get: () => {
+        throw new Error('the user agent denied access to the storage area');
+      },
+    });
+
+    expect(() => browserKeyStore()).not.toThrow();
+    expect(browserKeyStore()).toBeUndefined();
+  });
+
+  it('answers with nothing where there is no storage at all', () => {
+    delete (globalThis as { localStorage?: unknown }).localStorage;
+
+    expect(browserKeyStore()).toBeUndefined();
   });
 });
