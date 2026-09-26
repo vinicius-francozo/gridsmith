@@ -255,9 +255,9 @@ const TAVERN_ROOM: PlaceProfile = {
     { assetId: 'bed', footprint: { w: 2, h: 3 }, placement: 'wall' },
     { assetId: 'bunk_beds', footprint: { w: 2, h: 3 }, placement: 'wall', feature: 'bunks' },
     { assetId: 'wardrobe', footprint: { w: 2, h: 1 }, placement: 'wall' },
-    { assetId: 'shelf_row', footprint: { w: 3, h: 1 }, placement: 'wall', feature: 'shelving' },
+    { assetId: 'shelf_row_short', footprint: { w: 3, h: 1 }, placement: 'wall', feature: 'shelving' },
     {
-      assetId: 'hearth',
+      assetId: 'hearth_small',
       footprint: { w: 2, h: 1 },
       placement: 'wall',
       feature: 'hearth',
@@ -305,7 +305,7 @@ const TAVERN_STOREROOM: PlaceProfile = {
       size: { w: 2, h: 2 },
       parts: [
         { assetId: 'crate', offset: { x: 0, y: 0 }, footprint: { w: 2, h: 1 } },
-        { assetId: 'crate', offset: { x: 0, y: 1 }, footprint: { w: 1, h: 1 } },
+        { assetId: 'crate_small', offset: { x: 0, y: 1 }, footprint: { w: 1, h: 1 } },
         { assetId: 'barrel', offset: { x: 1, y: 1 }, footprint: { w: 1, h: 1 } },
       ],
     },

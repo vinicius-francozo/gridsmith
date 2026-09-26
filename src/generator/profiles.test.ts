@@ -255,3 +255,60 @@ describe('the feature vocabulary', () => {
     }
   });
 });
+
+describe('the asset vocabulary the profiles declare', () => {
+  /** Every (assetId, footprint) a profile names, wherever it names it. */
+  function declarations(): { assetId: string; footprint: Size; where: string }[] {
+    const found: { assetId: string; footprint: Size; where: string }[] = [];
+    for (const placeType of PLACE_TYPES) {
+      const profile = profileFor(placeType);
+      for (const spec of profile.anchors) {
+        found.push({ assetId: spec.assetId, footprint: spec.footprint, where: `${placeType} anchor` });
+      }
+      for (const group of profile.groups) {
+        for (const part of group.parts) {
+          found.push({
+            assetId: part.assetId,
+            footprint: part.footprint,
+            where: `${placeType} group ${group.id}`,
+          });
+        }
+      }
+      for (const spec of profile.scatter) {
+        found.push({ assetId: spec.assetId, footprint: { w: 1, h: 1 }, where: `${placeType} scatter` });
+      }
+    }
+    return found;
+  }
+
+  it('gives one footprint to each asset id, never two', () => {
+    // The asset library is indexed by id, and the renderer validates
+    // `prop.footprint === rotateFootprint(def.footprint, prop.rotation)`. One
+    // id carrying two sizes has no `def` that satisfies both, so every scene
+    // holding the smaller of the two throws at the contract. It is also the
+    // physically right model: a three-cell shelf and a four-cell shelf are
+    // different pictures, not one picture used twice.
+    const sizes = new Map<string, Map<string, string[]>>();
+    for (const { assetId, footprint, where } of declarations()) {
+      const key = `${footprint.w}x${footprint.h}`;
+      const byId = sizes.get(assetId) ?? new Map<string, string[]>();
+      byId.set(key, [...(byId.get(key) ?? []), where]);
+      sizes.set(assetId, byId);
+    }
+    const clashes = [...sizes]
+      .filter(([, byId]) => byId.size > 1)
+      .map(
+        ([assetId, byId]) =>
+          `${assetId}: ${[...byId].map(([key, wheres]) => `${key} (${wheres.join(', ')})`).join(' vs ')}`,
+      );
+    expect(`clashes: ${clashes.join(' | ')}`).toBe('clashes: ');
+  });
+
+  it('declares a footprint of at least one cell on every side', () => {
+    for (const { assetId, footprint, where } of declarations()) {
+      expect(`${where}/${assetId}: ${footprint.w}x${footprint.h}`).toBe(
+        `${where}/${assetId}: ${Math.max(1, footprint.w)}x${Math.max(1, footprint.h)}`,
+      );
+    }
+  });
+});
