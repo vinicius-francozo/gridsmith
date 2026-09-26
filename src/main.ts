@@ -5,7 +5,6 @@
 // TypeScript reports the directive as unused (TS2578) and the wrong arity as
 // TS2554, so this file has to be revisited. Excluding it from the program
 // instead would hide the call below forever and ship a blank page in silence.
-// @ts-expect-error `./ui/mount` is delivered by F4; see the note above.
 import { mount } from './ui/mount';
 
 const root = document.querySelector<HTMLDivElement>('#app');
