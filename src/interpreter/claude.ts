@@ -18,6 +18,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 
 import type { Constraints, Interpreter } from '../core/types';
 
+import { normalizeUnresolved } from './codes';
 import { classifyRequestFailure, detectRuntime, MissingApiKeyError, UnusableResponseError } from './errors';
 import type { Runtime } from './errors';
 import { constraintsSchema } from './schema';
@@ -64,9 +65,10 @@ const SYSTEM_PROMPT = [
   '',
   'Put in `unresolved` everything the description asked for that no field above can carry —',
   'a second floor, a specific NPC, a trapdoor, weather, anything outside this vocabulary.',
-  'Write each entry in English, in a few words, as the thing that was asked for and not as an',
-  'apology. This list is shown to the game master so they know what the map will not contain,',
-  'so leaving something out of it silently is worse than listing it.',
+  'Write each entry as the thing that was asked for, in a few words, in the words of the',
+  'description rather than translated, and never as an apology. This list reaches the game',
+  'master so they know what the map will not contain, so leaving something out of it silently',
+  'is worse than listing it.',
 ].join('\n');
 
 /**
@@ -199,6 +201,14 @@ export class ClaudeInterpreter implements Interpreter {
       throw new UnusableResponseError('the response carried no text to read');
     }
 
-    return response.parsed_output;
+    // The schema holds every other field to the vocabulary. `unresolved` is
+    // free text by construction — it exists to carry what the vocabulary has
+    // no word for — so it is the one field the model can answer anything in,
+    // and `codes.ts` is what turns anything into an entry the interface can
+    // read without knowing what language it was written in.
+    return {
+      ...response.parsed_output,
+      unresolved: normalizeUnresolved(response.parsed_output.unresolved),
+    };
   }
 }

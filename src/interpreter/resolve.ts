@@ -3,7 +3,7 @@
  *
  * `Constraints` is a wish. `Params` is a plan: every value concrete, every
  * size legal, and every part of the wish that did not survive written down in
- * `conflicts` with the reason. The distinction matters because an incoherent
+ * `conflicts` as a code from `codes.ts`. The distinction matters because an incoherent
  * description — a bar in a bedroom, a floor that is 140% covered — is ordinary
  * input from somebody talking quickly at a table, not an error. Refusing it
  * would be the wrong answer; silently dropping it would be worse, because the
@@ -18,6 +18,14 @@
 import { createRng } from '../core/prng';
 import type { Constraints, Params, PlaceType, Rng, Size } from '../core/types';
 
+import {
+  CLUTTER_NOT_A_NUMBER,
+  CLUTTER_OUT_OF_RANGE,
+  entry,
+  FEATURE_NOT_IN_PLACE,
+  FEATURE_NOT_IN_VOCABULARY,
+  FEATURE_OVER_BUDGET,
+} from './codes';
 import { featureSuits, isFeature } from './vocabulary';
 import type { Feature } from './vocabulary';
 
@@ -155,12 +163,12 @@ export function jitterSize(base: Size, rng: Rng): Size {
 }
 
 /**
- * The features that survive, appending a line to `conflicts` for each that
+ * The features that survive, appending a code to `conflicts` for each that
  * does not.
  *
- * Three ways to lose one, and they are different things to be told: the
- * generator has never heard the word, the word is real but not for this kind
- * of place, or the place is too small to hold one more.
+ * Three ways to lose one, and they are different things to be told, so they
+ * are three codes: the generator has never heard the word, the word is real
+ * but not for this kind of place, or the place is too small to hold one more.
  */
 function resolveFeatures(constraints: Constraints, size: Size, conflicts: string[]): string[] {
   const kept: Feature[] = [];
@@ -175,13 +183,13 @@ function resolveFeatures(constraints: Constraints, size: Size, conflicts: string
     }
     seen.add(word);
     if (!isFeature(word)) {
-      conflicts.push(`"${raw}" is not something the generator can build, so it was left out.`);
+      // The word as it was written, not as it was normalised: this is what
+      // the person is going to be told was left out.
+      conflicts.push(entry(FEATURE_NOT_IN_VOCABULARY, raw));
       continue;
     }
     if (!featureSuits(word, constraints.placeType)) {
-      conflicts.push(
-        `"${word}" does not belong in a ${readablePlace(constraints.placeType)}, so it was left out.`,
-      );
+      conflicts.push(entry(FEATURE_NOT_IN_PLACE, word));
       continue;
     }
     kept.push(word);
@@ -193,10 +201,7 @@ function resolveFeatures(constraints: Constraints, size: Size, conflicts: string
   }
 
   for (const dropped of kept.slice(budget)) {
-    conflicts.push(
-      `a ${readablePlace(constraints.placeType)} of ${String(size.w)}x${String(size.h)} has floor for ` +
-        `${String(budget)} feature${budget === 1 ? '' : 's'}, so "${dropped}" was left out.`,
-    );
+    conflicts.push(entry(FEATURE_OVER_BUDGET, dropped));
   }
   return kept.slice(0, budget);
 }
@@ -228,18 +233,13 @@ export function featureBudget(size: Size): number {
  */
 function resolveClutter(clutter: number, conflicts: string[]): number {
   if (Number.isNaN(clutter)) {
-    conflicts.push('clutter was not a number, so it was read as 0.');
+    conflicts.push(entry(CLUTTER_NOT_A_NUMBER));
     return 0;
   }
   if (clutter < 0 || clutter > 1) {
-    const clamped = Math.min(1, Math.max(0, clutter));
-    conflicts.push(`clutter was ${String(clutter)}, outside 0 to 1, so it was read as ${String(clamped)}.`);
-    return clamped;
+    conflicts.push(entry(CLUTTER_OUT_OF_RANGE, String(clutter)));
+    return Math.min(1, Math.max(0, clutter));
   }
   return clutter;
 }
 
-/** A place type as it reads in a sentence. */
-function readablePlace(placeType: PlaceType): string {
-  return placeType.replace('_', ' ');
-}

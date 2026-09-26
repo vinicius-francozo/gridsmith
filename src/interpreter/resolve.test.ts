@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { Constraints, PlaceType, Rng } from '../core/types';
 
+import {
+  CLUTTER_NOT_A_NUMBER,
+  CLUTTER_OUT_OF_RANGE,
+  FEATURE_NOT_IN_PLACE,
+  FEATURE_NOT_IN_VOCABULARY,
+  FEATURE_OVER_BUDGET,
+} from './codes';
 import { featureBudget, jitterSize, resolve } from './resolve';
 
 const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
@@ -245,37 +252,35 @@ describe('conflicts', () => {
     const params = resolve(constraints({ features: ['bar', 'throne'] }), 1);
 
     expect(params.features).toEqual(['bar']);
-    expect(params.conflicts).toHaveLength(1);
-    expect(params.conflicts[0]).toContain('throne');
+    expect(params.conflicts).toEqual([`${FEATURE_NOT_IN_VOCABULARY}:throne`]);
   });
 
   it('reports the word as the model wrote it, so the person recognises what they asked for', () => {
     const params = resolve(constraints({ features: ['Marble Fountain'] }), 1);
 
-    expect(params.conflicts[0]).toContain('Marble Fountain');
+    expect(params.conflicts).toEqual([`${FEATURE_NOT_IN_VOCABULARY}:Marble Fountain`]);
   });
 
   it('drops a real feature that does not belong in this kind of place', () => {
     // A bar in a bedroom is ordinary input from somebody talking quickly, not
-    // an error to refuse.
+    // an error to refuse. Which bedroom it was is in `placeType`, so the code
+    // does not carry it twice.
     const params = resolve(constraints({ placeType: 'tavern_room', features: ['bar'] }), 1);
 
     expect(params.features).toEqual([]);
-    expect(params.conflicts).toHaveLength(1);
-    expect(params.conflicts[0]).toContain('bar');
-    expect(params.conflicts[0]).toContain('tavern room');
+    expect(params.conflicts).toEqual([`${FEATURE_NOT_IN_PLACE}:bar`]);
+    expect(params.placeType).toBe('tavern_room');
   });
 
-  it('tells the two kinds of dropped feature apart in words', () => {
+  it('tells the two kinds of dropped feature apart by code, not by wording', () => {
     const unknown = resolve(constraints({ placeType: 'tavern_room', features: ['throne'] }), 1).conflicts[0];
     const unsuited = resolve(constraints({ placeType: 'tavern_room', features: ['bar'] }), 1).conflicts[0];
 
-    expect(unknown).not.toEqual(unsuited);
-    expect(unknown).toContain('not something the generator can build');
-    expect(unsuited).toContain('does not belong');
+    expect(unknown).toBe(`${FEATURE_NOT_IN_VOCABULARY}:throne`);
+    expect(unsuited).toBe(`${FEATURE_NOT_IN_PLACE}:bar`);
   });
 
-  it('drops features a small place has no floor for, and says how many fit', () => {
+  it('drops features a small place has no floor for, and names each one dropped', () => {
     // Every one of these suits a guest room; the room simply cannot hold them all.
     const params = resolve(
       constraints({ placeType: 'tavern_room', sizeHint: 'small', features: ['hearth', 'alcove', 'shelving', 'bunks'] }),
@@ -284,7 +289,10 @@ describe('conflicts', () => {
 
     expect(params.features.length).toBeLessThan(4);
     expect(params.conflicts.length).toBeGreaterThan(0);
-    expect(params.conflicts.some((line) => line.includes('floor for'))).toBe(true);
+    expect(params.conflicts.every((line) => line.startsWith(`${FEATURE_OVER_BUDGET}:`))).toBe(true);
+    for (const line of params.conflicts) {
+      expect(['hearth', 'alcove', 'shelving', 'bunks']).toContain(line.slice(FEATURE_OVER_BUDGET.length + 1));
+    }
   });
 
   it('never drops a feature for want of floor without recording it', () => {
@@ -308,28 +316,28 @@ describe('conflicts', () => {
     }
   });
 
-  it('clamps clutter above the range and says what it did', () => {
+  it('clamps clutter above the range and reports the value it was given', () => {
     const params = resolve(constraints({ clutter: 1.4 }), 1);
 
     expect(params.clutter).toBe(1);
-    expect(params.conflicts).toHaveLength(1);
-    expect(params.conflicts[0]).toContain('1.4');
+    expect(params.conflicts).toEqual([`${CLUTTER_OUT_OF_RANGE}:1.4`]);
   });
 
   it('clamps clutter below the range', () => {
     const params = resolve(constraints({ clutter: -0.5 }), 1);
 
     expect(params.clutter).toBe(0);
-    expect(params.conflicts).toHaveLength(1);
+    expect(params.conflicts).toEqual([`${CLUTTER_OUT_OF_RANGE}:-0.5`]);
   });
 
   it('reads clutter that is not a number as an empty floor rather than multiplying by it', () => {
     // Left alone this would reach the generator and be multiplied into a count
-    // of props, producing a NaN that surfaces far from here.
+    // of props, producing a NaN that surfaces far from here. Nothing useful
+    // can be said about the value, so this code carries no detail.
     const params = resolve(constraints({ clutter: Number.NaN }), 1);
 
     expect(params.clutter).toBe(0);
-    expect(params.conflicts).toHaveLength(1);
+    expect(params.conflicts).toEqual([CLUTTER_NOT_A_NUMBER]);
   });
 
   it('leaves clutter at the edges of the range alone', () => {

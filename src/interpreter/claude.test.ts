@@ -23,13 +23,14 @@ import { FEATURES } from './vocabulary';
 const IN_BROWSER: Runtime = { isBrowser: true, isOnline: true };
 const IN_NODE: Runtime = { isBrowser: false, isOnline: true };
 
+/** What the model answers with. `unresolved` is whatever it felt like writing. */
 const answer: Constraints = {
   placeType: 'tavern_hall',
   light: 'dim',
   condition: 'disordered',
   clutter: 0.6,
   features: ['bar', 'hearth'],
-  unresolved: ['a cellar below'],
+  unresolved: [],
 };
 
 type ParseCall = Parameters<Anthropic['messages']['parse']>[0];
@@ -184,6 +185,47 @@ describe('interpreting a description', () => {
     for (const feature of FEATURES) {
       expect(calls[0].system).toContain(feature);
     }
+  });
+});
+
+describe('taking language out of what could not be expressed', () => {
+  // `unresolved` is the one field the schema cannot hold to a vocabulary — it
+  // exists to carry what the vocabulary has no word for. What comes back is a
+  // model's prose, in whatever language it chose; what leaves here is a code,
+  // so the interface can put its own words to it.
+
+  it('gives every entry a code, keeping what was asked for as the detail', async () => {
+    const { client } = stubClient(respondsWith({ ...answer, unresolved: ['a cellar below', 'chuva lá fora'] }));
+
+    await expect(interpreterWith(client).interpret('a hall')).resolves.toMatchObject({
+      unresolved: ['unsupported_request:a cellar below', 'unsupported_request:chuva lá fora'],
+    });
+  });
+
+  it('leaves an entry that already names a code exactly as it is', async () => {
+    const { client } = stubClient(respondsWith({ ...answer, unresolved: ['unsupported_request:a cellar below'] }));
+
+    await expect(interpreterWith(client).interpret('a hall')).resolves.toMatchObject({
+      unresolved: ['unsupported_request:a cellar below'],
+    });
+  });
+
+  it('drops an entry with nothing in it rather than coding an empty request', async () => {
+    const { client } = stubClient(respondsWith({ ...answer, unresolved: ['', '   '] }));
+
+    await expect(interpreterWith(client).interpret('a hall')).resolves.toMatchObject({ unresolved: [] });
+  });
+
+  it('asks the model for the request in the words of the description, not for an apology', async () => {
+    // The detail is the only part of an entry that carries language, and it
+    // is the person's own. Asking for English there would hand the interface
+    // an English note about a Portuguese request.
+    const { client, calls } = stubClient(respondsWith(answer));
+
+    await interpreterWith(client).interpret('a hall');
+
+    expect(calls[0].system).toContain('in the words of the');
+    expect(calls[0].system).toContain('never as an apology');
   });
 });
 
