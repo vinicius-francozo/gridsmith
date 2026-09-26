@@ -23,6 +23,7 @@ import {
   UpstreamError,
 } from '../interpreter/errors';
 import { FEATURES } from '../interpreter/vocabulary';
+import type { Feature } from '../interpreter/vocabulary';
 
 import {
   CODE_PHRASES,
@@ -99,12 +100,30 @@ describe('an entry becomes a sentence', () => {
     expect(describeEntry(entry(FEATURE_OVER_BUDGET, 'hearth'))).toContain('lareira');
   });
 
-  it('has a Portuguese word for every feature in the vocabulary', () => {
-    // `FEATURE_WORDS` is typed `Record<Feature, string>`, so the compiler
-    // already refuses a missing word — but it does not refuse a word that is
-    // still the English one, which is what an author reaches for when adding a
-    // feature in a hurry.
+  it('says the right Portuguese word for every one of the seven features', () => {
+    // The table is the entire reason this layer reports a code rather than a
+    // sentence, so it is the table that has to be pinned, word by word.
+    // `Record<Feature, string>` refuses a missing word and "is not the English
+    // one" refuses an untranslated one, but between them `stairs: 'lareira'`
+    // passes both: every feature named, nothing in English, and the person
+    // told the hearth was left out when it was the stairs.
+    const words: Readonly<Record<Feature, string>> = {
+      bar: 'balcão',
+      hearth: 'lareira',
+      stairs: 'escada',
+      pillars: 'pilares',
+      alcove: 'alcova',
+      shelving: 'prateleiras',
+      bunks: 'beliches',
+    };
+
     for (const feature of FEATURES) {
+      expect(describeEntry(entry(FEATURE_NOT_IN_PLACE, feature))).toContain(
+        `“${words[feature]}”`,
+      );
+      expect(describeEntry(entry(FEATURE_OVER_BUDGET, feature))).toContain(
+        `“${words[feature]}”`,
+      );
       expect(describeEntry(entry(FEATURE_NOT_IN_PLACE, feature))).not.toContain(feature);
     }
   });
@@ -218,6 +237,39 @@ describe('a key never reaches the screen', () => {
   it('blanks a key out of an unusable answer and out of a plain error', () => {
     expect(describeFailure(new UnusableResponseError(KEY)).detail).not.toContain(KEY);
     expect(describeFailure(new Error(`falhou com ${KEY}`)).detail).not.toContain(KEY);
+  });
+
+  it('blanks a key out of an advisory, not only out of a failure', () => {
+    // Reachable with nothing going wrong at all. The description field is the
+    // first on the page and the key field is the second and shows dots, so a
+    // key pasted into the wrong one is an ordinary slip — and then the key is
+    // the request. The model puts what it cannot express into `unresolved`,
+    // `normalizeUnresolved` wraps anything non-conformant as
+    // `unsupported_request:<the raw text>`, and this is the sentence that would
+    // otherwise print the key on the screen that gets photographed.
+    const sentence = describeEntry(entry(UNSUPPORTED_REQUEST, `um andar escondido ${KEY}`));
+
+    expect(sentence).not.toContain(KEY);
+    expect(sentence).not.toContain('secret');
+    expect(sentence).toContain('sk-ant-***');
+  });
+
+  it('blanks a key out of an entry whose code it cannot explain either', () => {
+    // The unknown-code branch prints the entry whole, so it prints the key
+    // whole unless it is redacted too.
+    const sentence = describeEntry(`pergunta_do_futuro:${KEY}`);
+
+    expect(sentence).not.toContain(KEY);
+    expect(sentence).toContain('sk-ant-***');
+  });
+
+  it('blanks a key out of every advisory in a list, not the first only', () => {
+    const sentences = describeEntries([
+      entry(UNSUPPORTED_REQUEST, `um andar escondido ${KEY}`),
+      entry(UNSUPPORTED_REQUEST, `outro andar ${KEY}`),
+    ]);
+
+    expect(sentences.join('\n')).not.toContain(KEY);
   });
 
   it('leaves text with no key in it alone', () => {

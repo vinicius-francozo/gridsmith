@@ -36,6 +36,7 @@ import {
   FEATURE_OVER_BUDGET,
   UNSUPPORTED_REQUEST,
 } from '../interpreter/codes';
+import type { Code } from '../interpreter/codes';
 import {
   CorsError,
   InterpreterError,
@@ -95,11 +96,14 @@ function featureWord(detail: string): string {
 /**
  * Every code this interface can be handed, and how it reads.
  *
- * `messages.test.ts` holds this table against `CONFLICT_CODES` and
- * `UNRESOLVED_CODES` in both directions. A code added upstream with no entry
- * here would otherwise reach the screen as a bare identifier.
+ * The `Record<Code, CodePhrase>` is exact, like `FEATURE_WORDS`, `SCENE_ISSUES`
+ * and `PLACE_NAMES` below it: a code added upstream stops this file compiling
+ * instead of reaching the screen as a bare identifier. `messages.test.ts` still
+ * holds the table against `CONFLICT_CODES` and `UNRESOLVED_CODES` in both
+ * directions, because the compiler checks the keys and the test checks that
+ * none of them has gone stale.
  */
-export const CODE_PHRASES: Readonly<Record<string, CodePhrase>> = {
+export const CODE_PHRASES: Readonly<Record<Code, CodePhrase>> = {
   [FEATURE_NOT_IN_VOCABULARY]: {
     bare: 'Um elemento pedido não existe no vocabulário do gerador e ficou de fora.',
     detailed: (detail) => `Elemento que o gerador não conhece e deixou de fora: ${quoted(detail)}.`,
@@ -133,6 +137,17 @@ export const CODE_PHRASES: Readonly<Record<string, CodePhrase>> = {
 };
 
 /**
+ * Whether `code` is one the table above has a phrase for.
+ *
+ * `Object.hasOwn` rather than `in` or a lookup: an entry arrives as a string
+ * written by a language model, and `constructor` or `toString` would answer a
+ * prototype member rather than a phrase.
+ */
+function isKnownCode(code: string): code is Code {
+  return Object.hasOwn(CODE_PHRASES, code);
+}
+
+/**
  * One entry of `unresolved` or `conflicts`, as a sentence.
  *
  * An entry is `<code>` or `<code>:<detail>`; the detail may contain colons of
@@ -142,16 +157,25 @@ export const CODE_PHRASES: Readonly<Record<string, CodePhrase>> = {
  * unreachable through the interpreter, which leaves the case for an entry that
  * came from somewhere else — and a person reading a raw identifier at least
  * knows something was left out, which a blank line does not tell them.
+ *
+ * The result goes through `redactKeys` for the same reason a failure does, and
+ * it is reachable the same way round: the description field is the first field
+ * on the page and the key field is the second and shows dots, so a key pasted
+ * into the wrong one is an ordinary slip. From there the key is the request,
+ * the model puts what it cannot express into `unresolved`, and
+ * `normalizeUnresolved` wraps anything non-conformant as
+ * `unsupported_request:<the raw text>` — which lands on screen verbatim, on the
+ * screen that gets photographed into a conversation.
  */
 export function describeEntry(value: string): string {
   const code = codeOf(value);
   const detail = value.slice(code.length + 1).trim();
-  const phrase = Object.hasOwn(CODE_PHRASES, code) ? CODE_PHRASES[code] : undefined;
+  const phrase = isKnownCode(code) ? CODE_PHRASES[code] : undefined;
 
   if (phrase === undefined) {
-    return `Aviso que esta tela não sabe explicar: ${quoted(value)}.`;
+    return redactKeys(`Aviso que esta tela não sabe explicar: ${quoted(value)}.`);
   }
-  return detail === '' ? phrase.bare : phrase.detailed(detail);
+  return redactKeys(detail === '' ? phrase.bare : phrase.detailed(detail));
 }
 
 /** Every entry of `entries`, as sentences, in the order they arrived. */
