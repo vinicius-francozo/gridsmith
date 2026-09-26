@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Params, PlaceType } from '../core/types';
 
-import { FILENAME_PREFIX, mapFilename } from './download';
+import { createBlobSaver, FILENAME_PREFIX, mapFilename, REVOKE_DELAY_MS } from './download';
 
 function paramsFor(overrides: Partial<Params> = {}): Params {
   return {
@@ -66,5 +66,162 @@ describe('naming the exported map', () => {
 
     expect(name).toContain('7');
     expect(name).not.toContain('--');
+  });
+});
+
+// --- Handing the file to the browser -----------------------------------------
+//
+// The claim this block replaces was that `createBlobSaver` is untestable under
+// Node and has nothing to test. Neither half held. It has four observable
+// effects — a URL made, an attribute set, a click, a URL revoked — and each one
+// of them is the whole export path when it is the one that is missing. The
+// document below stands in for the four calls the saver makes on it and records
+// the order they came in, because the order is the part Firefox is strict
+// about.
+
+type Trace = string[];
+
+class FakeAnchor {
+  href = '';
+  download = '';
+  parent: FakeBody | undefined;
+
+  constructor(readonly trace: Trace) {}
+
+  click(): void {
+    // Recorded with its attachment, because a click on a detached node is
+    // exactly the failure that produces no file and no error.
+    this.trace.push(this.parent === undefined ? 'click-detached' : 'click-attached');
+  }
+
+  remove(): void {
+    if (this.parent === undefined) {
+      return;
+    }
+    this.parent.children.splice(this.parent.children.indexOf(this), 1);
+    this.parent = undefined;
+    this.trace.push('remove');
+  }
+}
+
+class FakeBody {
+  readonly children: FakeAnchor[] = [];
+
+  constructor(readonly trace: Trace) {}
+
+  append(...nodes: FakeAnchor[]): void {
+    for (const node of nodes) {
+      node.parent = this;
+      this.children.push(node);
+      this.trace.push('append');
+    }
+  }
+}
+
+class FakeDocument {
+  readonly trace: Trace = [];
+  readonly body = new FakeBody(this.trace);
+  readonly anchors: FakeAnchor[] = [];
+
+  createElement(tag: string): FakeAnchor {
+    this.trace.push(`create-${tag}`);
+    const anchor = new FakeAnchor(this.trace);
+    this.anchors.push(anchor);
+    return anchor;
+  }
+}
+
+function pngBlob(): Blob {
+  return new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' });
+}
+
+function saveInto(doc: FakeDocument, filename = 'gridsmith-tavern-hall-seed-4242.png'): void {
+  createBlobSaver(doc as unknown as Document)(pngBlob(), filename);
+}
+
+describe('handing the finished image to the browser', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('points an anchor at the blob, with nothing stood in for', () => {
+    // No double anywhere in this one: `URL.createObjectURL` exists under Node
+    // and takes a real `Blob`, so the URL the browser would be handed is the
+    // URL this assertion reads.
+    const doc = new FakeDocument();
+
+    saveInto(doc);
+
+    expect(doc.anchors).toHaveLength(1);
+    expect(doc.anchors[0].href.startsWith('blob:')).toBe(true);
+  });
+
+  it('clicks the anchor', () => {
+    // Without the click the button does nothing at all, silently: no file, no
+    // failure, nothing on screen.
+    const doc = new FakeDocument();
+
+    saveInto(doc);
+
+    expect(doc.trace.filter((step) => step.startsWith('click'))).toHaveLength(1);
+  });
+
+  it('asks for the file under the name it was given', () => {
+    // The `download` attribute is what turns a navigation into a save, and it
+    // is what carries the seed into the file name.
+    const doc = new FakeDocument();
+
+    saveInto(doc, 'gridsmith-tavern-storeroom-seed-7.png');
+
+    expect(doc.anchors[0].download).toBe('gridsmith-tavern-storeroom-seed-7.png');
+  });
+
+  it('clicks it while it is in the document, not while it is loose', () => {
+    // Firefox serves a click only from a node that is in the tree. A detached
+    // one is ignored, and ignored quietly.
+    const doc = new FakeDocument();
+
+    saveInto(doc);
+
+    expect(doc.trace).toContain('click-attached');
+    expect(doc.trace).not.toContain('click-detached');
+    expect(doc.trace.indexOf('append')).toBeLessThan(doc.trace.indexOf('click-attached'));
+  });
+
+  it('takes the anchor back out again', () => {
+    const doc = new FakeDocument();
+
+    saveInto(doc);
+
+    expect(doc.body.children).toEqual([]);
+  });
+
+  it('revokes the object URL, so twenty maps in a session are not all held', () => {
+    // The leak the comment on this function spends a paragraph on. Without the
+    // revocation every decoded image stays alive for the life of the tab.
+    vi.useFakeTimers();
+    const revoke = vi.spyOn(URL, 'revokeObjectURL');
+    const doc = new FakeDocument();
+
+    saveInto(doc);
+    vi.advanceTimersByTime(REVOKE_DELAY_MS);
+
+    expect(revoke).toHaveBeenCalledWith(doc.anchors[0].href);
+  });
+
+  it('does not revoke it out from under the click', () => {
+    // The other half. Firefox reads the URL after the handler returns, so a
+    // revocation on the next line is a download that never starts — and, again,
+    // nothing throws.
+    vi.useFakeTimers();
+    const revoke = vi.spyOn(URL, 'revokeObjectURL');
+    const doc = new FakeDocument();
+
+    saveInto(doc);
+
+    expect(revoke).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(REVOKE_DELAY_MS);
+    expect(revoke).toHaveBeenCalledTimes(1);
   });
 });

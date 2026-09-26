@@ -39,16 +39,31 @@ export function mapFilename(params: Params): string {
 export type BlobSaver = (blob: Blob, filename: string) => void;
 
 /**
+ * How long the object URL is kept alive after the click.
+ *
+ * Revoking it on the next line, which is what this did first, is the shape
+ * every "download a blob" snippet on the web has and it is wrong in Firefox:
+ * the click only queues the download, and the URL is read after the handler
+ * has returned. A URL revoked before that read gives a click that produces no
+ * file and no error — nothing throws, so the `catch` upstream never fires and
+ * the person is told nothing at all. A quarter of a second is far past the
+ * read and far short of holding several megabytes for the life of the tab.
+ */
+export const REVOKE_DELAY_MS = 250;
+
+/**
  * The browser's own download: an anchor with a `download` attribute, clicked.
  *
  * There is no backend to serve the file from, so the bytes never leave the
  * page — `createObjectURL` makes a URL that points at memory in this document,
- * and revoking it immediately after the click is what keeps the decoded image
- * from being held for the life of the tab. A map of a large hall is several
- * megabytes, and generating twenty in a session is the ordinary case.
+ * and revoking it afterwards is what keeps the decoded image from being held
+ * for the life of the tab. A map of a large hall is several megabytes, and
+ * generating twenty in a session is the ordinary case.
  *
- * Untestable under Node, and untested: it has no branches, and everything it
- * touches is the document.
+ * The anchor is put in the document before it is clicked, for the same reason
+ * the revocation is deferred: Firefox ignores a click on a node that is not in
+ * the tree. Both are silent failures — no exception, no file — so neither can
+ * be left to be noticed in use.
  */
 export function createBlobSaver(doc: Document): BlobSaver {
   return (blob, filename) => {
@@ -56,7 +71,14 @@ export function createBlobSaver(doc: Document): BlobSaver {
     const anchor = doc.createElement('a');
     anchor.href = url;
     anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    doc.body.append(anchor);
+    try {
+      anchor.click();
+    } finally {
+      anchor.remove();
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, REVOKE_DELAY_MS);
+    }
   };
 }
