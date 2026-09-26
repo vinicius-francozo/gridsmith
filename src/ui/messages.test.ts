@@ -143,6 +143,21 @@ describe('an entry becomes a sentence', () => {
     expect(sentence).toContain('pergunta_do_futuro:alguma coisa');
   });
 
+  it('treats the words every object already answers to as unknown codes too', () => {
+    // A word nothing declares is the easy half. The hard half is the five
+    // `CODE_PHRASES` inherits from `Object.prototype`: `in` says yes to all of
+    // them, and the lookup then hands back a function or the prototype instead
+    // of a phrase — an object with no `bare` and no `detailed`, which is a
+    // `TypeError` thrown at a person who asked for a map. The code arrives as
+    // a string written by a language model and every one of these survives
+    // `JSON.parse`, so it is reachable from the outside.
+    for (const key of ['toString', 'constructor', 'valueOf', '__proto__', 'hasOwnProperty']) {
+      expect(describeEntry(`${key}:alguma coisa`)).toBe(
+        `Aviso que esta tela não sabe explicar: “${key}:alguma coisa”.`,
+      );
+    }
+  });
+
   it('keeps the order the entries arrived in', () => {
     const sentences = describeEntries([
       entry(UNSUPPORTED_REQUEST, 'primeiro'),
