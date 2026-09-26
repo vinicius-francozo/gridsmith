@@ -53,6 +53,28 @@ function respondsWith(parsed: Constraints | null, stopReason = 'end_turn'): () =
   return () => ({ stop_reason: stopReason, stop_details: null, parsed_output: parsed, content: [] });
 }
 
+/**
+ * The function the request itself carries for reading the model's answer.
+ *
+ * Every test here replaces `messages.parse`, which is where the SDK would
+ * normally run this. Reaching into the recorded call and running it is what
+ * keeps the schema on the wire exercised instead of merely present: without
+ * it, the whole output format could be an inert object and no test would
+ * notice. Throwing when it is missing is half of the assertion.
+ */
+function answerParserOf(call: ParseCall): (content: string) => unknown {
+  const format: unknown = call.output_config?.format;
+  if (
+    typeof format !== 'object' ||
+    format === null ||
+    !('parse' in format) ||
+    typeof format.parse !== 'function'
+  ) {
+    throw new Error('the request carried nothing to validate the answer with');
+  }
+  return format.parse as (content: string) => unknown;
+}
+
 /** A client whose `messages.parse` rejects. */
 function failingClient(error: unknown): Anthropic {
   return {
@@ -112,6 +134,32 @@ describe('interpreting a description', () => {
     await interpreterWith(client).interpret('a tavern hall');
 
     expect(calls[0].output_config?.format?.type).toBe('json_schema');
+  });
+
+  it('carries a format that reads a well-formed answer back as constraints', async () => {
+    const { client, calls } = stubClient(respondsWith(answer));
+
+    await interpreterWith(client).interpret('a tavern hall');
+
+    expect(answerParserOf(calls[0])(JSON.stringify(answer))).toEqual(answer);
+  });
+
+  it('carries a format that refuses an answer outside the vocabulary, which the API does not', async () => {
+    // The API is not holding the model to this schema: `zodOutputFormat`
+    // sends the enums and the bounds as a description, so `throne_room` comes
+    // back with HTTP 200. The parse the request carries is the only thing
+    // that closes the vocabulary — and it is the thing every other test here
+    // stubs away, so it is asserted on the object the code actually builds.
+    const { client, calls } = stubClient(respondsWith(answer));
+
+    await interpreterWith(client).interpret('a tavern hall');
+    const parse = answerParserOf(calls[0]);
+
+    expect(() => parse(JSON.stringify({ ...answer, placeType: 'throne_room' }))).toThrow(/placeType/);
+    expect(() => parse(JSON.stringify({ ...answer, light: 'candlelit' }))).toThrow(/light/);
+    expect(() => parse(JSON.stringify({ ...answer, clutter: 4 }))).toThrow(/clutter/);
+    expect(() => parse(JSON.stringify({ ...answer, unresolved: undefined }))).toThrow(/unresolved/);
+    expect(() => parse('not json at all')).toThrow();
   });
 
   it('names the whole feature vocabulary in the prompt, so the model has the closed list', async () => {
