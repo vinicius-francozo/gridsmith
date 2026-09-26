@@ -116,8 +116,13 @@ export function resolve(constraints: Constraints, seed: number): Params {
  * hard rule — nothing is ever wider or taller than `MAX_SIDE` — and it is
  * applied after the variation, not before, because that is where it can
  * actually be exceeded.
+ *
+ * Exported for the sake of that cap. No profile is 20 cells tall, so no call
+ * through `resolve` can drive the height into `MAX_SIDE`, and a test that
+ * only goes through `resolve` asserts nothing about the taller side. Reached
+ * directly, both sides can be pushed at the ceiling.
  */
-function jitterSize(base: Size, rng: Rng): Size {
+export function jitterSize(base: Size, rng: Rng): Size {
   return {
     w: Math.min(MAX_SIDE, base.w + rng.int(-1, 1)),
     h: Math.min(MAX_SIDE, base.h + rng.int(-1, 1)),
@@ -177,8 +182,13 @@ function resolveFeatures(constraints: Constraints, size: Size, conflicts: string
  * Measured on the floor, not the footprint: the wall ring is a cell deep on
  * every side and nothing stands on it. Always at least one, because a place
  * with no room for a single feature is a place not worth generating.
+ *
+ * Exported for the sake of that floor, for the same reason `jitterSize` is:
+ * the smallest floor any profile can produce is exactly `CELLS_PER_FEATURE`,
+ * so through `resolve` the budget never comes out below one on its own and
+ * the guard is unreachable. Reached directly, a smaller room reaches it.
  */
-function featureBudget(size: Size): number {
+export function featureBudget(size: Size): number {
   const floorArea = Math.max(0, size.w - 2) * Math.max(0, size.h - 2);
   return Math.max(1, Math.floor(floorArea / CELLS_PER_FEATURE));
 }

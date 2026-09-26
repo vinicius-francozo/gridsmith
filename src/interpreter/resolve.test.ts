@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Constraints, PlaceType } from '../core/types';
+import type { Constraints, PlaceType, Rng } from '../core/types';
 
-import { resolve } from './resolve';
+import { featureBudget, jitterSize, resolve } from './resolve';
 
 const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
 const SIZE_HINTS = [undefined, 'small', 'medium', 'large'] as const;
@@ -93,6 +93,48 @@ describe('size', () => {
   it('is not the same rectangle for every seed', () => {
     const shapes = new Set(SEEDS.map((seed) => JSON.stringify(resolve(constraints(), seed).size)));
     expect(shapes.size).toBeGreaterThan(1);
+  });
+});
+
+describe('the size cap, reached directly', () => {
+  /**
+   * An rng that always varies upwards, so nothing but the cap is in the way.
+   *
+   * The tests above cannot get at this: the tallest profile is 15 cells, so
+   * no seed drives the height anywhere near 20 and an assertion about the
+   * taller side through `resolve` holds whether the cap is there or not.
+   */
+  const alwaysUp: Rng = {
+    int: () => 1,
+    float: () => 1,
+    pick: (xs) => xs[0],
+  };
+
+  it('holds on both sides of a footprint already at the ceiling', () => {
+    expect(jitterSize({ w: 20, h: 20 }, alwaysUp)).toEqual({ w: 20, h: 20 });
+  });
+
+  it('holds the taller side alone when only that one is at the ceiling', () => {
+    expect(jitterSize({ w: 10, h: 20 }, alwaysUp)).toEqual({ w: 11, h: 20 });
+  });
+
+  it('leaves a footprint with room above it free to grow', () => {
+    expect(jitterSize({ w: 10, h: 8 }, alwaysUp)).toEqual({ w: 11, h: 9 });
+  });
+});
+
+describe('the feature budget, reached directly', () => {
+  it('never drops below one, however little floor there is', () => {
+    // The smallest profile leaves a 4x3 floor, so `resolve` never asks this
+    // of a room small enough for the floor to matter. The interface can.
+    expect(featureBudget({ w: 3, h: 3 })).toBe(1);
+    expect(featureBudget({ w: 2, h: 2 })).toBe(1);
+    expect(featureBudget({ w: 1, h: 30 })).toBe(1);
+  });
+
+  it('is one feature for every six cells of floor above that', () => {
+    expect(featureBudget({ w: 6, h: 5 })).toBe(2);
+    expect(featureBudget({ w: 20, h: 15 })).toBe(39);
   });
 });
 
