@@ -554,14 +554,23 @@ function scatterProps(
   rng: Rng,
 ): PlacedProp[] {
   const specs: ScatterSpec[] = profile.scatter;
-  if (specs.length === 0) {
-    return [];
-  }
+  // The chance is computed before the empty-profile exit, not after, so that
+  // `conditionScatter` closes the vocabulary on every run. Returning early
+  // first would make the guard a property of whichever profile happens to be
+  // loaded — a place with nothing to scatter would accept
+  // `condition: 'scorched'` in silence, and the same `Params` would throw or
+  // not depending on which room it named. Inert today, and known to be: every
+  // profile declares scatter, so reverting the two statements leaves the
+  // suite green. Kept because the vocabulary is closed by the generator, not
+  // by the profile table.
   const clutter = Math.min(1, Math.max(0, params.clutter));
   const chance = Math.min(
     MAX_SCATTER_CHANCE,
     profile.scatterChance * clutter * conditionScatter(params.condition),
   );
+  if (specs.length === 0) {
+    return [];
+  }
 
   const props: PlacedProp[] = [];
   for (const cell of floor) {
