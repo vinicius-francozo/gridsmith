@@ -362,11 +362,19 @@ describe('the grid lines', () => {
   });
 
   it('carry their own geometry, so the executor has nothing left to decide', () => {
+    // Written out rather than compared against `gridLines`, which is the
+    // function that produced them: that assertion holds whatever either side
+    // does, and this file calls out the same anti-pattern twice elsewhere.
+    // A 3x2 map is 210x140px — two interior verticals and one horizontal.
     const list = buildDrawList(sceneFrom(['...', '...']));
     const grid = list.commands[list.commands.length - 1] as GridCommand;
     expect(grid.color).toBe(GRID_LINE_COLOR);
     expect(grid.lineWidth).toBe(1);
-    expect(grid.lines).toEqual(gridLines(list.size, PIXELS_PER_CELL));
+    expect(grid.lines).toEqual([
+      { from: { x: 70.5, y: 0 }, to: { x: 70.5, y: 140 } },
+      { from: { x: 140.5, y: 0 }, to: { x: 140.5, y: 140 } },
+      { from: { x: 0, y: 70.5 }, to: { x: 210, y: 70.5 } },
+    ]);
   });
 
   it('are ruled exactly once', () => {
