@@ -90,3 +90,11 @@ export interface Interpreter { interpret(text: string): Promise<Constraints>; }
 
 /** Roll20's default grid. The single bridge between cells and pixels. */
 export const PIXELS_PER_CELL = 70;
+
+/**
+ * No map is wider or taller than this, in cells. A business rule of the
+ * project, not of any one module: it lives here so the interpreter, which
+ * enforces it, and anything that later needs to reason about the ceiling
+ * read the same number.
+ */
+export const MAX_SIDE = 20;
