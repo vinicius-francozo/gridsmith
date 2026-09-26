@@ -96,6 +96,26 @@ describe('size', () => {
   });
 });
 
+describe('a place type outside the vocabulary', () => {
+  it('is refused by name and by value, rather than failing on a missing field later', () => {
+    // The cast is the point: nothing at run time stops the interface from
+    // handing this straight through from a model's answer, and the failure it
+    // used to produce read `Cannot read properties of undefined (reading
+    // 'sizes')`, two files away and naming neither the field nor the word.
+    const asked = constraints({ placeType: 'throne_room' as PlaceType });
+
+    expect(() => resolve(asked, 1)).toThrow(RangeError);
+    expect(() => resolve(asked, 1)).toThrow(/placeType/);
+    expect(() => resolve(asked, 1)).toThrow(/throne_room/);
+  });
+
+  it('accepts every kind of place the vocabulary does have', () => {
+    for (const placeType of PLACE_TYPES) {
+      expect(() => resolve(constraints({ placeType }), 1)).not.toThrow();
+    }
+  });
+});
+
 describe('the size cap, reached directly', () => {
   /**
    * An rng that always varies upwards, so nothing but the cap is in the way.

@@ -83,12 +83,14 @@ const DEFAULT_SIZE_HINT = 'medium';
  * @throws {TypeError} if `seed` is not an integer, from `createRng`. A
  *                     fractional seed would name a map that cannot be found
  *                     again.
+ * @throws {RangeError} if `placeType` is not in the vocabulary — see
+ *                      `profileFor`.
  */
 export function resolve(constraints: Constraints, seed: number): Params {
   const rng = createRng(seed);
   const conflicts: string[] = [];
 
-  const profile = PROFILES[constraints.placeType];
+  const profile = profileFor(constraints.placeType);
   const size = jitterSize(profile.sizes[constraints.sizeHint ?? DEFAULT_SIZE_HINT], rng);
   const doorCount = rng.int(profile.doors.min, profile.doors.max);
 
@@ -106,6 +108,29 @@ export function resolve(constraints: Constraints, seed: number): Params {
     seed,
     conflicts,
   };
+}
+
+/**
+ * The profile for `placeType`.
+ *
+ * `resolve` is a public function, reached from the interface with whatever a
+ * language model answered — and the API does not hold the model to the
+ * vocabulary, so `placeType` arrives unverified in exactly the way `clutter`
+ * does. Left alone, an unknown kind of place reads a missing profile and
+ * fails a field later on `sizes`, naming neither the field that was wrong nor
+ * the value it held. Unlike `clutter` there is nothing sensible to fall back
+ * to: a map of no particular place is not a map, so this refuses.
+ *
+ * @throws {RangeError} if `placeType` is not one of the three kinds.
+ */
+function profileFor(placeType: PlaceType): PlaceProfile {
+  const profile: PlaceProfile | undefined = PROFILES[placeType];
+  if (profile === undefined) {
+    throw new RangeError(
+      `resolve() was given placeType "${String(placeType)}", which is not a kind of place the generator knows`,
+    );
+  }
+  return profile;
 }
 
 /**
