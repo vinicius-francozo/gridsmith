@@ -387,10 +387,20 @@ function weightedPick<T extends { weight: number }>(specs: T[], rng: Rng): T {
  * writing into the generator's own profile — after which `generate` stops
  * agreeing with itself under one seed, with no exception and no log.
  *
- * `rotateTemplate` no longer hands back anything it was given, so this copy
- * is a second line rather than the only one; it is kept because it makes the
- * guarantee a property of `PlacedProp` itself, readable at the one place a
- * `PlacedProp` is built, instead of a conclusion about two callers.
+ * **Defensive, and known to be: this function is inert today.** Measured, not
+ * assumed — reverting it to `return footprint` at both call sites leaves the
+ * whole suite green, because `rotateFootprint` allocates on every branch and
+ * `rotateTemplate` allocates on every rotation including the identity turn,
+ * so there is nothing left to alias. No mutant kills it, and a future
+ * refactor that deletes it turns nothing red.
+ *
+ * Kept anyway, and the reason is the shape of the failure rather than its
+ * likelihood: the invariant is that `generate` agrees with itself under one
+ * seed, and an aliased footprint breaks it with no exception, no log and no
+ * failing assertion — a map subtly different on the second run. The copy
+ * makes the guarantee a property of `PlacedProp` itself, readable at the one
+ * place a `PlacedProp` is built, instead of a conclusion about what two other
+ * functions currently happen to allocate.
  */
 function placedFootprint(footprint: Size): Size {
   return { w: footprint.w, h: footprint.h };
