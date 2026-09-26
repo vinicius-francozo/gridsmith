@@ -43,7 +43,20 @@ export type GenerationDeps = {
   interpreter: Interpreter;
   library: AssetLibrary;
   target: RenderTarget;
+  /**
+   * Told each time the loop moves on, so the page can say where it is.
+   *
+   * The two stages are not the same length and not the same kind of waiting.
+   * Asking the model is a round trip over the network; drawing a 20×20 hall is
+   * this machine, resolving a bitmap per cell. A page that says "interpretando"
+   * for both tells the person to check their connection while the fault, if
+   * there is one, is on their own screen.
+   */
+  onStage?: (stage: GenerationStage) => void;
 };
+
+/** Which part of the loop is running. */
+export type GenerationStage = 'interpreting' | 'drawing';
 
 /** Everything the loop produced, including what it had to give up on. */
 export type Generation = {
@@ -74,7 +87,17 @@ export async function generateMap(
   input: GenerationInput,
   deps: GenerationDeps,
 ): Promise<Generation> {
+  const reached = (stage: GenerationStage): void => {
+    deps.onStage?.(stage);
+  };
+
+  reached('interpreting');
   const constraints = await deps.interpreter.interpret(input.description);
+
+  // Everything from here on is this machine: settling the parameters, laying
+  // the place out, and painting it. Drawing is the part of that the person
+  // watches, so it is the part the stage is named for.
+  reached('drawing');
   const params = resolve(constraints, input.seed);
   const scene = generate(params, createRng(input.seed));
   await renderScene(scene, deps.library, deps.target);

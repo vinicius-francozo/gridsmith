@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Constraints, Interpreter } from '../core/types';
+import type { AssetLibrary, Constraints, Interpreter } from '../core/types';
 import { createPlaceholderLibrary } from '../assets/placeholder';
 import {
   CorsError,
@@ -10,6 +10,7 @@ import {
   UpstreamError,
 } from '../interpreter/errors';
 
+import { UI_TEXT } from './messages';
 import { mount, mountApp } from './mount';
 import type { AppServices } from './mount';
 import { API_KEY_ITEM } from './storage';
@@ -49,8 +50,15 @@ class FakeElement {
     readonly ownerDocument: FakeDocument,
   ) {}
 
+  /** Every attribute set on this element, by name. */
+  readonly attributes = new Map<string, string>();
+
   append(...nodes: FakeElement[]): void {
     this.children.push(...nodes);
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
   }
 
   replaceChildren(...nodes: FakeElement[]): void {
@@ -110,6 +118,14 @@ function byId(root: FakeElement, id: string): FakeElement {
   const found = descendants(root).find((node) => node.id === id);
   if (found === undefined) {
     throw new Error(`no element with id ${id}`);
+  }
+  return found;
+}
+
+function byClass(root: FakeElement, className: string): FakeElement {
+  const found = descendants(root).find((node) => node.className === className);
+  if (found === undefined) {
+    throw new Error(`no element with class ${className}`);
   }
   return found;
 }
@@ -206,6 +222,8 @@ type Harness = {
   seed: FakeElement;
   generate: FakeElement;
   download: FakeElement;
+  status: FakeElement;
+  failure: FakeElement;
   text: () => string;
 };
 
@@ -222,6 +240,8 @@ type HarnessOptions = {
   toPng?: AppServices['toPng'];
   /** Stands in for the platform's random source, which a browser may not have. */
   entropy?: AppServices['entropy'];
+  /** The asset library, for watching the page from inside the drawing stage. */
+  library?: AppServices['library'];
 };
 
 function mountHarness(options: HarnessOptions = {}): Harness {
@@ -234,7 +254,7 @@ function mountHarness(options: HarnessOptions = {}): Harness {
 
   const services: Partial<AppServices> = {
     storage: store,
-    library: createPlaceholderLibrary(),
+    library: options.library ?? createPlaceholderLibrary(),
     createInterpreter: (key): Interpreter => {
       keysSeen.push(key);
       return {
@@ -273,6 +293,8 @@ function mountHarness(options: HarnessOptions = {}): Harness {
     seed: byId(root, 'gs-seed'),
     generate: buttonLabelled(root, 'Gerar mapa'),
     download: buttonLabelled(root, 'Baixar PNG'),
+    status: byClass(root, 'gs-status'),
+    failure: byClass(root, 'gs-failure'),
     text: () => shownText(root),
   };
 }
@@ -595,19 +617,81 @@ describe('what the map could not be', () => {
   });
 
   it('clears the notices of the previous map before drawing the next', async () => {
+    // Two maps that were both actually drawn. The refusal this used to be
+    // written against never reaches the clearing at all, so it proved nothing
+    // about the case it was named for.
+    // The same array both times, emptied in between, so the second run is a
+    // map that really was drawn and really had nothing to report.
+    const unresolved = ['unsupported_request:um segundo andar'];
+    const app = mountHarness({ answer: constraintsFor({ unresolved }) });
+    app.description.value = 'um salão de taverna com um segundo andar';
+    app.generate.click();
+    await settle();
+    expect(app.text()).toContain('um segundo andar');
+
+    unresolved.length = 0;
+    app.description.value = 'um salão de taverna';
+    app.generate.click();
+    await settle();
+
+    expect(app.text()).not.toContain('um segundo andar');
+  });
+
+  it('keeps the notices of the map it is still offering to save', async () => {
+    // A refusal before the run starts leaves the previous map on the canvas
+    // and the download live, by the rule the page is built on. Clearing its
+    // notices there would let the person save a map whose caveats the screen
+    // has just erased.
     const app = mountHarness({
       answer: constraintsFor({ unresolved: ['unsupported_request:um segundo andar'] }),
     });
     app.description.value = 'um salão de taverna com um segundo andar';
     app.generate.click();
     await settle();
-    expect(app.text()).toContain('um segundo andar');
 
     app.description.value = '';
     app.generate.click();
     await settle();
 
-    expect(app.text()).not.toContain('um segundo andar');
+    expect(app.download.disabled).toBe(false);
+    expect(app.text()).toContain('um segundo andar');
+    expect(app.text()).toContain('Escreva uma descrição');
+  });
+
+  it('keeps them through a seed it cannot use either', async () => {
+    const app = mountHarness({
+      answer: constraintsFor({ unresolved: ['unsupported_request:um segundo andar'] }),
+    });
+    app.description.value = 'um salão de taverna com um segundo andar';
+    app.generate.click();
+    await settle();
+
+    app.seed.value = 'meia-noite';
+    app.generate.click();
+    await settle();
+
+    expect(app.text()).toContain('um segundo andar');
+  });
+
+  it('never prints a key that came back inside a notice', async () => {
+    // Reachable with nothing broken. The description field is the first on the
+    // page and the key field is the second and shows dots, so a key pasted
+    // into the wrong one is an ordinary slip — and then the key is the prompt,
+    // the model reports it as something it cannot express, and the entry is
+    // wrapped whole as `unsupported_request:<the raw text>`.
+    const key = 'sk-ant-api03-AAAAsegredoAAAA_BBBB-CCCC';
+    const app = mountHarness({
+      answer: constraintsFor({ unresolved: [`unsupported_request:um andar escondido ${key}`] }),
+    });
+    app.description.value = `um salão de taverna ${key}`;
+
+    app.generate.click();
+    await settle();
+
+    expect(app.text()).toContain('O que a descrição pediu e o mapa não tem');
+    expect(app.text()).not.toContain(key);
+    expect(app.text()).not.toContain('segredo');
+    expect(app.text()).toContain('sk-ant-***');
   });
 
   it('says nothing at all when there was nothing to say', async () => {
@@ -734,5 +818,108 @@ describe('when it goes wrong', () => {
 
     expect(app.generate.disabled).toBe(false);
     expect(app.generate.textContent).toBe('Gerar mapa');
+  });
+});
+
+describe('what the page says it is doing', () => {
+  it('says it is asking the model while the model is being asked', async () => {
+    const app = mountHarness({ hang: true });
+    app.description.value = 'um salão de taverna';
+
+    app.generate.click();
+    await settle();
+
+    expect(app.status.textContent).toBe(UI_TEXT.interpreting);
+  });
+
+  it('says it is drawing once the model has answered', async () => {
+    // A 20×20 hall spends its visible time here, not on the network: a bitmap
+    // resolved per cell and a canvas painted. A line that still claims to be
+    // interpreting sends the person to check their connection while the wait
+    // is on their own machine. The library below reports what the page was
+    // saying at the moment it was asked for a bitmap, which is inside the
+    // drawing stage by construction.
+    const real = createPlaceholderLibrary();
+    const saidWhileDrawing: string[] = [];
+    let saying = (): string => '(not mounted yet)';
+    const watched: AssetLibrary = {
+      get: (id) => real.get(id),
+      query: (tags, kind) => real.query(tags, kind),
+      bitmap: (id, rotation) => {
+        saidWhileDrawing.push(saying());
+        return real.bitmap(id, rotation);
+      },
+    };
+
+    const app = mountHarness({ library: watched });
+    saying = () => app.status.textContent;
+    app.description.value = 'um salão de taverna';
+
+    app.generate.click();
+    await settle();
+
+    expect(saidWhileDrawing.length).toBeGreaterThan(0);
+    expect([...new Set(saidWhileDrawing)]).toEqual([UI_TEXT.drawing]);
+  });
+
+  it('says the map is ready, and what it is, when it is', async () => {
+    const app = mountHarness();
+    app.description.value = 'um salão de taverna';
+    app.seed.value = '4242';
+
+    app.generate.click();
+    await settle();
+
+    expect(app.status.textContent).toContain(UI_TEXT.done);
+    expect(app.status.textContent).toContain('semente 4242');
+  });
+
+  it('announces the status line and the failure, rather than only showing them', () => {
+    // Both change while the focus is still on the button that started the run,
+    // so without a live region nothing says the map is ready or that it failed.
+    const app = mountHarness();
+
+    expect(app.status.attributes.get('aria-live')).toBe('polite');
+    expect(app.status.attributes.get('role')).toBe('status');
+    expect(app.failure.attributes.get('aria-live')).toBe('assertive');
+    expect(app.failure.attributes.get('role')).toBe('alert');
+  });
+});
+
+describe('saving the map that was encoded', () => {
+  it('names the file after the map it encoded, not after whatever came next', async () => {
+    // The download disables nothing, so both buttons stay live while the PNG
+    // encodes. A run started in that window clears the map the button is
+    // naming, and reading it after the await found nothing: no file saved, and
+    // “algo deu errado ao montar o mapa” shown for a map that was made
+    // perfectly well and is still on the canvas.
+    let finish: (blob: Blob) => void = () => undefined;
+    const app = mountHarness({
+      fail: new NetworkError(),
+      failAfter: 1,
+      toPng: () =>
+        new Promise<Blob>((resolve) => {
+          finish = resolve;
+        }),
+    });
+    app.description.value = 'um salão de taverna';
+    app.seed.value = '4242';
+    app.generate.click();
+    await settle();
+
+    app.download.click();
+    await settle();
+
+    // The second run fails, which is what clears the map the encode is for.
+    app.generate.click();
+    await settle();
+    expect(app.download.disabled).toBe(true);
+
+    finish({ size: 1, type: 'image/png' } as Blob);
+    await settle();
+
+    expect(app.saved).toHaveLength(1);
+    expect(app.saved[0].filename).toContain('4242');
+    expect(app.text()).not.toContain('Algo deu errado');
   });
 });

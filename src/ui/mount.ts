@@ -204,8 +204,17 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   actions.append(generateButton, downloadButton);
 
   const status = make('p', 'gs-status');
+  // Both of these change while the focus is still on the button that started
+  // the run, so nothing would announce them on its own. The status line is
+  // polite because it interrupts nothing worth interrupting; the failure is
+  // assertive because it is the answer to what was just asked for.
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+
   const failure = make('div', 'gs-failure');
   failure.hidden = true;
+  failure.setAttribute('role', 'alert');
+  failure.setAttribute('aria-live', 'assertive');
 
   const notices = make('div', 'gs-notices');
 
@@ -316,7 +325,6 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
       return;
     }
     showFailure(undefined);
-    notices.replaceChildren();
 
     const text = description.value.trim();
     if (text === '') {
@@ -340,6 +348,11 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
     status.textContent = UI_TEXT.interpreting;
     downloadButton.disabled = true;
     drawn = undefined;
+    // Only here, and not with the failure above. The refusals in between leave
+    // the previous map on the canvas and the download button live on purpose,
+    // and a map still offered for saving has to keep the notices that say what
+    // it could not be — otherwise the file goes out with its caveats erased.
+    notices.replaceChildren();
 
     try {
       const result = await generateMap(
@@ -348,6 +361,9 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
           interpreter: services.createInterpreter(apiKey.value.trim()),
           library: services.library,
           target,
+          onStage: (stage) => {
+            status.textContent = stage === 'drawing' ? UI_TEXT.drawing : UI_TEXT.interpreting;
+          },
         },
       );
 
@@ -357,7 +373,7 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
       );
       drawn = result.params;
       downloadButton.disabled = false;
-      status.textContent = describeResult(result.params);
+      status.textContent = `${UI_TEXT.done} ${describeResult(result.params)}`;
     } catch (error) {
       status.textContent = '';
       showFailure(describeFailure(error));
@@ -366,12 +382,24 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
     }
   };
 
+  /**
+   * Saves the map that is on the canvas.
+   *
+   * `drawn` is read into a local before the encode is awaited, and that is the
+   * whole of the care this function needs. Nothing is disabled while a PNG
+   * encodes — the encode is the browser's and it is quick — so both buttons
+   * stay live, and a run started in that window clears `drawn` on its way in.
+   * Read after the await, it would be `undefined` by the time the bytes
+   * arrived: no file saved, and "algo deu errado ao montar o mapa" shown for a
+   * map that was made perfectly well.
+   */
   const download = async (): Promise<void> => {
-    if (drawn === undefined) {
+    const saving = drawn;
+    if (saving === undefined) {
       return;
     }
     try {
-      services.saveBlob(await services.toPng(target), mapFilename(drawn));
+      services.saveBlob(await services.toPng(target), mapFilename(saving));
     } catch (error) {
       showFailure(describeFailure(error));
     }
