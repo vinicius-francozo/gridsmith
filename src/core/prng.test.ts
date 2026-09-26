@@ -112,6 +112,11 @@ describe('pick', () => {
   });
 
   it('rejects an empty array instead of returning undefined', () => {
+    // The message, not just the type: without `pick`'s own guard the call
+    // still throws a RangeError, but from `int(0, -1)` and blaming bounds the
+    // caller never wrote. Asserting the type alone leaves the guard untested.
     expect(() => createRng(42).pick([])).toThrow(RangeError);
+    expect(() => createRng(42).pick([])).toThrow('pick() needs a non-empty array');
+    expect(() => createRng(42).int(0, -1)).toThrow('int() range is empty: [0, -1]');
   });
 });
