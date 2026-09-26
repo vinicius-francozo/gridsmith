@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   assertValidSize,
   bfs,
+  cellAt,
   cellKey,
   cellToPixel,
   inBounds,
   neighbors,
   pixelToCell,
   sameCell,
+  setCellAt,
   sizeToPixels,
   step,
 } from './grid';
@@ -73,6 +75,56 @@ describe('cellKey and sameCell', () => {
     expect(sameCell({ x: 2, y: 3 }, { x: 5, y: 3 })).toBe(false);
     expect(cellKey({ x: 2, y: 3 })).not.toBe(cellKey({ x: 2, y: 4 }));
     expect(cellKey({ x: 2, y: 3 })).not.toBe(cellKey({ x: 5, y: 3 }));
+  });
+});
+
+describe('cellAt and setCellAt', () => {
+  /**
+   * Deliberately not square, and every value distinct: on a square grid a
+   * transposed index stays in bounds and returns a plausible-looking value,
+   * so the mistake would not show.
+   */
+  const grid = (): string[][] => [
+    ['a', 'b', 'c', 'd'],
+    ['e', 'f', 'g', 'h'],
+  ];
+
+  it('reads [y][x], the layout of Floorplan.cells and Scene.tiles', () => {
+    expect(cellAt(grid(), { x: 3, y: 1 })).toBe('h');
+    expect(cellAt(grid(), { x: 1, y: 0 })).toBe('b');
+    expect(cellAt(grid(), { x: 0, y: 0 })).toBe('a');
+  });
+
+  it('writes [y][x], leaving the transposed cell untouched', () => {
+    const cells = grid();
+    setCellAt(cells, { x: 2, y: 1 }, 'X');
+    expect(cells).toEqual([
+      ['a', 'b', 'c', 'd'],
+      ['e', 'f', 'X', 'h'],
+    ]);
+  });
+
+  it('round-trips a write through a read', () => {
+    const cells = grid();
+    setCellAt(cells, { x: 1, y: 1 }, 'Z');
+    expect(cellAt(cells, { x: 1, y: 1 })).toBe('Z');
+  });
+
+  it('rejects a cell outside the grid rather than reading undefined', () => {
+    // Including the transposition that a square grid would have hidden.
+    expect(() => cellAt(grid(), { x: 0, y: 3 })).toThrow(RangeError);
+    expect(() => cellAt(grid(), { x: 4, y: 0 })).toThrow(RangeError);
+    expect(() => cellAt(grid(), { x: -1, y: 0 })).toThrow(RangeError);
+    expect(() => cellAt(grid(), { x: 0, y: -1 })).toThrow(RangeError);
+    expect(() => cellAt(grid(), { x: 1.5, y: 0 })).toThrow(RangeError);
+    expect(() => cellAt(grid(), { x: 1, y: 3 })).toThrow('cell 1,3 is outside the grid');
+  });
+
+  it('rejects a write outside the grid rather than growing the row', () => {
+    const cells = grid();
+    expect(() => setCellAt(cells, { x: 4, y: 0 }, 'X')).toThrow(RangeError);
+    expect(() => setCellAt(cells, { x: 0, y: 2 }, 'X')).toThrow(RangeError);
+    expect(cells).toEqual(grid());
   });
 });
 

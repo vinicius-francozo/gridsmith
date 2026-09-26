@@ -70,6 +70,47 @@ export function inBounds(cell: Cell, size: Size): boolean {
   );
 }
 
+// --- Indexing a cell grid --------------------------------------------------
+//
+// `Floorplan.cells` and `Scene.tiles` are both `[y][x]`: the outer array is the
+// row. Every hand-written `grid[y][x]` is a chance to transpose it, and a
+// transposed read on a non-square grid either throws far from the mistake or,
+// worse, silently addresses the wrong cell. These two accessors spell the
+// order out once, so no caller has to remember it.
+
+/**
+ * The row of `grid` that `cell` addresses.
+ *
+ * @throws {RangeError} if `cell` addresses no square of `grid`. Out of bounds
+ *                      reads as `undefined` otherwise, which passes for a real
+ *                      value through several layers before it fails.
+ */
+function rowAt<T>(grid: T[][], cell: Cell): T[] {
+  const row = Number.isInteger(cell.y) ? grid[cell.y] : undefined;
+  if (row === undefined || !Number.isInteger(cell.x) || cell.x < 0 || cell.x >= row.length) {
+    throw new RangeError(`cell ${cellKey(cell)} is outside the grid`);
+  }
+  return row;
+}
+
+/**
+ * The value `grid` holds at `cell`, indexed `[y][x]`.
+ *
+ * @throws {RangeError} if `cell` is outside `grid`.
+ */
+export function cellAt<T>(grid: T[][], cell: Cell): T {
+  return rowAt(grid, cell)[cell.x];
+}
+
+/**
+ * Writes `value` into `grid` at `cell`, indexed `[y][x]`.
+ *
+ * @throws {RangeError} if `cell` is outside `grid`.
+ */
+export function setCellAt<T>(grid: T[][], cell: Cell, value: T): void {
+  rowAt(grid, cell)[cell.x] = value;
+}
+
 /**
  * The orthogonal neighbours of `cell` that lie inside the grid, in `FACINGS`
  * order. Diagonals are not neighbours: movement, reachability and circulation
