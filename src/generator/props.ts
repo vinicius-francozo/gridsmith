@@ -91,28 +91,37 @@ export function rotateTemplate(
   const turned = rotateFootprint(size, rotation);
   const moved = parts.map((part) => {
     const { offset, footprint } = part;
-    if (rotation === 0) {
-      return part;
-    }
-    if (rotation === 180) {
-      return {
-        assetId: part.assetId,
-        offset: { x: size.w - offset.x - footprint.w, y: size.h - offset.y - footprint.h },
-        footprint,
-      };
-    }
-    const spun: Size = { w: footprint.h, h: footprint.w };
-    return rotation === 90
-      ? {
+    // A fresh `offset` and `footprint` on every branch, the identity turn
+    // included. Handing a part back by reference would put the very object
+    // stored in `PROFILES` into a `PlacedProp`, and one consumer scaling or
+    // normalising it in place would corrupt the profile for the rest of the
+    // session. See `placedFootprint`.
+    const spun: Size =
+      rotation === 90 || rotation === 270
+        ? { w: footprint.h, h: footprint.w }
+        : { w: footprint.w, h: footprint.h };
+    switch (rotation) {
+      case 0:
+        return { assetId: part.assetId, offset: { x: offset.x, y: offset.y }, footprint: spun };
+      case 180:
+        return {
+          assetId: part.assetId,
+          offset: { x: size.w - offset.x - footprint.w, y: size.h - offset.y - footprint.h },
+          footprint: spun,
+        };
+      case 90:
+        return {
           assetId: part.assetId,
           offset: { x: size.h - offset.y - footprint.h, y: offset.x },
           footprint: spun,
-        }
-      : {
+        };
+      default:
+        return {
           assetId: part.assetId,
           offset: { x: offset.y, y: size.w - offset.x - footprint.w },
           footprint: spun,
         };
+    }
   });
   return { size: turned, parts: moved };
 }
@@ -308,6 +317,25 @@ function weightedPick<T extends { weight: number }>(specs: T[], rng: Rng): T {
   return specs[specs.length - 1];
 }
 
+/**
+ * The footprint object a `PlacedProp` leaves with: always a fresh one.
+ *
+ * Every candidate placement of one rotation would otherwise share the single
+ * `Size` the loop computed, and a template part would share the object held
+ * in `PROFILES`. `PlacedProp` is handed to the renderer and to the interface,
+ * and a consumer that normalises or scales a footprint in place would then be
+ * writing into the generator's own profile — after which `generate` stops
+ * agreeing with itself under one seed, with no exception and no log.
+ *
+ * `rotateTemplate` no longer hands back anything it was given, so this copy
+ * is a second line rather than the only one; it is kept because it makes the
+ * guarantee a property of `PlacedProp` itself, readable at the one place a
+ * `PlacedProp` is built, instead of a conclusion about two callers.
+ */
+function placedFootprint(footprint: Size): Size {
+  return { w: footprint.w, h: footprint.h };
+}
+
 /** Every way `spec` could stand against a wall of this room. */
 function anchorCandidates(room: Room, spec: AnchorSpec, size: Size): Placement[] {
   const found: Placement[] = [];
@@ -329,7 +357,13 @@ function anchorCandidates(room: Room, spec: AnchorSpec, size: Size): Placement[]
         found.push({
           rects: [rect],
           parts: [
-            { assetId: spec.assetId, cell: { x, y }, footprint, rotation, layer: 'anchor' },
+            {
+              assetId: spec.assetId,
+              cell: { x, y },
+              footprint: placedFootprint(footprint),
+              rotation,
+              layer: 'anchor',
+            },
           ],
         });
       }
@@ -359,7 +393,7 @@ function groupCandidates(room: Room, spec: GroupSpec, size: Size): Placement[] {
           parts: template.parts.map((part, i) => ({
             assetId: part.assetId,
             cell: { x: rects[i].x, y: rects[i].y },
-            footprint: part.footprint,
+            footprint: placedFootprint(part.footprint),
             rotation,
             layer: 'group' as const,
           })),

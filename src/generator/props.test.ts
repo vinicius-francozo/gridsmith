@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { cellAt, cellKey, inBounds, step } from '../core/grid';
 import { createRng } from '../core/prng';
-import type { Cell, Facing, Floorplan, PlaceType, PlacedProp, Rotation } from '../core/types';
+import type { Cell, Facing, Floorplan, PlaceType, PlacedProp, Rotation, Size } from '../core/types';
 import { buildFloorplan, opposite } from './floorplan';
 import { profileFor, ROTATIONS } from './profiles';
 import type { GroupPart, PlaceProfile } from './profiles';
@@ -114,6 +114,29 @@ describe('rotateTemplate', () => {
         { assetId: 'tail', offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
       ],
     });
+  });
+
+  it('shares no object with the template it was handed, at any rotation', () => {
+    // `rotateTemplate` is handed the array held in `PROFILES`. A part given
+    // back by identity — which the identity turn and the half turn used to do
+    // — puts the profile's own `Size` into a `PlacedProp`, and from there
+    // into the renderer's hands. One consumer normalising it in place would
+    // rewrite the generator's profile for the rest of the session.
+    for (const placeType of PLACE_TYPES) {
+      for (const group of profileFor(placeType).groups) {
+        for (const rotation of ROTATIONS) {
+          const turned = rotateTemplate(group.size, group.parts, rotation);
+          expect(turned.size).not.toBe(group.size);
+          for (const part of turned.parts) {
+            expect(group.parts).not.toContain(part);
+            for (const original of group.parts) {
+              expect(part.footprint).not.toBe(original.footprint);
+              expect(part.offset).not.toBe(original.offset);
+            }
+          }
+        }
+      }
+    }
   });
 
   it('keeps every part inside the turned box, for every template of every profile', () => {
@@ -281,6 +304,44 @@ describe('the whole prop set', () => {
           expect(taken.has(cellKey(door.cell))).toBe(false);
           expect(taken.has(cellKey(approach))).toBe(false);
         }
+      }
+    }
+  });
+
+  it('hands every prop a footprint object of its own, reaching into no profile', () => {
+    // A consumer — the renderer, the interface — that normalises or scales a
+    // footprint in place must not be able to write into `PROFILES`. If it
+    // could, the generator's own profile would stay corrupt for the rest of
+    // the browser session and two calls to `generate` under one seed would
+    // hand back different scenes: no exception, no log, no red test. That is
+    // the silent loss of the invariant the whole project rests on, and it is
+    // exactly what a group part handed back by identity at rotation 0 or 180
+    // used to do.
+    const profileShape = (placeType: PlaceType): string => {
+      const profile = profileFor(placeType);
+      return JSON.stringify([profile.anchors, profile.groups, profile.scatter]);
+    };
+
+    for (const placeType of PLACE_TYPES) {
+      for (const seed of [0, 3, 7, 11]) {
+        const before = profileShape(placeType);
+        const { props } = furnished(placeType, seed);
+        expect(props.length).toBeGreaterThan(0);
+        const scene = JSON.stringify(props);
+
+        const handedOut: Size[] = [];
+        for (const prop of props) {
+          // Two props sharing one object is the same bug one step removed.
+          expect(handedOut).not.toContain(prop.footprint);
+          handedOut.push(prop.footprint);
+          prop.footprint.w = 99;
+          prop.footprint.h = 99;
+        }
+
+        expect(`${placeType}/${seed} profile: ${profileShape(placeType)}`).toBe(
+          `${placeType}/${seed} profile: ${before}`,
+        );
+        expect(JSON.stringify(furnished(placeType, seed).props)).toBe(scene);
       }
     }
   });
