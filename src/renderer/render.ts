@@ -18,7 +18,8 @@
  * `OffscreenCanvas` for export.
  */
 
-import type { AssetLibrary, Rotation, Scene } from '../core/types';
+import type { AssetDef, AssetLibrary, Rotation, Scene } from '../core/types';
+import { validateBitmapSize, validatePlacement } from '../assets/contract';
 import { buildDrawList } from './drawlist';
 import type { DrawList, PixelLine } from './drawlist';
 
@@ -73,7 +74,15 @@ async function resolveBitmaps(
   await Promise.all(
     [...wanted].map(async ([key, { id, rotation }]) => {
       try {
-        resolved.set(key, await library.bitmap(id, rotation));
+        const bitmap = await library.bitmap(id, rotation);
+        const def = library.get(id);
+        if (
+          def !== undefined &&
+          validateBitmapSize(def, rotation, { w: bitmap.width, h: bitmap.height }).length > 0
+        ) {
+          return;
+        }
+        resolved.set(key, bitmap);
       } catch {
         // Left out of the map; the paint loop draws the missing marker.
       }
@@ -183,6 +192,39 @@ export async function executeDrawList(
 }
 
 /**
+ * Rejects a scene whose placements disagree with the library that will draw it.
+ *
+ * `PlacedProp.footprint` is the footprint **as placed**, already turned, and
+ * `bitmap(id, rotation)` hands back art already turned to match. If a
+ * generator writes the unturned footprint on a `bar_counter` placed at 90°,
+ * the draw list reserves 350x140px while the library returns 140x350px, and
+ * `drawImage` squeezes the art into the rectangle without a word: a prop
+ * transposed on the map, no error, no magenta. This is the guard the frozen
+ * contract was written for, run where it can catch that.
+ *
+ * Props the library does not know are left alone — a missing asset is already
+ * answered by the magenta rectangle, and there is no definition to check
+ * against.
+ *
+ * @throws {TypeError} listing every placement that breaks the contract.
+ */
+function assertPlacements(scene: Scene, library: AssetLibrary): void {
+  const issues: string[] = [];
+  for (const prop of scene.props) {
+    const def: AssetDef | undefined = library.get(prop.assetId);
+    if (def === undefined) {
+      continue;
+    }
+    for (const issue of validatePlacement(def, prop)) {
+      issues.push(`at (${prop.cell.x}, ${prop.cell.y}): ${issue}`);
+    }
+  }
+  if (issues.length > 0) {
+    throw new TypeError(`the scene breaks the asset contract: ${issues.join('; ')}`);
+  }
+}
+
+/**
  * Renders a scene onto `canvas`.
  *
  * The canvas comes out exactly `Floorplan.size` times `PIXELS_PER_CELL` on
@@ -190,12 +232,14 @@ export async function executeDrawList(
  * virtual tabletop's own.
  *
  * @throws {RangeError} if the scene is inconsistent — see `buildDrawList`.
- * @throws {TypeError} if the canvas has no 2d context.
+ * @throws {TypeError} if a placement breaks the asset contract, or if the
+ *                     canvas has no 2d context.
  */
 export async function renderScene(
   scene: Scene,
   library: AssetLibrary,
   canvas: RenderTarget,
 ): Promise<void> {
+  assertPlacements(scene, library);
   await executeDrawList(buildDrawList(scene), library, canvas);
 }
