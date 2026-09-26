@@ -140,12 +140,35 @@ describe('buildFootprint', () => {
     }
   });
 
-  it('reaches every orientation over a run of seeds', () => {
+  it('draws several distinct footprints over a run of seeds', () => {
     const shapes = new Set<string>();
     for (let seed = 0; seed < 60; seed += 1) {
       shapes.add(JSON.stringify(buildFootprint('l_shape', interior, createRng(seed))));
     }
     // Four corners, times the sizes of the cut.
     expect(shapes.size).toBeGreaterThanOrEqual(4);
+  });
+
+  it('reaches every orientation over a run of seeds', () => {
+    // Counting distinct footprints is not this: the sizes of the cut alone
+    // already give four of them, so nulling both mirrors leaves the grammar
+    // biting the same corner every time and the count still passes. Half the
+    // variety of the grammar is in the mirrors, and this is what holds it.
+    // An L always loses exactly one corner of its frame, so the corner it
+    // loses names the orientation.
+    const bitten = new Set<string>();
+    for (let seed = 0; seed < 60; seed += 1) {
+      const covered = cover(buildFootprint('l_shape', interior, createRng(seed)));
+      const corners: [string, number, number][] = [
+        ['nw', interior.x, interior.y],
+        ['ne', interior.x + interior.w - 1, interior.y],
+        ['sw', interior.x, interior.y + interior.h - 1],
+        ['se', interior.x + interior.w - 1, interior.y + interior.h - 1],
+      ];
+      const missing = corners.filter(([, x, y]) => !covered.has(`${x},${y}`));
+      expect(`seed ${seed} loses ${missing.length} corner(s)`).toBe(`seed ${seed} loses 1 corner(s)`);
+      bitten.add(missing[0][0]);
+    }
+    expect([...bitten].sort()).toEqual(['ne', 'nw', 'se', 'sw']);
   });
 });

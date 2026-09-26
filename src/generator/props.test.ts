@@ -255,6 +255,25 @@ describe('the anchor layer', () => {
     expect(checked).toBeGreaterThan(0);
   });
 
+  it('stands anchors against every wall of the room, not only the north one', () => {
+    // `anchorCandidates` iterating only `ROTATIONS[0]` passes every other
+    // test in this file: the anchors still back onto a wall, still record a
+    // turned footprint, still fit and still answer the features. They would
+    // simply all have their backs to the north wall, and nobody would see it
+    // until the map was drawn.
+    const seen = new Set<Rotation>();
+    for (const placeType of PLACE_TYPES) {
+      for (let seed = 0; seed < 15; seed += 1) {
+        for (const anchor of furnished(placeType, seed).props) {
+          if (anchor.layer === 'anchor') {
+            seen.add(anchor.rotation);
+          }
+        }
+      }
+    }
+    expect([...seen].sort((a, b) => a - b)).toEqual([...ROTATIONS]);
+  });
+
   it('records an anchor footprint already turned, not waiting to be turned', () => {
     // The renderer reads `footprint` as the cells the prop actually covers
     // and applies no transform. An unturned footprint here would draw every
@@ -438,6 +457,58 @@ describe('the whole prop set', () => {
     }
   });
 
+  it('records a group prop footprint already turned, exactly as an anchor does', () => {
+    // `rotateTemplate` is well covered on its own, but nothing checked its
+    // point of use. Dropping the call in `groupCandidates` while still
+    // recording the rotation on the `PlacedProp` passes every other test —
+    // the parts still fit, still land on floor, still do not overlap — and
+    // every group prop at a quarter turn renders transposed. That is word
+    // for word what the frozen contract warns about, and the anchors have
+    // this test while the groups did not.
+    /** Group part ids that name exactly one footprint, and a non-square one. */
+    const turnable = (profile: PlaceProfile): Map<string, Size> => {
+      const declared = new Map<string, Size[]>();
+      for (const group of profile.groups) {
+        for (const part of group.parts) {
+          declared.set(part.assetId, [...(declared.get(part.assetId) ?? []), part.footprint]);
+        }
+      }
+      const single = new Map<string, Size>();
+      for (const [assetId, found] of declared) {
+        const shapes = new Set(found.map((size) => `${size.w}x${size.h}`));
+        const [first] = found;
+        if (shapes.size === 1 && first.w !== first.h) {
+          single.set(assetIdFor('group', assetId), first);
+        }
+      }
+      return single;
+    };
+
+    let quarterTurned = 0;
+    for (const placeType of PLACE_TYPES) {
+      const known = turnable(profileFor(placeType));
+      for (let seed = 0; seed < 20; seed += 1) {
+        for (const prop of furnished(placeType, seed).props) {
+          const unturned = prop.layer === 'group' ? known.get(prop.assetId) : undefined;
+          if (unturned === undefined) {
+            continue;
+          }
+          const want = rotateFootprint(unturned, prop.rotation);
+          expect(
+            `${placeType}/${seed} ${prop.assetId}@${prop.rotation}: ${prop.footprint.w}x${prop.footprint.h}`,
+          ).toBe(`${placeType}/${seed} ${prop.assetId}@${prop.rotation}: ${want.w}x${want.h}`);
+          if (prop.rotation === 90 || prop.rotation === 270) {
+            quarterTurned += 1;
+          }
+        }
+      }
+    }
+    // Without a quarter-turned group the assertion above says nothing.
+    expect(`quarter-turned group props checked: ${quarterTurned > 0}`).toBe(
+      'quarter-turned group props checked: true',
+    );
+  });
+
   it('returns the layers in drawing order: anchors, then groups, then scatter', () => {
     const order = { anchor: 0, group: 1, scatter: 2 };
     for (const placeType of PLACE_TYPES) {
@@ -473,6 +544,33 @@ describe('the scatter layer', () => {
         expect(prop.footprint).toEqual({ w: 1, h: 1 });
       }
     }
+  });
+
+  it('draws debris in proportion to the weights its profile declares', () => {
+    // `weightedPick` returning the first spec every time passes every other
+    // test: every id is still one the profile declares and every footprint
+    // is still 1x1. The weights would just be decoration on the page.
+    const counts = new Map<string, number>();
+    for (let seed = 0; seed < 20; seed += 1) {
+      for (const prop of furnished('tavern_hall', seed, { clutter: 1, condition: 'ruined' })
+        .props) {
+        if (prop.layer === 'scatter') {
+          counts.set(prop.assetId, (counts.get(prop.assetId) ?? 0) + 1);
+        }
+      }
+    }
+
+    const drawn = (name: string): number => counts.get(assetIdFor('scatter', name)) ?? 0;
+    for (const spec of profileFor('tavern_hall').scatter) {
+      expect(`${spec.assetId} at weight ${spec.weight}: ${drawn(spec.assetId)} drawn`).not.toBe(
+        `${spec.assetId} at weight ${spec.weight}: 0 drawn`,
+      );
+    }
+    // A mug carries four times the weight of straw; twice as many is the
+    // loosest claim that still separates the weights from a flat draw.
+    expect(`mug ${drawn('mug')} vs straw ${drawn('straw')}`).toBe(
+      `mug ${drawn('mug')} vs straw ${drawn('straw') * 2 < drawn('mug') ? drawn('straw') : 'too many'}`,
+    );
   });
 
   it('drops nothing when the profile declares no scatter at all', () => {
