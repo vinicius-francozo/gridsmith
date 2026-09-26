@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Params, PlaceType } from '../core/types';
 
@@ -148,6 +148,15 @@ function saveInto(doc: FakeDocument, filename = 'gridsmith-tavern-hall-seed-4242
 }
 
 describe('handing the finished image to the browser', () => {
+  // The clock is fake for every test here, not only for the two that read it.
+  // The saver leaves a timer running for a quarter of a second after every
+  // save, so a test that does not touch the clock still ends with a real timer
+  // pending — which then fires against a document that was thrown away, after
+  // the test that made it has finished.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -208,12 +217,16 @@ describe('handing the finished image to the browser', () => {
   it('revokes the object URL, so twenty maps in a session are not all held', () => {
     // The leak the comment on this function spends a paragraph on. Without the
     // revocation every decoded image stays alive for the life of the tab.
-    vi.useFakeTimers();
+    //
+    // Advanced by the literal rather than by `REVOKE_DELAY_MS`: a clock moved
+    // by the same constant the code waits on arrives at the right moment for
+    // every value of it, zero included, so it is the one number this assertion
+    // could not have checked.
     const revoke = vi.spyOn(URL, 'revokeObjectURL');
     const doc = new FakeDocument();
 
     saveInto(doc);
-    vi.advanceTimersByTime(REVOKE_DELAY_MS);
+    vi.advanceTimersByTime(250);
 
     expect(revoke).toHaveBeenCalledWith(doc.anchors[0].href);
   });
@@ -221,15 +234,24 @@ describe('handing the finished image to the browser', () => {
   it('does not revoke it out from under the click', () => {
     // The other half. Firefox reads the URL after the handler returns, so a
     // revocation on the next line is a download that never starts — and, again,
-    // nothing throws.
-    vi.useFakeTimers();
+    // nothing throws. The wait is asserted at the tick before it and the tick
+    // it lands on, which is what makes a shortened delay fail here rather than
+    // in Firefox.
     const revoke = vi.spyOn(URL, 'revokeObjectURL');
     const doc = new FakeDocument();
 
     saveInto(doc);
 
     expect(revoke).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(REVOKE_DELAY_MS);
+    vi.advanceTimersByTime(249);
+    expect(revoke).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
     expect(revoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits exactly as long as the constant the comment argues for', () => {
+    // The two tests above move a literal clock, so the constant itself is what
+    // is left to pin: the number in the module is the number they assume.
+    expect(REVOKE_DELAY_MS).toBe(250);
   });
 });
