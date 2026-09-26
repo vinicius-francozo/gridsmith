@@ -62,6 +62,32 @@ const CONDITION_SCATTER: Record<Condition, number> = {
 };
 
 /**
+ * The scatter factor of `condition`.
+ *
+ * @throws {Error} if `condition` is outside the closed vocabulary. The type
+ *                 system rules it out inside the project, but `Params` may
+ *                 have come through a language model and a JSON boundary, and
+ *                 the API does not enforce the schema — the client-side
+ *                 validation is the only thing that closes the vocabulary, so
+ *                 the generator closes it again here, as `profileFor` does
+ *                 for `placeType`.
+ *
+ * Left unguarded the lookup gives `undefined`, `chance` becomes `NaN`, and
+ * `rng.float() >= NaN` is false — so the skip never fires and the scatter
+ * layer drops a prop on every free cell in the room. Measured in a 20x18
+ * hall: 145 pieces of debris over 222 floor cells, against 8 with a valid
+ * condition on the same seed. Worse, the scene it hands back passes
+ * `validateScene` in full, because debris is meant to be walked over.
+ */
+function conditionScatter(condition: Condition): number {
+  const factor = CONDITION_SCATTER[condition];
+  if (factor === undefined) {
+    throw new Error(`unknown condition '${condition}'`);
+  }
+  return factor;
+}
+
+/**
  * The wall a prop has its back to, per rotation.
  *
  * An unrotated prop stands with its back against a wall to its north; each
@@ -500,7 +526,7 @@ function scatterProps(
   const clutter = Math.min(1, Math.max(0, params.clutter));
   const chance = Math.min(
     MAX_SCATTER_CHANCE,
-    profile.scatterChance * clutter * CONDITION_SCATTER[params.condition],
+    profile.scatterChance * clutter * conditionScatter(params.condition),
   );
 
   const props: PlacedProp[] = [];

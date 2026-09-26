@@ -140,6 +140,24 @@ describe('generate', () => {
       'unknown place type',
     );
   });
+
+  it('refuses a condition outside the closed vocabulary', () => {
+    // `Params` can arrive from a language model through JSON, and the API
+    // does not enforce the schema. Unguarded, the scatter factor is
+    // `undefined`, the chance is `NaN`, `rng.float() >= NaN` is false, and
+    // every free cell in the room takes a piece of debris — in a scene that
+    // still passes `validateScene`, so nothing downstream notices either.
+    const params = busy('tavern_hall', { condition: 'scorched' as Params['condition'] });
+    expect(() => generate(params, createRng(1))).toThrow('unknown condition');
+  });
+
+  it('refuses a light level outside the closed vocabulary', () => {
+    // `dark` is a deliberate `null` in the lamp table, so an unknown level
+    // comes back `undefined` and slips past a `!== null` test into a raw
+    // `TypeError` from inside the generator.
+    const params = busy('tavern_hall', { light: 'candlelit' as Params['light'] });
+    expect(() => generate(params, createRng(1))).toThrow('unknown light level');
+  });
 });
 
 describe('the scene generate returns', () => {

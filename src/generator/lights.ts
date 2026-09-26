@@ -21,6 +21,28 @@ const AMBIENT: Record<Light, { spacing: number; radiusCells: number } | null> = 
   bright: { spacing: 5, radiusCells: 7 },
 };
 
+/**
+ * The lamp rule for `light`, or `null` where the level hangs no lamps.
+ *
+ * @throws {Error} if `light` is outside the closed vocabulary, for the same
+ *                 reason `profileFor` guards `placeType`: `Params` may have
+ *                 come through a language model and a JSON boundary, and the
+ *                 API does not enforce the schema.
+ *
+ * The guard has to be its own test rather than `!== null` at the call site.
+ * `dark` is recorded as a deliberate `null`, so an unknown level comes back
+ * `undefined`, passes `!== null`, and the next line reads `.spacing` off it:
+ * a raw `TypeError` out of the middle of the generator. The sentinel that
+ * makes `dark` explicit is exactly what makes `!== null` the wrong test.
+ */
+function ambientFor(light: Light): { spacing: number; radiusCells: number } | null {
+  const ambient = AMBIENT[light];
+  if (ambient === undefined) {
+    throw new Error(`unknown light level '${light}'`);
+  }
+  return ambient;
+}
+
 /** The colour of a hanging lamp; a hearth carries its own, from its spec. */
 const LAMP_COLOR = '#ffe9c4';
 
@@ -61,7 +83,7 @@ export function deriveLights(
     });
   }
 
-  const ambient = AMBIENT[light];
+  const ambient = ambientFor(light);
   if (ambient !== null) {
     const { size, cells } = floorplan;
     const half = Math.floor(ambient.spacing / 2);
