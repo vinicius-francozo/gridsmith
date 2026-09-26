@@ -296,13 +296,33 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
 
   /** The parameters of the map currently on the canvas, for naming its file. */
   let drawn: Params | undefined;
-  /** Guards against a second run while the first is still in the air. */
+  /**
+   * Whether a generation or an encoding is in the air.
+   *
+   * One flag for both, and both buttons wait on it. The canvas is a single
+   * mutable thing that a run overwrites and an encode reads, and every way of
+   * overlapping those two ends the same way: the encode reads a canvas that is
+   * no longer the map it was asked for, throws over the size it did not expect,
+   * and the person is told the map failed while a perfectly good one is on the
+   * screen. Keeping only what the encode needs would close one path in at a
+   * time; refusing to start the second thing closes the class, and it is what a
+   * disabled button already promises anyway.
+   */
   let busy = false;
+  /** Whether what is in the air is a generation, which is what the label says. */
+  let generating = false;
+
+  /** Puts both buttons into the state the two flags and `drawn` describe. */
+  const refreshButtons = (): void => {
+    generateButton.disabled = busy;
+    generateButton.textContent = generating ? UI_TEXT.generating : UI_TEXT.generate;
+    downloadButton.disabled = busy || drawn === undefined;
+  };
 
   const setBusy = (value: boolean): void => {
     busy = value;
-    generateButton.disabled = value;
-    generateButton.textContent = value ? UI_TEXT.generating : UI_TEXT.generate;
+    generating = value;
+    refreshButtons();
   };
 
   /**
@@ -387,7 +407,6 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
         ...noticeList(UI_TEXT.conflictsHeading, describeEntries(result.params.conflicts)),
       );
       drawn = result.params;
-      downloadButton.disabled = false;
       status.textContent = `${UI_TEXT.done} ${describeResult(result.params)}`;
     } catch (error) {
       status.textContent = '';
@@ -400,23 +419,28 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   /**
    * Saves the map that is on the canvas.
    *
-   * `drawn` is read into a local before the encode is awaited, and that is the
-   * whole of the care this function needs. Nothing is disabled while a PNG
-   * encodes — the encode is the browser's and it is quick — so both buttons
-   * stay live, and a run started in that window clears `drawn` on its way in.
-   * Read after the await, it would be `undefined` by the time the bytes
-   * arrived: no file saved, and "algo deu errado ao montar o mapa" shown for a
-   * map that was made perfectly well.
+   * `drawn` is read into a local before the encode is awaited, and the buttons
+   * are held for as long as the encode lasts. The parameters alone are not
+   * enough: `target` is the live canvas, and the encoder reads its width and
+   * height after two awaits, so a run finishing underneath an encode leaves it
+   * reading a canvas of another size. The encode throws, the catch below turns
+   * that into "algo deu errado" — for a map that came out perfectly and is
+   * still on the screen.
    */
   const download = async (): Promise<void> => {
     const saving = drawn;
-    if (saving === undefined) {
+    if (saving === undefined || busy) {
       return;
     }
+    busy = true;
+    refreshButtons();
     try {
       services.saveBlob(await services.toPng(target), mapFilename(saving));
     } catch (error) {
       showFailure(describeFailure(error));
+    } finally {
+      busy = false;
+      refreshButtons();
     }
   };
 

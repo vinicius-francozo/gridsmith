@@ -931,16 +931,16 @@ describe('what the page says it is doing', () => {
 });
 
 describe('saving the map that was encoded', () => {
-  it('names the file after the map it encoded, not after whatever came next', async () => {
-    // The download disables nothing, so both buttons stay live while the PNG
-    // encodes. A run started in that window clears the map the button is
-    // naming, and reading it after the await found nothing: no file saved, and
-    // “algo deu errado ao montar o mapa” shown for a map that was made
-    // perfectly well and is still on the canvas.
+  it('refuses to start a run while the PNG is still encoding', async () => {
+    // The whole class, closed at the root. The encoder is handed `target`, the
+    // live canvas, and reads its width and height after two awaits — so a run
+    // that finishes underneath an encode leaves it measuring a canvas of
+    // another size, it throws, and the catch says “algo deu errado ao montar o
+    // mapa” about a map that came out perfectly and is still on the screen.
+    // Holding both buttons for as long as anything is in the air removes the
+    // window rather than rescuing what falls into it.
     let finish: (blob: Blob) => void = () => undefined;
     const app = mountHarness({
-      fail: new NetworkError(),
-      failAfter: 1,
       toPng: () =>
         new Promise<Blob>((resolve) => {
           finish = resolve;
@@ -950,14 +950,17 @@ describe('saving the map that was encoded', () => {
     app.seed.value = '4242';
     app.generate.click();
     await settle();
+    expect(app.asked).toHaveLength(1);
 
     app.download.click();
     await settle();
 
-    // The second run fails, which is what clears the map the encode is for.
+    expect(app.generate.disabled).toBe(true);
+    expect(app.download.disabled).toBe(true);
+
     app.generate.click();
     await settle();
-    expect(app.download.disabled).toBe(true);
+    expect(app.asked).toHaveLength(1);
 
     finish({ size: 1, type: 'image/png' } as Blob);
     await settle();
@@ -965,5 +968,7 @@ describe('saving the map that was encoded', () => {
     expect(app.saved).toHaveLength(1);
     expect(app.saved[0].filename).toContain('4242');
     expect(app.text()).not.toContain('Algo deu errado');
+    expect(app.generate.disabled).toBe(false);
+    expect(app.download.disabled).toBe(false);
   });
 });
