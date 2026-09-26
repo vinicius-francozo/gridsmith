@@ -255,6 +255,34 @@ describe('doorCandidates', () => {
     expect(doorCandidates(plan.cells, plan.size).map((c) => cellKey(c.cell))).toEqual(['2,2']);
   });
 
+  it('breaks a run where the wall stops, rather than measuring across the gap', () => {
+    // A T puts two south-facing runs on one line, one either side of the
+    // stem. The five-cell room every other test here uses has a single run
+    // per side, so nothing exercised the break — and joining the two would
+    // measure each cell's setback through the hole. The cells next to the
+    // stem would come out as the middle of a long wall and a door could land
+    // in an inside corner.
+    const tee = planFrom([
+      '#############',
+      '#...........#',
+      '#...........#',
+      '#####...#####',
+      '    #...#    ',
+      '    #...#    ',
+      '    #####    ',
+    ]);
+
+    const southOfTheBand = doorCandidates(tee.cells, tee.size)
+      .filter((candidate) => candidate.facing === 's' && candidate.cell.y === 3)
+      .sort((a, b) => a.cell.x - b.cell.x);
+
+    expect(southOfTheBand.map((candidate) => candidate.cell.x)).toEqual([1, 2, 3, 9, 10, 11]);
+    // Two runs of three: 0, 1, 0 and 0, 1, 0. Joined into one run of six it
+    // would read 0, 1, 2, 2, 1, 0, and x=3 and x=9 — the cells hard against
+    // the stem — would claim the full two-cell setback from a corner.
+    expect(southOfTheBand.map((candidate) => candidate.setback)).toEqual([0, 1, 0, 0, 1, 0]);
+  });
+
   it('finds nothing in a plan with no wall at all', () => {
     const plan = planFrom([
       '...',
