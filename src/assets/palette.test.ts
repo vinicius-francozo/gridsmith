@@ -32,10 +32,25 @@ describe('hslToHex', () => {
     expect(hslToHex(240, 100, 50)).toBe('#0000ff');
   });
 
-  it('converts the secondaries exactly, which pins every sextant', () => {
+  it('converts the secondaries exactly', () => {
+    // These are the sextant boundaries, and they pin nothing about which
+    // sextant was taken: at 60, 180 and 300 two of the three channels are
+    // equal, so swapping the two entries that meet there is invisible here.
     expect(hslToHex(60, 100, 50)).toBe('#ffff00');
     expect(hslToHex(180, 100, 50)).toBe('#00ffff');
     expect(hslToHex(300, 100, 50)).toBe('#ff00ff');
+  });
+
+  it('pins each of the six sextants, at a hue where no two channels agree', () => {
+    // One hue from the middle of each sextant. Every value below is distinct
+    // from the other five in channel order, so a sextant table with any two
+    // rows swapped, or off by one, fails here rather than passing by symmetry.
+    expect(hslToHex(30, 100, 50)).toBe('#ff8000');
+    expect(hslToHex(90, 100, 50)).toBe('#80ff00');
+    expect(hslToHex(150, 100, 50)).toBe('#00ff80');
+    expect(hslToHex(210, 100, 50)).toBe('#0080ff');
+    expect(hslToHex(270, 100, 50)).toBe('#8000ff');
+    expect(hslToHex(330, 100, 50)).toBe('#ff0080');
   });
 
   it('converts the greys', () => {
