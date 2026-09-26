@@ -163,16 +163,22 @@ describe('interpreting a description', () => {
     expect(() => parse('not json at all')).toThrow();
   });
 
-  it('leaves the model room to reason as well as to answer', async () => {
-    // Reasoning is on by default on this model and is spent out of the same
-    // budget as the answer, so a budget sized for a few hundred tokens of
-    // JSON buys a truncation rather than a map. 16000 is the documented floor
-    // for a request that does not stream.
+  it('leaves the model room to reason as well as to answer, and stays under the ceiling', async () => {
+    // Two sides, because the budget has two ways to be wrong and only one of
+    // them is visible from here. Below: reasoning is on by default on this
+    // model and is spent out of the same budget as the answer, so a budget
+    // sized for a few hundred tokens of JSON buys a truncation rather than a
+    // map — 16000 is what the guide suggests defaulting to without streaming.
+    // Above: a call that does not stream projects its time limit from this
+    // number and the SDK throws outright past ten minutes' worth, at 21333
+    // tokens. A budget over that passes a suite of stubs and fails every real
+    // request, so the margin is asserted rather than left to be discovered.
     const { client, calls } = stubClient(respondsWith(answer));
 
     await interpreterWith(client).interpret('a tavern hall');
 
     expect(calls[0].max_tokens).toBeGreaterThanOrEqual(16000);
+    expect(calls[0].max_tokens).toBeLessThanOrEqual(21333);
   });
 
   it('names the whole feature vocabulary in the prompt, so the model has the closed list', async () => {

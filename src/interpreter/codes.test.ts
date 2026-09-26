@@ -122,6 +122,21 @@ describe('normalising what the model wrote in unresolved', () => {
     expect(normalizeUnresolved(once)).toEqual(once);
   });
 
+  it('writes a kept entry the way entry() would have written it', () => {
+    // A kept entry is kept because the model named a real code, but the model
+    // wrote the punctuation and the spacing too. Left as it stands it reaches
+    // the interface in shapes nothing on our side of the boundary emits: a
+    // colon with nothing after it, and a detail still padded.
+    expect(normalizeUnresolved(['unsupported_request:'])).toEqual([entry(UNSUPPORTED_REQUEST)]);
+    expect(normalizeUnresolved(['   unsupported_request:  a well  '])).toEqual([
+      entry(UNSUPPORTED_REQUEST, 'a well'),
+    ]);
+    expect(normalizeUnresolved(['unsupported_request'])).toEqual([entry(UNSUPPORTED_REQUEST)]);
+    expect(normalizeUnresolved(['unsupported_request:the sign reads: no dogs'])).toEqual([
+      entry(UNSUPPORTED_REQUEST, 'the sign reads: no dogs'),
+    ]);
+  });
+
   it('drops an entry with nothing in it, and trims the rest', () => {
     expect(normalizeUnresolved(['', '   ', '  a well  '])).toEqual(['unsupported_request:a well']);
   });

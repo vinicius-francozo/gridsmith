@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Constraints, PlaceType, Rng } from '../core/types';
+import type { Constraints, PlaceType, Rng, Size } from '../core/types';
 
 import {
   CLUTTER_NOT_A_NUMBER,
@@ -16,6 +16,37 @@ const SIZE_HINTS = [undefined, 'small', 'medium', 'large'] as const;
 
 /** Enough seeds to exercise the variation without turning this into a fuzz run. */
 const SEEDS = Array.from({ length: 60 }, (_, i) => i - 30);
+
+/**
+ * The bounds the generator holds a size to, read from `minSize` and `maxSize`
+ * on each profile in `src/generator/profiles.ts`.
+ *
+ * They are copied rather than imported because this layer does not depend on
+ * that one — `Params` is the whole of what passes between them. They are
+ * structural on the far side: below `minSize` the generator's own geometry
+ * stops holding, so it clamps whatever `resolve` hands it into these bounds
+ * before building anything.
+ *
+ * Which makes them the only place a size band can honestly be measured. A band
+ * that starts under `minSize` does not produce a smaller place, it produces
+ * the same place as the band above it with the difference clamped away, and a
+ * test that reads `resolve`'s own output sees three bands where the map has
+ * two.
+ */
+const GENERATOR_BOUNDS: Readonly<Record<PlaceType, { min: Size; max: Size }>> = {
+  tavern_hall: { min: { w: 12, h: 10 }, max: { w: 20, h: 18 } },
+  tavern_room: { min: { w: 6, h: 6 }, max: { w: 11, h: 10 } },
+  tavern_storeroom: { min: { w: 8, h: 6 }, max: { w: 14, h: 12 } },
+};
+
+/** `size` as the generator's own `clampSize` would leave it. */
+function asBuilt(size: Size, placeType: PlaceType): Size {
+  const { min, max } = GENERATOR_BOUNDS[placeType];
+  return {
+    w: Math.min(max.w, Math.max(min.w, size.w)),
+    h: Math.min(max.h, Math.max(min.h, size.h)),
+  };
+}
 
 function constraints(overrides: Partial<Constraints> = {}): Constraints {
   return {
@@ -101,6 +132,62 @@ describe('size', () => {
     const shapes = new Set(SEEDS.map((seed) => JSON.stringify(resolve(constraints(), seed).size)));
     expect(shapes.size).toBeGreaterThan(1);
   });
+
+  it('never asks for a place smaller than the generator will build', () => {
+    // The floor is structural, not a preference: a 2x3 bed needs a room with
+    // somewhere to stand beside it. Asked for less, the generator clamps —
+    // and a band that lives under the clamp is a band nobody can tell from
+    // the one above it.
+    for (const placeType of PLACE_TYPES) {
+      for (const sizeHint of SIZE_HINTS) {
+        for (const seed of SEEDS) {
+          const { size } = resolve(constraints({ placeType, sizeHint }), seed);
+          const { min } = GENERATOR_BOUNDS[placeType];
+          expect(size.w).toBeGreaterThanOrEqual(min.w);
+          expect(size.h).toBeGreaterThanOrEqual(min.h);
+        }
+      }
+    }
+  });
+
+  it('keeps the three hints apart, measured on the rooms that actually get built', () => {
+    // The point of having three hints. Asking for a small storeroom and a
+    // medium one used to hand back the same 8-wide room, because both bands
+    // sat at or under the generator's floor and the clamp closed the gap.
+    // So this compares the footprints as built, and asks that no two hints
+    // ever produce the same one — not that the numbers in the table differ.
+    for (const placeType of PLACE_TYPES) {
+      const built = new Map<string, Set<string>>();
+      for (const sizeHint of ['small', 'medium', 'large'] as const) {
+        const footprints = SEEDS.map((seed) => {
+          const { size } = resolve(constraints({ placeType, sizeHint }), seed);
+          const { w, h } = asBuilt(size, placeType);
+          return `${String(w)}x${String(h)}`;
+        });
+        built.set(sizeHint, new Set(footprints));
+      }
+
+      for (const [a, b] of [
+        ['small', 'medium'],
+        ['medium', 'large'],
+        ['small', 'large'],
+      ] as const) {
+        const shared = [...(built.get(a) ?? [])].filter((footprint) => built.get(b)?.has(footprint));
+        expect({ placeType, a, b, shared }).toEqual({ placeType, a, b, shared: [] });
+      }
+    }
+  });
+
+  it('gives each hint more than one rectangle to be, so the seed still says something', () => {
+    for (const placeType of PLACE_TYPES) {
+      for (const sizeHint of ['small', 'medium', 'large'] as const) {
+        const built = new Set(
+          SEEDS.map((seed) => JSON.stringify(asBuilt(resolve(constraints({ placeType, sizeHint }), seed).size, placeType))),
+        );
+        expect(built.size).toBeGreaterThan(1);
+      }
+    }
+  });
 });
 
 describe('a place type outside the vocabulary', () => {
@@ -114,6 +201,21 @@ describe('a place type outside the vocabulary', () => {
     expect(() => resolve(asked, 1)).toThrow(RangeError);
     expect(() => resolve(asked, 1)).toThrow(/placeType/);
     expect(() => resolve(asked, 1)).toThrow(/throne_room/);
+  });
+
+  it('refuses the keys every object carries, rather than reading one as a profile', () => {
+    // The table of profiles is an object literal, so it answers to everything
+    // `Object.prototype` answers to. Each of these reads back as something
+    // other than `undefined` — a function, a method, an object — walks past a
+    // guard written against `undefined`, and dies on a missing `sizes` one
+    // line later with the raw `TypeError` the guard exists to replace.
+    for (const key of ['constructor', 'toString', 'valueOf', '__proto__', 'hasOwnProperty']) {
+      const asked = constraints({ placeType: key as PlaceType });
+
+      expect(() => resolve(asked, 1)).toThrow(RangeError);
+      expect(() => resolve(asked, 1)).toThrow(/placeType/);
+      expect(() => resolve(asked, 1)).toThrow(key);
+    }
   });
 
   it('accepts every kind of place the vocabulary does have', () => {
@@ -338,6 +440,19 @@ describe('conflicts', () => {
 
     expect(params.clutter).toBe(0);
     expect(params.conflicts).toEqual([CLUTTER_NOT_A_NUMBER]);
+  });
+
+  it('reads a clutter that is not a number at all the same way, instead of passing it on', () => {
+    // The field is typed `number`, and the value came out of a model through
+    // JSON, so the type is a claim rather than a fact. Each of these used to
+    // sail through untouched — no conflict, and the word `"lots"` sitting in
+    // `Params.clutter` for the generator to multiply a prop count by.
+    for (const clutter of [undefined, null, 'lots', {}, [], true] as unknown as number[]) {
+      const params = resolve(constraints({ clutter }), 1);
+
+      expect(params.clutter).toBe(0);
+      expect(params.conflicts).toEqual([CLUTTER_NOT_A_NUMBER]);
+    }
   });
 
   it('leaves clutter at the edges of the range alone', () => {

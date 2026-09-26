@@ -34,10 +34,17 @@ export const INTERPRETER_MODEL = 'claude-opus-5';
  * model's own reasoning, which is on by default on this model and is spent
  * out of this same budget — so a figure sized for the JSON alone is a figure
  * that runs out before the answer is written, which is the round trip this
- * headroom exists to avoid. 16000 is the floor documented for a request that
- * does not stream: enough that running out is not the ordinary case, low
- * enough to stay inside the SDK's own HTTP timeout. Tokens left unspent cost
+ * headroom exists to avoid. 16000 is what the guide suggests defaulting to
+ * for a request that does not stream: enough that running out is not the
+ * ordinary case, and clear of the ceiling above it. Tokens left unspent cost
  * nothing.
+ *
+ * The ceiling is the SDK's, and it is a throw rather than a slow request: a
+ * call that does not stream projects its time limit from this number and
+ * refuses anything that could run past ten minutes, which lands at 21333
+ * tokens (`calculateNonstreamingTimeout`, 0.128.0). A figure above that
+ * passes every test in this file and fails every real call, so
+ * `claude.test.ts` asserts both sides of the margin, not just the floor.
  */
 const MAX_TOKENS = 16000;
 

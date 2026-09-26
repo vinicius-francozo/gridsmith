@@ -74,12 +74,22 @@ export const UNSUPPORTED_REQUEST = 'unsupported_request';
 /**
  * Every code that may appear in `Constraints.unresolved`.
  *
- * There is exactly one, and that is a decision rather than an omission. What a
- * game master can ask for and this vocabulary cannot express is an open set —
- * naming a few kinds of it here would invite the model to round a request to
- * the nearest one, which is the same failure the prompt already warns it away
- * from for `features`. One code with the request kept in the detail says the
- * true thing: this was asked for, and the map will not have it.
+ * There is exactly one, and that is a decision rather than an omission, for
+ * two reasons.
+ *
+ * What a game master can ask for and this vocabulary cannot express is an open
+ * set — naming a few kinds of it here would invite the model to round a
+ * request to the nearest one, which is the same failure the prompt already
+ * warns it away from for `features`.
+ *
+ * And nothing downstream would do anything different with the distinction. The
+ * one consumer the plan asks for displays the list; a second floor and the
+ * weather are shown the same way, so telling them apart buys the interface
+ * nothing it could act on. A taxonomy invented before the consumer that needs
+ * it is a taxonomy drawn along the wrong lines, and it will have to be redrawn
+ * — after it is already in saved maps — the day something actually branches on
+ * it. One code with the request kept in the detail says the true thing now:
+ * this was asked for, and the map will not have it.
  */
 export const UNRESOLVED_CODES = [UNSUPPORTED_REQUEST] as const;
 
@@ -107,11 +117,18 @@ export function codeOf(value: string): string {
  * Everything else in this file is written by us. This one field is written by
  * a language model, and the API holds it to nothing — it can come back as a
  * sentence, as an apology, or as a code that does not exist. An entry already
- * naming a code is kept as it stands, so the contract does not rest on the
- * model failing to follow it. Anything else becomes `unsupported_request` with
- * the text kept as the detail: the text is the person's own request, and
- * dropping it would leave the interface with a code and nothing to put after
- * it. An entry with nothing in it carries nothing, and goes.
+ * naming a code is kept, so the contract does not rest on the model failing to
+ * follow it — but kept through `entry`, not as it stands. The model writes the
+ * spacing and the punctuation too, and an entry it wrote is only interchangeable
+ * with one we wrote if it comes out in the same shape: `unsupported_request:`
+ * with nothing after the colon is the bare code, and a detail padded with
+ * spaces is that detail trimmed. Reading the two apart is work the interface
+ * should not be doing twice.
+ *
+ * Anything else becomes `unsupported_request` with the text kept as the detail:
+ * the text is the person's own request, and dropping it would leave the
+ * interface with a code and nothing to put after it. An entry with nothing in
+ * it carries nothing, and goes.
  */
 export function normalizeUnresolved(entries: readonly string[]): string[] {
   const normalized: string[] = [];
@@ -120,7 +137,10 @@ export function normalizeUnresolved(entries: readonly string[]): string[] {
     if (text === '') {
       continue;
     }
-    normalized.push(isUnresolvedCode(codeOf(text)) ? text : entry(UNSUPPORTED_REQUEST, text));
+    const code = codeOf(text);
+    normalized.push(
+      isUnresolvedCode(code) ? entry(code, text.slice(code.length + 1)) : entry(UNSUPPORTED_REQUEST, text),
+    );
   }
   return normalized;
 }
