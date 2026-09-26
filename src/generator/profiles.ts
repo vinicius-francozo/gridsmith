@@ -64,14 +64,22 @@ export const MATERIALS: Record<string, MaterialDef> = {
 /**
  * The variation rules for `material`.
  *
- * @throws {Error} if `material` is not in `MATERIALS`.
+ * @throws {Error} if `MATERIALS` does not declare `material`.
+ *
+ * The parameter is a bare `string`, so this is the one lookup in the module
+ * with no type in front of it at all — and `MATERIALS` is an object literal,
+ * so `materialDef('toString')` would otherwise hand back a function, and
+ * `materialDef('__proto__')` `Object.prototype` itself, neither of them
+ * `undefined`. `def.variants` is then `undefined`, `rng.int(0, NaN)` follows,
+ * and the map is painted in tiles nobody declared. `Object.hasOwn` asks the
+ * question the doc comment above `MATERIALS` claims is being asked: whether
+ * the catalogue names this material, not whether the lookup came back empty.
  */
 export function materialDef(material: string): MaterialDef {
-  const def = MATERIALS[material];
-  if (def === undefined) {
+  if (!Object.hasOwn(MATERIALS, material)) {
     throw new Error(`unknown material '${material}'`);
   }
-  return def;
+  return MATERIALS[material];
 }
 
 // --- Features --------------------------------------------------------------
@@ -356,16 +364,22 @@ const PROFILES: Record<PlaceType, PlaceProfile> = {
 /**
  * The profile for `placeType`.
  *
- * @throws {Error} if `placeType` is not a known place. The type system rules
- *                 this out inside the project, but `Params` may have come
- *                 through a language model and a JSON boundary.
+ * @throws {Error} if `PROFILES` does not declare `placeType`. The type system
+ *                 rules this out inside the project, but `Params` may have
+ *                 come through a language model and a JSON boundary.
+ *
+ * `Object.hasOwn`, because `PROFILES` is an object literal and a lookup on
+ * `'toString'` or `'__proto__'` comes back with something inherited rather
+ * than with `undefined` — a `placeType` every JSON document can carry, and
+ * one that would be handed on as a profile to all three generation stages.
+ * The whole point of the guard is to close the vocabulary, and a vocabulary
+ * is closed by what it declares, not by what a lookup fails to find.
  */
 export function profileFor(placeType: PlaceType): PlaceProfile {
-  const profile = PROFILES[placeType];
-  if (profile === undefined) {
+  if (!Object.hasOwn(PROFILES, placeType)) {
     throw new Error(`unknown place type '${placeType}'`);
   }
-  return profile;
+  return PROFILES[placeType];
 }
 
 /**

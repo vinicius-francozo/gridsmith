@@ -158,6 +158,40 @@ describe('generate', () => {
     const params = busy('tavern_hall', { light: 'candlelit' as Params['light'] });
     expect(() => generate(params, createRng(1))).toThrow('unknown light level');
   });
+
+  it('refuses a condition that is only a key of Object.prototype', () => {
+    // The two tests above are satisfied by a word nothing declares anywhere.
+    // These are the other half of the same vocabulary, and the half a lookup
+    // against `undefined` lets through: every object literal answers to
+    // `toString`, so `CONDITION_SCATTER['toString']` is a function, not
+    // `undefined`. `JSON.parse('{"condition":"toString"}')` yields exactly
+    // this string, so it arrives by the same route a model's output does —
+    // and unguarded it carpeted a 20x18 hall with 167 pieces of debris over
+    // 254 floor cells, in a scene `validateScene` had no complaint about.
+    for (const key of ['toString', 'constructor', 'valueOf', '__proto__', 'hasOwnProperty']) {
+      const params = busy('tavern_hall', { condition: key as Params['condition'] });
+      expect(() => generate(params, createRng(1))).toThrow(`unknown condition '${key}'`);
+    }
+  });
+
+  it('refuses a light level that is only a key of Object.prototype', () => {
+    // Same class, and here it does not even throw on its own: a function is
+    // not `null`, so `!== null` passes, `.spacing` is `undefined`, the
+    // lattice loop starts at `NaN` and never runs, and the room comes back
+    // silently unlit but for its hearth.
+    for (const key of ['toString', 'constructor', 'valueOf', '__proto__', 'hasOwnProperty']) {
+      const params = busy('tavern_hall', { light: key as Params['light'] });
+      expect(() => generate(params, createRng(1))).toThrow(`unknown light level '${key}'`);
+    }
+  });
+
+  it('refuses a place type that is only a key of Object.prototype', () => {
+    for (const key of ['toString', 'constructor', 'valueOf', '__proto__', 'hasOwnProperty']) {
+      expect(() => generate(paramsFor(key as PlaceType), createRng(1))).toThrow(
+        `unknown place type '${key}'`,
+      );
+    }
+  });
 });
 
 describe('the scene generate returns', () => {

@@ -84,16 +84,24 @@ const CONDITION_SCATTER: Record<Condition, number> = {
  * Left unguarded the lookup gives `undefined`, `chance` becomes `NaN`, and
  * `rng.float() >= NaN` is false — so the skip never fires and the scatter
  * layer drops a prop on every free cell in the room. Measured in a 20x18
- * hall: 145 pieces of debris over 222 floor cells, against 8 with a valid
+ * hall: 167 pieces of debris over 254 floor cells, against 38 with a valid
  * condition on the same seed. Worse, the scene it hands back passes
  * `validateScene` in full, because debris is meant to be walked over.
+ *
+ * The test is `Object.hasOwn` and not a lookup against `undefined`, because
+ * `CONDITION_SCATTER` is an object literal and therefore carries everything
+ * `Object.prototype` carries. `condition = 'toString'` finds a function, is
+ * not `undefined`, passes an `undefined` test untouched, and lays the same
+ * carpet — and `JSON.parse('{"condition":"toString"}')` hands back exactly
+ * that string, so the boundary this guard names is the boundary that reaches
+ * it. Closing the vocabulary means asking whether the table declared the key,
+ * not whether the answer happened to be absent.
  */
 function conditionScatter(condition: Condition): number {
-  const factor = CONDITION_SCATTER[condition];
-  if (factor === undefined) {
+  if (!Object.hasOwn(CONDITION_SCATTER, condition)) {
     throw new Error(`unknown condition '${condition}'`);
   }
-  return factor;
+  return CONDITION_SCATTER[condition];
 }
 
 /**

@@ -31,6 +31,18 @@ describe('profileFor', () => {
     // `undefined` and fail several layers away, reading a property of it.
     expect(() => profileFor('dungeon_crypt' as PlaceType)).toThrow("unknown place type");
   });
+
+  it('rejects a place type that is only a key of Object.prototype', () => {
+    // A word nothing declares is the easy half of the vocabulary. The hard
+    // half is the words every object literal already answers to: `PROFILES`
+    // inherits from `Object.prototype`, so a lookup on `toString` returns a
+    // function and one on `__proto__` returns the prototype — neither is
+    // `undefined`, and both would be handed on as a profile to all three
+    // generation stages. Every one of these survives `JSON.parse`.
+    for (const key of ['toString', 'constructor', 'valueOf', '__proto__', 'hasOwnProperty']) {
+      expect(() => profileFor(key as PlaceType)).toThrow(`unknown place type '${key}'`);
+    }
+  });
 });
 
 describe('profile material vocabulary', () => {
@@ -100,6 +112,16 @@ describe('materialDef', () => {
     // A material nobody declared renders as nothing at all, and a map with an
     // invisible floor is far harder to diagnose than a thrown error.
     expect(() => materialDef('marble')).toThrow("unknown material 'marble'");
+  });
+
+  it('rejects a material that is only a key of Object.prototype', () => {
+    // `materialDef` takes a bare `string`, so this is the lookup with no type
+    // in front of it at all. Unguarded, `materialDef('__proto__')` hands back
+    // `Object.prototype`, `def.variants` is `undefined`, and every tile of
+    // the map draws its variant from `rng.int(0, NaN)`.
+    for (const key of ['toString', 'constructor', 'valueOf', '__proto__', 'hasOwnProperty']) {
+      expect(() => materialDef(key)).toThrow(`unknown material '${key}'`);
+    }
   });
 });
 

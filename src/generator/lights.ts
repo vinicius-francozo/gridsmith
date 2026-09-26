@@ -34,13 +34,22 @@ const AMBIENT: Record<Light, { spacing: number; radiusCells: number } | null> = 
  * `undefined`, passes `!== null`, and the next line reads `.spacing` off it:
  * a raw `TypeError` out of the middle of the generator. The sentinel that
  * makes `dark` explicit is exactly what makes `!== null` the wrong test.
+ *
+ * And the test is `Object.hasOwn`, not a comparison against `undefined`:
+ * `AMBIENT` is an object literal, so `light = 'toString'` finds a function
+ * inherited from `Object.prototype`, is not `undefined`, and sails through.
+ * It does not even crash — a function is not `null`, `.spacing` is
+ * `undefined`, the lattice loop starts at `NaN` and never runs, and the room
+ * comes back lit by its hearth alone with nothing raised anywhere. A level
+ * that arrived as `JSON.parse('{"light":"toString"}')` would be silently
+ * demoted to dark. Closing the vocabulary means asking whether the table
+ * declared the key, not whether the answer happened to be absent.
  */
 function ambientFor(light: Light): { spacing: number; radiusCells: number } | null {
-  const ambient = AMBIENT[light];
-  if (ambient === undefined) {
+  if (!Object.hasOwn(AMBIENT, light)) {
     throw new Error(`unknown light level '${light}'`);
   }
-  return ambient;
+  return AMBIENT[light];
 }
 
 /** The colour of a hanging lamp; a hearth carries its own, from its spec. */
