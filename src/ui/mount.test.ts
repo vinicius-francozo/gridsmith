@@ -40,7 +40,6 @@ class FakeElement {
   inputMode = '';
   spellcheck = false;
   rows = 0;
-  hidden = false;
   disabled = false;
   width = 0;
   height = 0;
@@ -53,6 +52,28 @@ class FakeElement {
   /** Every attribute set on this element, by name. */
   readonly attributes = new Map<string, string>();
 
+  /**
+   * Being revealed, being hidden and being filled, in the order they happened.
+   *
+   * `hidden` is `display: none`: while it is on, the element is out of the
+   * accessibility tree and a change to its children is a change nothing is
+   * watching. So the order of those two is the difference between a live region
+   * that announces and one that only ends up correct, and the order is the only
+   * thing that can tell them apart — the final state is identical either way.
+   */
+  readonly trace: string[] = [];
+
+  #hidden = false;
+
+  get hidden(): boolean {
+    return this.#hidden;
+  }
+
+  set hidden(value: boolean) {
+    this.#hidden = value;
+    this.trace.push(value ? 'hidden' : 'revealed');
+  }
+
   append(...nodes: FakeElement[]): void {
     this.children.push(...nodes);
   }
@@ -64,6 +85,7 @@ class FakeElement {
   replaceChildren(...nodes: FakeElement[]): void {
     this.children.length = 0;
     this.children.push(...nodes);
+    this.trace.push(`filled:${nodes.length}`);
   }
 
   addEventListener(type: string, handler: () => void): void {
@@ -874,15 +896,37 @@ describe('what the page says it is doing', () => {
     expect(app.status.textContent).toContain('semente 4242');
   });
 
-  it('announces the status line and the failure, rather than only showing them', () => {
+  it('puts the status line and the failure in live regions', () => {
     // Both change while the focus is still on the button that started the run,
     // so without a live region nothing says the map is ready or that it failed.
+    // This is the declaration only; whether a change to the failure is in fact
+    // announced is the test below, because the attributes are set once at mount
+    // and cannot say anything about when the children move.
     const app = mountHarness();
 
     expect(app.status.attributes.get('aria-live')).toBe('polite');
     expect(app.status.attributes.get('role')).toBe('status');
     expect(app.failure.attributes.get('aria-live')).toBe('assertive');
     expect(app.failure.attributes.get('role')).toBe('alert');
+  });
+
+  it('reveals the failure region before it puts the failure into it', async () => {
+    // `role=\"alert\"` announces a mutation of a region that is on the screen.
+    // Filled first and revealed second, the mutation happens under
+    // `display: none`, where the region is not in the accessibility tree at
+    // all, and what appears afterwards is a container that was already full —
+    // the order a screen reader handles worst. The end state is the same both
+    // ways round, so nothing but the order can tell them apart: a network error
+    // comes back, the focus is still on the generate button, and the person
+    // using a screen reader hears nothing.
+    const app = mountHarness();
+    app.description.value = '';
+
+    app.generate.click();
+    await settle();
+
+    expect(app.failure.hidden).toBe(false);
+    expect(app.failure.trace.slice(-2)).toEqual(['revealed', 'filled:1']);
   });
 });
 

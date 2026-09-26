@@ -242,6 +242,21 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
 
   // --- Showing things -------------------------------------------------------
 
+  /**
+   * Shows `value`, or takes the failure region back off the screen.
+   *
+   * Revealed before it is filled, and in that order deliberately. `hidden` is
+   * `display: none`, so a region filled while it is still hidden is not in the
+   * accessibility tree at the moment its children change: the mutation an alert
+   * region exists to announce happens where nothing is watching, and the
+   * container then appears with the text already inside it — which a screen
+   * reader may treat as nothing having happened. Revealing first puts an empty
+   * live region on the screen and then mutates it, which is the shape the
+   * announcement is defined for.
+   *
+   * Clearing goes the other way round for the same reason: hide first, then
+   * empty, so the emptying is not itself announced as a change.
+   */
   const showFailure = (value: Failure | undefined): void => {
     if (value === undefined) {
       failure.hidden = true;
@@ -256,8 +271,8 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
       detail.textContent = value.detail;
       children.push(detail);
     }
-    failure.replaceChildren(...children);
     failure.hidden = false;
+    failure.replaceChildren(...children);
   };
 
   const noticeList = (title: string, sentences: readonly string[]): HTMLElement[] => {
