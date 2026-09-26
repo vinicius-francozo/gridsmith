@@ -65,6 +65,15 @@ describe('cellKey and sameCell', () => {
     expect(cellKey({ x: 2, y: 3 })).not.toBe(cellKey({ x: 3, y: 2 }));
     expect(sameCell({ x: 2, y: 3 }, { x: 3, y: 2 })).toBe(false);
   });
+
+  it('separates cells that differ in one axis only', () => {
+    // Each axis on its own. Transposed coordinates differ in both at once, so
+    // they would still look different to a comparison that read only `x`.
+    expect(sameCell({ x: 2, y: 3 }, { x: 2, y: 4 })).toBe(false);
+    expect(sameCell({ x: 2, y: 3 }, { x: 5, y: 3 })).toBe(false);
+    expect(cellKey({ x: 2, y: 3 })).not.toBe(cellKey({ x: 2, y: 4 }));
+    expect(cellKey({ x: 2, y: 3 })).not.toBe(cellKey({ x: 5, y: 3 }));
+  });
 });
 
 describe('step', () => {
