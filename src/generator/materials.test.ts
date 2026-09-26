@@ -5,7 +5,14 @@ import { createRng } from '../core/prng';
 import type { PlaceType, Rng } from '../core/types';
 import { buildFloorplan, floorCells } from './floorplan';
 import { paintMaterials, segmentZones } from './materials';
-import { MATERIALS, materialDef, profileFor, ROTATIONS, VOID_MATERIAL } from './profiles';
+import {
+  MATERIALS,
+  materialDef,
+  profileFor,
+  ROTATIONS,
+  VOID_MATERIAL,
+  wallMaterialFor,
+} from './profiles';
 import type { Rect } from './shapes';
 import { maxRng, minRng, paramsFor } from './testing';
 
@@ -161,7 +168,7 @@ describe('tiles', () => {
     }
   });
 
-  it('give a wall cell the wall material of the zone it borders', () => {
+  it('give a wall cell some wall material of its own profile, never a floor one', () => {
     for (const placeType of PLACE_TYPES) {
       const { profile, floorplan, tiles } = painted(placeType, 12);
       const walls = new Set(Object.values(profile.wallMaterials));
@@ -175,6 +182,61 @@ describe('tiles', () => {
         }
       }
     }
+  });
+
+  it('give a wall cell the wall material of the zone it actually borders', () => {
+    // Membership of the profile's set of wall materials is not the rule: the
+    // set contains the default, so painting every wall the default satisfies
+    // it. The rule is timber around the plank and stone around the flagstone,
+    // and only the hall has two of each to tell apart.
+    const profile = profileFor('tavern_hall');
+    expect(new Set(Object.values(profile.wallMaterials)).size).toBeGreaterThan(1);
+
+    const exercised = new Set<string>();
+    for (let seed = 0; seed < 15; seed += 1) {
+      const { floorplan, zones, tiles } = painted('tavern_hall', seed);
+      const zoneMaterial = new Map<string, string>();
+      for (const zone of zones) {
+        for (const cell of zone.cells) {
+          zoneMaterial.set(cellKey(cell), zone.material);
+        }
+      }
+
+      for (let y = 0; y < floorplan.size.h; y += 1) {
+        for (let x = 0; x < floorplan.size.w; x += 1) {
+          const cell = { x, y };
+          if (cellAt(floorplan.cells, cell) !== 'wall') {
+            continue;
+          }
+          // Only walls facing one zone across their four sides. A wall
+          // wedged between two zones is answered by the implementation's
+          // tie-break, which is not what this test is about.
+          const beside = new Set(
+            [
+              { x, y: y - 1 },
+              { x: x + 1, y },
+              { x, y: y + 1 },
+              { x: x - 1, y },
+            ]
+              .map((neighbour) => zoneMaterial.get(cellKey(neighbour)))
+              .filter((material): material is string => material !== undefined),
+          );
+          if (beside.size !== 1) {
+            continue;
+          }
+          const [floorMaterial] = [...beside];
+          const expected = wallMaterialFor(floorMaterial, profile);
+          exercised.add(expected);
+          expect(
+            `${seed} ${cellKey(cell)} beside ${floorMaterial}: ${cellAt(tiles, cell).material}`,
+          ).toBe(`${seed} ${cellKey(cell)} beside ${floorMaterial}: ${expected}`);
+        }
+      }
+    }
+
+    // Both halves of the rule have to have been reached, or the loop above
+    // proves only that one wall material is used everywhere.
+    expect([...exercised].sort()).toEqual(['stone_wall', 'timber_wall']);
   });
 
   it('does not share one tile object between two void cells', () => {

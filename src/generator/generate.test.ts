@@ -81,11 +81,23 @@ describe('generate', () => {
   });
 
   it('gives back a different scene when the params change under one seed', () => {
-    const tidy = generate(busy('tavern_hall', { clutter: 0, condition: 'tidy' }), createRng(5));
-    const ruined = generate(
-      busy('tavern_hall', { clutter: 1, condition: 'ruined' }),
-      createRng(5),
+    // One param at a time. Moving clutter and condition together is satisfied
+    // by the scatter layer alone, and clutter's other job — how many groups a
+    // room of this size wants — is then left with no test at all.
+    const scene = (overrides: Partial<Params>): Scene =>
+      generate(busy('tavern_hall', overrides), createRng(5));
+    const groupCount = (of: Scene): number =>
+      of.props.filter((prop) => prop.layer === 'group').length;
+
+    const bare = scene({ clutter: 0, condition: 'lived_in' });
+    const full = scene({ clutter: 1, condition: 'lived_in' });
+    expect(stable(full)).not.toBe(stable(bare));
+    expect(`groups at clutter 0 / 1: ${groupCount(bare)} / ${groupCount(full)}`).toBe(
+      `groups at clutter 0 / 1: ${groupCount(bare)} / ${Math.max(groupCount(full), groupCount(bare) + 1)}`,
     );
+
+    const tidy = scene({ clutter: 0.5, condition: 'tidy' });
+    const ruined = scene({ clutter: 0.5, condition: 'ruined' });
     expect(stable(ruined)).not.toBe(stable(tidy));
   });
 
@@ -156,11 +168,19 @@ describe('the scene generate returns', () => {
     }
   });
 
-  it('covers every floor cell with a zone and no cell twice', () => {
-    for (const { scene } of scenes()) {
+  it('covers every floor cell with a zone, no cell twice, and leaves no zone empty', () => {
+    for (const { placeType, seed, scene } of scenes()) {
       const keys = scene.zones.flatMap((zone) => zone.cells.map(cellKey));
       expect(new Set(keys).size).toBe(keys.length);
       expect(keys.length).toBe(floorCells(scene.floorplan).length);
+      // The union and the absence of duplicates are both satisfied by
+      // dropping every cell into zone 0: one material over the whole room,
+      // every other zone empty, and "material by region" quietly undone
+      // without a cell being covered twice or left out.
+      const empty = scene.zones.filter((zone) => zone.cells.length === 0).length;
+      expect(`${placeType}/${seed}: ${empty} of ${scene.zones.length} zones empty`).toBe(
+        `${placeType}/${seed}: 0 of ${scene.zones.length} zones empty`,
+      );
     }
   });
 
