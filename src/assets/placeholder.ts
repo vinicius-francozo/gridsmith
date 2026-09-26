@@ -28,7 +28,6 @@ import type { AssetDef, AssetLibrary, AssetKind, Rotation, Size } from '../core/
 import {
   expectedBitmapSize,
   rotatedFootprint,
-  tileAssetId,
   validateCatalog,
   ROTATIONS,
 } from './contract';
@@ -73,29 +72,72 @@ const ANCHOR_MARK_PX = 12;
 const BORDER_WIDTH_PX = 3;
 
 /**
- * The catalogue. Small on purpose: it covers every `AssetKind` and the shapes
- * the generator actually places — a long counter against a wall, a square
- * table with room around it, one-cell debris — and nothing beyond that, since
- * every entry here is scaffolding that a real library replaces.
+ * The floor and wall materials the generator emits, and how many variants each
+ * one has.
+ *
+ * This is a **vocabulary, not a catalogue**: the marking library serves no tile
+ * bitmap at all (see `PLACEHOLDER_CATALOG`), so nothing here is ever drawn. It
+ * is written down so the two halves of the frozen agreement — the names the
+ * generator emits and the names this side expects — can be read against each
+ * other in one place instead of drifting apart silently, which is the failure
+ * that ends with a whole floor rendering as the wrong colour and nobody
+ * knowing why.
+ */
+export const MATERIAL_VARIANTS: Readonly<Record<string, number>> = {
+  void: 1,
+  wood_plank: 4,
+  flagstone: 4,
+  stone_floor: 3,
+  dirt_floor: 3,
+  stone_wall: 3,
+  plaster_wall: 2,
+  timber_wall: 2,
+};
+
+/**
+ * The catalogue: every prop the generator places, and **no floor tiles**.
+ *
+ * Names and footprints are the generator's, because its footprints are
+ * structural — placement is computed from them, and a 5x2 counter behaves
+ * differently from a 4x1 one. The id spelling is this side's, `<kind>/<name>`,
+ * which is also how the four folders of a real library are laid out on disk.
+ *
+ * Tiles are left out on purpose. A labelled box is exactly right for a prop —
+ * `bar counter 5x2` against a wall can be checked at a glance — and exactly
+ * wrong for a floor, where the same box repeated four hundred times, with a
+ * 3px border and a 12px anchor wedge in every cell, hides everything the map
+ * is for. Floors are drawn as the flat colour `materialColor` derives from the
+ * material and its variant, which still shows that the generator assigned
+ * variants at all.
  */
 export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
-  // Floor tiles. Their ids follow `tileAssetId`, which is the agreed spelling
-  // between a `TileRef`'s material and variant and a library key.
-  { id: tileAssetId('oak_plank', 0), kind: 'tile', footprint: { w: 1, h: 1 }, tags: ['wood', 'floor'], againstWall: false },
-  { id: tileAssetId('oak_plank', 1), kind: 'tile', footprint: { w: 1, h: 1 }, tags: ['wood', 'floor'], againstWall: false },
-  { id: tileAssetId('flagstone', 0), kind: 'tile', footprint: { w: 1, h: 1 }, tags: ['stone', 'floor'], againstWall: false },
+  // Anchors: the furniture that defines a room and is placed against a wall.
+  { id: 'anchor/bar_counter', kind: 'anchor', footprint: { w: 5, h: 2 }, tags: ['bar', 'wood'], againstWall: true },
+  { id: 'anchor/hearth', kind: 'anchor', footprint: { w: 3, h: 2 }, tags: ['hearth', 'stone', 'light'], againstWall: true },
+  { id: 'anchor/hearth_small', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['hearth', 'stone', 'light'], againstWall: true },
+  { id: 'anchor/stairs_up', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['stairs', 'wood'], againstWall: true },
+  { id: 'anchor/bed', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['bed', 'furniture', 'wood'], againstWall: true },
+  { id: 'anchor/bunk_beds', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['bunks', 'bed', 'furniture', 'wood'], againstWall: true },
+  { id: 'anchor/wardrobe', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['storage', 'furniture', 'wood'], againstWall: true },
+  { id: 'anchor/shelf_row', kind: 'anchor', footprint: { w: 4, h: 1 }, tags: ['shelving', 'storage', 'wood'], againstWall: true },
+  { id: 'anchor/shelf_row_short', kind: 'anchor', footprint: { w: 3, h: 1 }, tags: ['shelving', 'storage', 'wood'], againstWall: true },
 
-  { id: 'anchor/bar_counter', kind: 'anchor', footprint: { w: 4, h: 1 }, tags: ['bar', 'wood'], againstWall: true },
-  { id: 'anchor/hearth', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['hearth', 'stone', 'light'], againstWall: true },
-  { id: 'anchor/stairs', kind: 'anchor', footprint: { w: 2, h: 2 }, tags: ['stairs', 'wood'], againstWall: true },
-
+  // Groups: arrangements placed in the open, with room around them.
   { id: 'group/table_round', kind: 'group', footprint: { w: 2, h: 2 }, tags: ['table', 'seating', 'wood'], againstWall: false },
   { id: 'group/table_long', kind: 'group', footprint: { w: 3, h: 1 }, tags: ['table', 'seating', 'wood'], againstWall: false },
-  { id: 'group/crate_stack', kind: 'group', footprint: { w: 2, h: 1 }, tags: ['storage', 'crate', 'wood'], againstWall: true },
+  { id: 'group/chair', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['seating', 'wood'], againstWall: false },
+  { id: 'group/bench', kind: 'group', footprint: { w: 3, h: 1 }, tags: ['seating', 'wood'], againstWall: false },
+  { id: 'group/crate', kind: 'group', footprint: { w: 2, h: 1 }, tags: ['storage', 'crate', 'wood'], againstWall: false },
+  { id: 'group/crate_small', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['storage', 'crate', 'wood'], againstWall: false },
+  { id: 'group/barrel', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['storage', 'barrel', 'wood'], againstWall: false },
 
+  // Scatter: one-cell litter, strewn over the floor.
+  { id: 'scatter/mug', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['tableware', 'clutter'], againstWall: false },
   { id: 'scatter/stool', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['seating', 'wood'], againstWall: false },
-  { id: 'scatter/tankard', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['tableware', 'clutter'], againstWall: false },
+  { id: 'scatter/bottle', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['tableware', 'clutter'], againstWall: false },
   { id: 'scatter/straw', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['clutter', 'debris'], againstWall: false },
+  { id: 'scatter/sack', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['storage', 'clutter'], againstWall: false },
+  { id: 'scatter/shard', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['clutter', 'debris'], againstWall: false },
 ];
 
 /**

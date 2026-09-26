@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { AssetDef, Rotation } from '../core/types';
-import { ASSET_KINDS, PIXELS_PER_CELL, validateCatalog } from './contract';
+import type { AssetDef, AssetKind, Rotation } from '../core/types';
+import { PIXELS_PER_CELL, validateCatalog } from './contract';
 import {
+  MATERIAL_VARIANTS,
   PLACEHOLDER_CATALOG,
   anchorCorner,
   createPlaceholderLibrary,
@@ -72,13 +73,64 @@ describe('PLACEHOLDER_CATALOG', () => {
     expect(validateCatalog(PLACEHOLDER_CATALOG)).toEqual([]);
   });
 
-  it('spells its tile ids the way tileAssetId does', () => {
-    // The tile ids are the join between a TileRef's material and variant and a
-    // library key. If the catalogue spelled them differently, tile art would
-    // simply never resolve and nobody would see an error.
-    for (const def of PLACEHOLDER_CATALOG.filter((entry) => entry.kind === 'tile')) {
-      expect(def.id).toMatch(/^tile\/[a-z0-9_]+\/\d+$/);
+  it('serves no floor tile at all', () => {
+    // A labelled box is right for a prop and wrong for a floor: the same box,
+    // border and anchor wedge repeated in every cell hides the map. Floors are
+    // the flat colour `materialColor` derives from material and variant, and
+    // one catalogued tile variant among four is worse than none — it patches
+    // the floor with labelled squares wherever that one variant landed.
+    expect(PLACEHOLDER_CATALOG.filter((def) => def.kind === 'tile')).toEqual([]);
+  });
+
+  it('spells every id as <kind>/<name>, which is the frozen scheme', () => {
+    for (const def of PLACEHOLDER_CATALOG) {
+      expect(def.id).toBe(`${def.kind}/${def.id.slice(def.id.indexOf('/') + 1)}`);
+      expect(def.id).toMatch(/^(anchor|group|scatter)\/[a-z0-9_]+$/);
     }
+  });
+
+  it('carries the generator’s names and footprints, which are the structural ones', () => {
+    // Placement is computed from these: a 5x2 counter behaves differently from
+    // a 4x1 one, and a disagreement here fails `validatePlacement` on every
+    // scene that contains the prop.
+    const footprint = (id: string): string => {
+      const def = catalogued(id);
+      return `${def.footprint.w}x${def.footprint.h}`;
+    };
+    expect(footprint('anchor/bar_counter')).toBe('5x2');
+    expect(footprint('anchor/hearth')).toBe('3x2');
+    expect(footprint('anchor/hearth_small')).toBe('2x1');
+    expect(footprint('anchor/stairs_up')).toBe('2x3');
+    expect(footprint('anchor/bed')).toBe('2x3');
+    expect(footprint('anchor/bunk_beds')).toBe('2x3');
+    expect(footprint('anchor/wardrobe')).toBe('2x1');
+    expect(footprint('anchor/shelf_row')).toBe('4x1');
+    expect(footprint('anchor/shelf_row_short')).toBe('3x1');
+    expect(footprint('group/table_round')).toBe('2x2');
+    expect(footprint('group/table_long')).toBe('3x1');
+    expect(footprint('group/chair')).toBe('1x1');
+    expect(footprint('group/bench')).toBe('3x1');
+    expect(footprint('group/crate')).toBe('2x1');
+    expect(footprint('group/crate_small')).toBe('1x1');
+    expect(footprint('group/barrel')).toBe('1x1');
+    for (const id of ['mug', 'stool', 'bottle', 'straw', 'sack', 'shard']) {
+      expect(footprint(`scatter/${id}`)).toBe('1x1');
+    }
+  });
+});
+
+describe('MATERIAL_VARIANTS', () => {
+  it('is the frozen material vocabulary, with each material’s variant count', () => {
+    expect(MATERIAL_VARIANTS).toEqual({
+      void: 1,
+      wood_plank: 4,
+      flagstone: 4,
+      stone_floor: 3,
+      dirt_floor: 3,
+      stone_wall: 3,
+      plaster_wall: 2,
+      timber_wall: 2,
+    });
   });
 });
 
@@ -104,14 +156,14 @@ describe('placeholderMarker', () => {
 
   it('turns with the rotation', () => {
     const marker = placeholderMarker(catalogued('anchor/bar_counter'), 90);
-    expect(marker.footprint).toEqual({ w: 1, h: 4 });
-    expect(marker.size).toEqual({ w: PIXELS_PER_CELL, h: 4 * PIXELS_PER_CELL });
+    expect(marker.footprint).toEqual({ w: 2, h: 5 });
+    expect(marker.size).toEqual({ w: 2 * PIXELS_PER_CELL, h: 5 * PIXELS_PER_CELL });
   });
 
   it('carries a readable name and the footprint, which is what a marker is for', () => {
     const marker = placeholderMarker(catalogued('anchor/bar_counter'), 0);
     expect(marker.label).toBe('bar counter');
-    expect(marker.sublabel).toBe('4x1 anchor');
+    expect(marker.sublabel).toBe('5x2 anchor');
   });
 
   it('moves the anchor wedge to the corner the rotation put it in', () => {
@@ -119,7 +171,7 @@ describe('placeholderMarker', () => {
     expect(placeholderMarker(def, 0).anchorMark).toMatchObject({ x: 0, y: 0 });
 
     const turned = placeholderMarker(def, 90);
-    // 1x4 after the turn: the original top-left is now the top-right.
+    // 2x5 after the turn: the original top-left is now the top-right.
     expect(turned.anchorMark.x).toBe(turned.size.w - turned.anchorMark.w);
     expect(turned.anchorMark.y).toBe(0);
 
@@ -145,7 +197,7 @@ describe('placeholderMarker', () => {
     const def = catalogued('anchor/hearth');
     expect(placeholderMarker(def, 0).background).toBe(placeholderMarker(def, 270).background);
     expect(placeholderMarker(def, 0).background).not.toBe(
-      placeholderMarker(catalogued('anchor/stairs'), 0).background,
+      placeholderMarker(catalogued('anchor/stairs_up'), 0).background,
     );
   });
 
@@ -172,14 +224,16 @@ describe('createPlaceholderLibrary', () => {
 describe('query', () => {
   const library = createPlaceholderLibrary();
 
-  it('covers every asset kind', () => {
+  it('covers every kind of prop the generator places', () => {
     // The marking library exists so the engine can be exercised end to end. A
-    // kind with nothing in it is a stage of generation with nothing to draw.
-    for (const kind of ASSET_KINDS) {
+    // prop kind with nothing in it is a stage of generation with nothing to
+    // draw. `tile` is the deliberate exception: floors are flat colour.
+    for (const kind of ['anchor', 'group', 'scatter'] as AssetKind[]) {
       const found = library.query([], kind);
       expect(found.length).toBeGreaterThan(0);
       expect(found.every((def) => def.kind === kind)).toBe(true);
     }
+    expect(library.query([], 'tile')).toEqual([]);
   });
 
   it('returns the whole catalogue when asked for nothing in particular', () => {
@@ -196,7 +250,7 @@ describe('query', () => {
   });
 
   it('narrows a tag search by kind', () => {
-    expect(library.query(['wood'], 'tile').every((def) => def.kind === 'tile')).toBe(true);
+    expect(library.query(['wood'], 'anchor').every((def) => def.kind === 'anchor')).toBe(true);
     expect(library.query(['hearth'], 'scatter')).toEqual([]);
   });
 
@@ -209,7 +263,7 @@ describe('get', () => {
   const library = createPlaceholderLibrary();
 
   it('finds a catalogued asset', () => {
-    expect(library.get('anchor/hearth')?.footprint).toEqual({ w: 2, h: 1 });
+    expect(library.get('anchor/hearth')?.footprint).toEqual({ w: 3, h: 2 });
   });
 
   it('returns undefined for an id nobody declared', () => {
@@ -239,16 +293,16 @@ describe('bitmap', () => {
     installFakeCanvas();
     const library = createPlaceholderLibrary();
     const bitmap = await library.bitmap('anchor/bar_counter', 0);
-    expect(bitmap.width).toBe(4 * PIXELS_PER_CELL);
-    expect(bitmap.height).toBe(1 * PIXELS_PER_CELL);
+    expect(bitmap.width).toBe(5 * PIXELS_PER_CELL);
+    expect(bitmap.height).toBe(2 * PIXELS_PER_CELL);
   });
 
   it('hands back a turned bitmap for a turned asset', async () => {
     installFakeCanvas();
     const library = createPlaceholderLibrary();
     const bitmap = await library.bitmap('anchor/bar_counter', 90);
-    expect(bitmap.width).toBe(1 * PIXELS_PER_CELL);
-    expect(bitmap.height).toBe(4 * PIXELS_PER_CELL);
+    expect(bitmap.width).toBe(2 * PIXELS_PER_CELL);
+    expect(bitmap.height).toBe(5 * PIXELS_PER_CELL);
   });
 
   it('sizes every catalogued asset at the grid pitch, at every rotation', async () => {
