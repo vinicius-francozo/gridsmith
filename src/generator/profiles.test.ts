@@ -310,8 +310,13 @@ describe('the asset vocabulary the profiles declare', () => {
     // holding the smaller of the two throws at the contract. It is also the
     // physically right model: a three-cell shelf and a four-cell shelf are
     // different pictures, not one picture used twice.
+    const declared = declarations();
+    // The sweep has to have swept: every assertion below is over a
+    // collection, so an empty `PLACE_TYPES` would pass this test by saying
+    // nothing at all.
+    expect(declared.length).toBeGreaterThan(0);
     const sizes = new Map<string, Map<string, string[]>>();
-    for (const { assetId, footprint, where } of declarations()) {
+    for (const { assetId, footprint, where } of declared) {
       const key = `${footprint.w}x${footprint.h}`;
       const byId = sizes.get(assetId) ?? new Map<string, string[]>();
       byId.set(key, [...(byId.get(key) ?? []), where]);
@@ -327,7 +332,9 @@ describe('the asset vocabulary the profiles declare', () => {
   });
 
   it('declares a footprint of at least one cell on every side', () => {
-    for (const { assetId, footprint, where } of declarations()) {
+    const declared = declarations();
+    expect(declared.length).toBeGreaterThan(0);
+    for (const { assetId, footprint, where } of declared) {
       expect(`${where}/${assetId}: ${footprint.w}x${footprint.h}`).toBe(
         `${where}/${assetId}: ${Math.max(1, footprint.w)}x${Math.max(1, footprint.h)}`,
       );
