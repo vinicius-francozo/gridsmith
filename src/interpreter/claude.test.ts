@@ -202,19 +202,25 @@ describe('refusing to spend a request', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('reports a missing key before building a client, never falling back to the environment', async () => {
-    // An empty key handed to the SDK makes it read ANTHROPIC_API_KEY instead,
-    // which on a project with no backend means spending a key the user never
-    // pasted. The guard has to come first.
-    const interpreter = new ClaudeInterpreter({ apiKey: '', runtime: IN_NODE });
+  it('reports a missing key as its own failure, without spending a request', async () => {
+    // The SDK does not read ANTHROPIC_API_KEY for an empty string — it only
+    // does that when `apiKey` is undefined — so the empty key would travel as
+    // an empty header and come back a round trip later as a 401, which this
+    // layer reads as "that key was rejected". Telling somebody who has not
+    // pasted a key that their key is wrong is the failure this guard avoids.
+    const { client, calls } = stubClient(respondsWith(answer));
+    const interpreter = new ClaudeInterpreter({ apiKey: '', client, runtime: IN_NODE });
 
     await expect(interpreter.interpret('a tavern hall')).rejects.toBeInstanceOf(MissingApiKeyError);
+    expect(calls).toHaveLength(0);
   });
 
   it('treats a key of only whitespace as no key', async () => {
-    const interpreter = new ClaudeInterpreter({ apiKey: '   ', runtime: IN_NODE });
+    const { client, calls } = stubClient(respondsWith(answer));
+    const interpreter = new ClaudeInterpreter({ apiKey: '   ', client, runtime: IN_NODE });
 
     await expect(interpreter.interpret('a tavern hall')).rejects.toBeInstanceOf(MissingApiKeyError);
+    expect(calls).toHaveLength(0);
   });
 });
 

@@ -131,9 +131,13 @@ export class ClaudeInterpreter implements Interpreter {
       throw new RangeError('interpret() needs a description to work from');
     }
 
-    // Before the client is built, not after: an empty key handed to the SDK
-    // makes it fall back to the environment, which on this project would mean
-    // silently spending somebody else's key.
+    // Before the request, and before a client is built for it. The SDK does
+    // not read the environment here — it falls back to `ANTHROPIC_API_KEY`
+    // only when `apiKey` is `undefined` (`client.ts`, verified in 0.128.0),
+    // so an empty string is kept and sent as an empty header. What that buys
+    // is a 401 one round trip later, which this layer classifies as
+    // `InvalidApiKeyError`: "that key was rejected", told to somebody who
+    // never pasted a key. The guard costs nothing and names the real problem.
     if (this.apiKey.trim() === '') {
       throw new MissingApiKeyError();
     }
