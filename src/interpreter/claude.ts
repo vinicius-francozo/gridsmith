@@ -27,11 +27,18 @@ import { FEATURES } from './vocabulary';
 export const INTERPRETER_MODEL = 'claude-opus-5';
 
 /**
- * Generous for an answer that is a few hundred tokens of JSON. The headroom is
- * for the model's own reasoning, which is on by default on this model; running
- * out mid-answer truncates the JSON and costs a whole round trip.
+ * The ceiling on the whole answer, reasoning included.
+ *
+ * The JSON itself is a few hundred tokens. The rest is headroom for the
+ * model's own reasoning, which is on by default on this model and is spent
+ * out of this same budget — so a figure sized for the JSON alone is a figure
+ * that runs out before the answer is written, which is the round trip this
+ * headroom exists to avoid. 16000 is the floor documented for a request that
+ * does not stream: enough that running out is not the ordinary case, low
+ * enough to stay inside the SDK's own HTTP timeout. Tokens left unspent cost
+ * nothing.
  */
-const MAX_TOKENS = 4096;
+const MAX_TOKENS = 16000;
 
 /**
  * Sorting one sentence into seven fields is not hard work, and the map's
@@ -149,10 +156,15 @@ export class ClaudeInterpreter implements Interpreter {
    * The constraints in a parsed response.
    *
    * `stop_reason` is read before the content, because both of the ways this
-   * call ends badly still arrive as a successful HTTP response. A refusal
-   * carries no answer at all, and an answer cut off at `max_tokens` is
-   * truncated JSON — reading `parsed_output` first would report either as
-   * "the model returned nothing", which points at the wrong thing to fix.
+   * call ends badly still arrive as a successful HTTP response, and both
+   * leave `parsed_output` null. A refusal carries no answer at all. Running
+   * out of tokens reaches here only when the cut came before any text block
+   * was written — the budget went on reasoning — because an answer cut off
+   * part-way through its JSON never gets this far: `messages.parse` raises on
+   * the incomplete JSON, and that arrives as an `UnusableResponseError`
+   * through `classifyRequestFailure`. Reading `parsed_output` first would
+   * report both of the cases that do land here as "the model returned
+   * nothing", which points at the wrong thing to fix.
    */
   private readAnswer(response: Awaited<ReturnType<ClaudeInterpreter['request']>>): Constraints {
     if (response.stop_reason === 'refusal') {

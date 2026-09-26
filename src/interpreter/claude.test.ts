@@ -162,6 +162,18 @@ describe('interpreting a description', () => {
     expect(() => parse('not json at all')).toThrow();
   });
 
+  it('leaves the model room to reason as well as to answer', async () => {
+    // Reasoning is on by default on this model and is spent out of the same
+    // budget as the answer, so a budget sized for a few hundred tokens of
+    // JSON buys a truncation rather than a map. 16000 is the documented floor
+    // for a request that does not stream.
+    const { client, calls } = stubClient(respondsWith(answer));
+
+    await interpreterWith(client).interpret('a tavern hall');
+
+    expect(calls[0].max_tokens).toBeGreaterThanOrEqual(16000);
+  });
+
   it('names the whole feature vocabulary in the prompt, so the model has the closed list', async () => {
     // A word the prompt never offers is a word the model invents a synonym
     // for, and `resolve` then throws away with a conflict the person cannot act on.
