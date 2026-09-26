@@ -9,18 +9,42 @@
  * inert, every blank seed the same number forever.
  *
  * So this file mounts with the defaults in place and moves as little as it has
- * to. Five of the six are exercised for real — the marking library, the
- * browser's storage, the platform's entropy, the saver and the file name. The
- * sixth is the interpreter, which is the one service that cannot be reached
- * without leaving the machine, so the class the page names is replaced by one
- * that records what it was handed. Nothing here touches the network.
+ * to. Four of the six run here as they run in a browser — the marking library,
+ * the browser's storage, the platform's entropy and the saver — and replacing
+ * any of the four reddens a test below.
+ *
+ * The other two cannot be reached from Node at all. The interpreter is a
+ * network round trip, so the class the page names is replaced by one that
+ * records what it was handed — and the line that builds it is still pinned,
+ * because the trimmed key and the typed description have to arrive at that
+ * constructor. The encoder is a browser rasteriser, so one test hands back a
+ * `Blob` in its place, and that stand-in is total: `toPng` in `defaultServices`
+ * is the one default of the six this file leaves free, since there is nothing
+ * under Node that could tell the real encoder from any other. What it produces
+ * is tested where it lives, and what happens to the bytes afterwards — the
+ * saver, the object URL, the anchor, the file name — is production code here.
+ * Nothing touches the network.
+ *
+ * One thing this file cannot pin, said plainly rather than implied away:
+ * `AssetLibrary.bitmap` needs a canvas to paint its marker on, so under Node
+ * every bitmap request fails — and `resolveBitmaps` swallows a failed one and
+ * has the paint loop fill magenta, which means a render that resolved no bitmap
+ * at all still finishes successfully. A finished render therefore says nothing
+ * about the library. What the library is held to here is the half that does
+ * answer the same under Node as in a browser: its catalogue, through `get` and
+ * `query`.
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Constraints, Interpreter } from '../core/types';
+import { createRng } from '../core/prng';
+import type { AssetLibrary, Constraints, Interpreter, PlaceType, Scene } from '../core/types';
+import { generate } from '../generator/generate';
+import { resolve } from '../interpreter/resolve';
+import { featuresFor } from '../interpreter/vocabulary';
 
 import { mountApp } from './mount';
+import type { GenerationDeps, GenerationInput } from './pipeline';
 import { API_KEY_ITEM } from './storage';
 import type { KeyStore } from './storage';
 
@@ -30,7 +54,28 @@ const spy = vi.hoisted(() => ({
   keys: [] as string[],
   /** Every description that reached it. */
   asked: [] as string[],
+  /** Every asset library `defaultServices` handed the loop, in order. */
+  libraries: [] as AssetLibrary[],
 }));
+
+// The loop itself is not stood in for — this wrapper records the library the
+// page built and then calls the real one. The library is the one default with
+// no observable effect from outside the page: the interpreter is seen through
+// the constructor, the store through what is in it afterwards, the entropy
+// through the seed field and the saver through the anchor, but the library goes
+// in one side of `generateMap` and never comes out. Recording it is the only
+// way to assert on the object `defaultServices` actually built, rather than on
+// a second one built here that would prove nothing about the page.
+vi.mock('./pipeline', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./pipeline')>();
+  return {
+    ...actual,
+    generateMap: (input: GenerationInput, deps: GenerationDeps) => {
+      spy.libraries.push(deps.library);
+      return actual.generateMap(input, deps);
+    },
+  };
+});
 
 vi.mock('../interpreter/claude', () => ({
   ClaudeInterpreter: class implements Interpreter {
@@ -172,9 +217,17 @@ function buttonLabelled(root: FakeElement, label: string): FakeElement {
   return found;
 }
 
+/**
+ * Lets every pending promise settle, on the fake clock this file runs on.
+ *
+ * The clock is fake for the sake of the saver, which leaves a timer running for
+ * a quarter of a second after every save; a real one outlives the test and
+ * fires against a document that is already gone. Moving the fake clock is then
+ * also how the turns between the click and the finished map are taken.
+ */
 async function settle(): Promise<void> {
   for (let turn = 0; turn < 4; turn += 1) {
-    await new Promise((done) => setTimeout(done, 0));
+    await vi.advanceTimersByTimeAsync(1);
   }
 }
 
@@ -217,6 +270,35 @@ function lendLocalStorage(store: KeyStore): void {
   });
 }
 
+/**
+ * The three kinds of place, exhaustively.
+ *
+ * Written as the keys of a `Record<PlaceType, true>` so that a fourth kind
+ * added to the frozen vocabulary stops this file compiling instead of quietly
+ * going untested.
+ */
+const PLACE_TYPES = Object.keys({
+  tavern_hall: true,
+  tavern_room: true,
+  tavern_storeroom: true,
+} satisfies Record<PlaceType, true>) as PlaceType[];
+
+/** A scene of `placeType` at `seed`, asking for everything that place can hold. */
+function sceneFor(placeType: PlaceType, seed: number): Scene {
+  const params = resolve(
+    {
+      placeType,
+      light: 'dim',
+      condition: 'lived_in',
+      clutter: 0.6,
+      features: featuresFor(placeType),
+      unresolved: [],
+    },
+    seed,
+  );
+  return generate(params, createRng(seed));
+}
+
 function mapStore(initial?: string): KeyStore & { items: Map<string, string> } {
   const items = new Map<string, string>();
   if (initial !== undefined) {
@@ -235,11 +317,41 @@ function mapStore(initial?: string): KeyStore & { items: Map<string, string> } {
 }
 
 describe('what the page is wired to when nobody stands in for anything', () => {
+  /**
+   * Whatever `localStorage` this runtime came with, put back after every test.
+   *
+   * Captured and restored rather than deleted, which is what `storage.test.ts`
+   * does with the same global and for the same reason: deleting unconditionally
+   * is only correct for as long as Node happens not to supply one, and a test
+   * whose cleanup quietly strips a real global is a test that breaks the file
+   * that runs after it.
+   */
+  const hadLocalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+
+  const restoreLocalStorage = (): void => {
+    if (hadLocalStorage === undefined) {
+      delete (globalThis as { localStorage?: unknown }).localStorage;
+    } else {
+      Object.defineProperty(globalThis, 'localStorage', hadLocalStorage);
+    }
+  };
+
+  beforeEach(() => {
+    // The saver keeps a timer alive for a quarter of a second after the click,
+    // on purpose. Real, it outlives the test and revokes a URL long after the
+    // page it belonged to is gone; fake, it is discarded with the clock. The
+    // clock here is never moved as far as that quarter second, so the
+    // revocation is never reached — `download.test.ts` is where it is.
+    vi.useFakeTimers();
+  });
+
   afterEach(() => {
     spy.keys.length = 0;
     spy.asked.length = 0;
-    delete (globalThis as { localStorage?: unknown }).localStorage;
+    spy.libraries.length = 0;
+    restoreLocalStorage();
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it('builds the interpreter around the key that was pasted, not around nothing', async () => {
@@ -277,7 +389,20 @@ describe('what the page is wired to when nobody stands in for anything', () => {
 
   it('opens with an empty field, rather than refusing, where there is no storage to have', () => {
     // No `localStorage` at all is the private window and the blocked origin.
-    // The fallback store is what keeps the page from throwing on the way up.
+    // The precondition is established rather than assumed: every other test in
+    // this file lends a store, and this one needs the global to be absent, so
+    // it says so instead of depending on Node not having one today.
+    //
+    // What this pins is that the page comes up and shows an empty field. It is
+    // not what pins `nullKeyStore()`: `readApiKey` and `writeApiKey` each wrap
+    // their own access in a try/catch, so the page would come up just the same
+    // with `undefined` in place of the fallback store, and those two catches
+    // are pinned in `storage.test.ts` where they live. The fallback is a guard
+    // no test here can tell from its absence.
+    restoreLocalStorage();
+    delete (globalThis as { localStorage?: unknown }).localStorage;
+    expect((globalThis as { localStorage?: unknown }).localStorage).toBeUndefined();
+
     expect(() => mountPage()).not.toThrow();
     expect(mountPage().apiKey.value).toBe('');
   });
@@ -327,9 +452,13 @@ describe('what the page is wired to when nobody stands in for anything', () => {
     expect(page.doc.clicked).toContain(anchors[0]);
   });
 
-  it('draws the map with the library the page ships with', async () => {
-    // The marking library is real here, so a scene it cannot supply an asset
-    // for is a failure this test sees. Nothing is stood in for at all.
+  it('draws with the library the page ships with, and survives it supplying no bitmap', async () => {
+    // What a finished render proves, and only that. Every bitmap request fails
+    // under Node, `resolveBitmaps` swallows each one and the paint loop fills
+    // magenta, so this is the page coming through a library that hands it
+    // nothing — which is worth pinning, because a render that threw would be a
+    // blank page. It is not evidence that the library has anything in it; that
+    // is the test below.
     const page = mountPage();
     page.description.value = 'um salão de taverna';
     page.seed.value = '4242';
@@ -338,5 +467,47 @@ describe('what the page is wired to when nobody stands in for anything', () => {
     await settle();
 
     expect(page.download.disabled).toBe(false);
+  });
+
+  it('ships a catalogue that answers for every prop the generator places', async () => {
+    // The library the page built, asserted on directly — a catalogue with
+    // nothing in it renders exactly as well as the real one under Node, so the
+    // only thing that can tell them apart is asking it what it has.
+    //
+    // A missing id is not a crash: the renderer paints a magenta rectangle
+    // where the prop should be and the run finishes. Publish with a library
+    // that answers for nothing and every map in the product comes out a field
+    // of magenta boxes, with the suite green.
+    const page = mountPage();
+    page.description.value = 'um salão de taverna';
+    page.generate.click();
+    await settle();
+
+    const library = spy.libraries[0];
+    expect(library).toBeDefined();
+
+    const missing = new Set<string>();
+    let placed = 0;
+    for (const placeType of PLACE_TYPES) {
+      for (let seed = 1; seed <= 25; seed += 1) {
+        for (const prop of sceneFor(placeType, seed).props) {
+          placed += 1;
+          if (library.get(prop.assetId) === undefined) {
+            missing.add(prop.assetId);
+          }
+        }
+      }
+    }
+
+    expect(placed).toBeGreaterThan(0);
+    expect([...missing]).toEqual([]);
+
+    // The three kinds it does carry, and the fourth it leaves out on purpose:
+    // floors are flat colour by design, so `tile/...` resolving to nothing is
+    // the plan working rather than the same gap in a fourth place.
+    for (const kind of ['anchor', 'group', 'scatter'] as const) {
+      expect(library.query([], kind).length).toBeGreaterThan(0);
+    }
+    expect(library.query([], 'tile')).toEqual([]);
   });
 });
