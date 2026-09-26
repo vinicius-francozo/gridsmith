@@ -15,6 +15,25 @@ const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroo
 /** Which wall a prop has its back to, per rotation. Mirrors `BACK_OF`. */
 const BACK: Record<Rotation, Facing> = { 0: 'n', 90: 'e', 180: 's', 270: 'w' };
 
+/**
+ * The vocabulary words an anchor answers to, read off the profiles.
+ *
+ * Written out by hand this list had drifted: it asked for `bed` and
+ * `shelves`, neither of which is in `FEATURE_VOCABULARY` — the word is
+ * `shelving` — so two of the five requests were silently doing nothing while
+ * `profiles.test.ts` guarded the vocabulary a file away. Deriving it means
+ * the helper cannot disagree with the profiles it is furnishing from.
+ */
+const ANCHOR_FEATURES: string[] = [
+  ...new Set(
+    PLACE_TYPES.flatMap((placeType) =>
+      profileFor(placeType)
+        .anchors.map((spec) => spec.feature)
+        .filter((feature): feature is string => feature !== undefined),
+    ),
+  ),
+];
+
 /** A furnished room, for one place type and seed. */
 function furnished(
   placeType: PlaceType,
@@ -25,7 +44,7 @@ function furnished(
   const params = paramsFor(placeType, {
     size: profile.maxSize,
     doorCount: 2,
-    features: ['bar', 'hearth', 'stairs', 'bed', 'shelves'],
+    features: ANCHOR_FEATURES,
     ...overrides,
   });
   const rng = createRng(seed);
@@ -255,10 +274,56 @@ describe('the anchor layer', () => {
     }
   });
 
-  it('places an anchor a feature asked for by name', () => {
-    const { props } = furnished('tavern_hall', 2, { features: ['bar'] });
-    expect(props.map((prop) => prop.assetId)).toContain('anchor/bar_counter');
+});
+
+describe('the anchor a feature asks for by name', () => {
+  /**
+   * Every (place, word, anchor) the profiles answer to, read off the profiles
+   * rather than listed here: a word that lost its anchor has to make a test
+   * go red, not make one quietly stop existing.
+   *
+   * The mechanism it covers is one line — the requested anchors going to the
+   * front of the order — and a room draws two or three of the three anchors a
+   * hall offers anyway, so a single word on a single seed is satisfied by
+   * chance seventeen times in twenty. Each word is therefore asked for alone,
+   * over a run of seeds wide enough that luck cannot carry it.
+   */
+  const REQUESTS = PLACE_TYPES.flatMap((placeType) =>
+    profileFor(placeType)
+      .anchors.filter((spec) => spec.feature !== undefined)
+      .map((spec) => ({
+        placeType,
+        feature: spec.feature as string,
+        assetId: assetIdFor('anchor', spec.assetId),
+      })),
+  );
+
+  it('is asked for by all five of the words an anchor answers to', () => {
+    // Without this, deleting `feature` from a spec would delete its test
+    // along with it and the suite would stay green at a lower count.
+    expect([...new Set(REQUESTS.map((request) => request.feature))].sort()).toEqual([
+      'bar',
+      'bunks',
+      'hearth',
+      'shelving',
+      'stairs',
+    ]);
   });
+
+  for (const { placeType, feature, assetId } of REQUESTS) {
+    it(`puts ${assetId} in a ${placeType} that asks for '${feature}'`, () => {
+      const missing: number[] = [];
+      for (let seed = 0; seed < 30; seed += 1) {
+        const { props } = furnished(placeType, seed, { features: [feature] });
+        if (!props.some((prop) => prop.assetId === assetId)) {
+          missing.push(seed);
+        }
+      }
+      expect(`${placeType} asked for '${feature}', missing on seeds: ${missing.join()}`).toBe(
+        `${placeType} asked for '${feature}', missing on seeds: `,
+      );
+    });
+  }
 });
 
 describe('the whole prop set', () => {
