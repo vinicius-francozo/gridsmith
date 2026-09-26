@@ -12,7 +12,7 @@ import {
   segmentWalls,
 } from './floorplan';
 import { clampDoorCount, clampSize, profileFor } from './profiles';
-import { paramsFor, planFrom } from './testing';
+import { paramsFor, planFrom } from './test-fixtures';
 
 const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
 

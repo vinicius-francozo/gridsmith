@@ -5,7 +5,7 @@ import type { Cell } from '../core/types';
 import type { ShapeName } from './profiles';
 import { buildFootprint, rectArea, rectContains } from './shapes';
 import type { Rect } from './shapes';
-import { maxRng, minRng } from './testing';
+import { maxRng, minRng } from './test-fixtures';
 
 const SHAPES: ShapeName[] = ['rectangle', 'l_shape', 't_shape', 'alcove'];
 

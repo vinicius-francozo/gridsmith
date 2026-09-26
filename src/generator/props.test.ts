@@ -7,7 +7,7 @@ import { buildFloorplan, opposite } from './floorplan';
 import { assetIdFor, profileFor, ROTATIONS } from './profiles';
 import type { GroupPart, PlaceProfile } from './profiles';
 import { placeProps, rotateFootprint, rotateTemplate } from './props';
-import { paramsFor, planFrom } from './testing';
+import { paramsFor, planFrom } from './test-fixtures';
 import type { Params } from '../core/types';
 
 const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];

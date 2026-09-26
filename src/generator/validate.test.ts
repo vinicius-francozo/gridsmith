@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { PlacedProp } from '../core/types';
 import { SceneValidationError, validateScene } from './validate';
-import { planFrom, sceneFrom } from './testing';
+import { planFrom, sceneFrom } from './test-fixtures';
 
 /** A one-cell prop, since most of these tests only care where it stands. */
 function prop(

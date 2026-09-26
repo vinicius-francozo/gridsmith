@@ -14,7 +14,7 @@ import {
   wallMaterialFor,
 } from './profiles';
 import type { Rect } from './shapes';
-import { maxRng, minRng, paramsFor } from './testing';
+import { maxRng, minRng, paramsFor } from './test-fixtures';
 
 const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
 

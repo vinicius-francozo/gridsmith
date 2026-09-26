@@ -6,7 +6,7 @@ import type { Params, PlaceType, Scene } from '../core/types';
 import { floorCells } from './floorplan';
 import { generate } from './generate';
 import { profileFor } from './profiles';
-import { paramsFor } from './testing';
+import { paramsFor } from './test-fixtures';
 import { validateScene } from './validate';
 
 const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];

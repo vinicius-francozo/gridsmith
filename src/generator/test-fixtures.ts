@@ -1,5 +1,12 @@
 /**
- * Fixtures the generator's tests are written against.
+ * Fixtures the generator's tests are written against — **test code only**.
+ *
+ * Nothing in `src/generator/` outside a `*.test.ts` file may import this
+ * module. The name says so because nothing else can: the file has to be
+ * reachable from several test files, so it cannot be a `*.test.ts` itself,
+ * and no lint rule is configured to enforce the boundary. A stub `Rng` or a
+ * plan drawn as art reaching production would look exactly like the real
+ * thing and would silently pin the randomness the whole project rests on.
  *
  * A generated plan is a poor thing to assert against: it is twenty cells
  * square and it changes whenever the grammar does. The helpers here build a
