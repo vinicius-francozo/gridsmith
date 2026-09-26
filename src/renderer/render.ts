@@ -4,9 +4,14 @@
  * It walks a `DrawList` and calls canvas methods. It makes no decisions —
  * every colour, rectangle, alpha and ordering was settled by `buildDrawList`,
  * which is pure and covered by tests. Keeping this file free of judgement is
- * what makes the untestable half small enough to read in one sitting: there is
- * no canvas in the Node test environment, so everything below is verified in
- * the browser, during integration.
+ * what makes it small enough to read in one sitting.
+ *
+ * There is no canvas in the Node test environment, but that is not the same as
+ * untestable: `render.test.ts` drives everything below through a recording
+ * stand-in and asserts the exact calls, which is how a transposed canvas or a
+ * dropped command is caught. What genuinely waits for the browser is the
+ * rasteriser's own behaviour — what the pixels look like once these calls
+ * land.
  *
  * It never touches `document`. The caller supplies the canvas, which lets the
  * same code render into an on-screen `HTMLCanvasElement` and into an
@@ -15,7 +20,7 @@
 
 import type { AssetLibrary, Rotation, Scene } from '../core/types';
 import { buildDrawList } from './drawlist';
-import type { DrawList } from './drawlist';
+import type { DrawList, PixelLine } from './drawlist';
 
 /** Either canvas the renderer can paint into. */
 export type RenderTarget = HTMLCanvasElement | OffscreenCanvas;
@@ -36,7 +41,13 @@ const MISSING_ASSET_COLOR = '#ff00c8';
  *
  * A bitmap the library cannot supply resolves to `undefined` rather than
  * rejecting: one bad prop should cost one magenta rectangle, not the whole
- * map, and magenta is loud enough that nobody ships it by accident.
+ * map, and magenta is loud enough that nobody ships it by accident. A bitmap
+ * that breaks the size clause of the asset contract is treated the same way,
+ * and for the same reason it was written: `drawImage` scales whatever it is
+ * given into the rectangle asked for, so a pack drawn at 64px per cell would
+ * come out *looking aligned* and be wrong by six pixels a cell all the way
+ * across the map. The check costs one comparison per distinct (id, rotation)
+ * pair per render — not per frame, since nothing here runs in a loop.
  */
 async function resolveBitmaps(
   list: DrawList,
@@ -71,26 +82,24 @@ async function resolveBitmaps(
   return resolved;
 }
 
-/** Strokes the grid lines described by a `grid` command. */
+/**
+ * Strokes the lines a `grid` command carries.
+ *
+ * Where they start, where they stop and the half pixel they are nudged by were
+ * all decided in the draw list. This walks them.
+ */
 function paintGrid(
   ctx: Context2D,
-  size: { w: number; h: number },
-  spacing: number,
+  lines: readonly PixelLine[],
   color: string,
   lineWidth: number,
 ): void {
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
-  // Half-pixel offsets: a 1px line stroked on an integer coordinate is
-  // straddled by the rasteriser and comes out two grey pixels wide.
-  for (let x = spacing; x < size.w; x += spacing) {
-    ctx.moveTo(x + 0.5, 0);
-    ctx.lineTo(x + 0.5, size.h);
-  }
-  for (let y = spacing; y < size.h; y += spacing) {
-    ctx.moveTo(0, y + 0.5);
-    ctx.lineTo(size.w, y + 0.5);
+  for (const line of lines) {
+    ctx.moveTo(line.from.x, line.from.y);
+    ctx.lineTo(line.to.x, line.to.y);
   }
   ctx.stroke();
 }
@@ -146,9 +155,28 @@ export async function executeDrawList(
         ctx.restore();
         break;
       }
-      case 'grid': {
-        paintGrid(ctx, command.size, command.spacing, command.color, command.lineWidth);
+      case 'door': {
+        ctx.fillStyle = command.color;
+        ctx.fillRect(command.rect.x, command.rect.y, command.rect.w, command.rect.h);
+        ctx.fillStyle = command.thresholdColor;
+        ctx.fillRect(
+          command.threshold.x,
+          command.threshold.y,
+          command.threshold.w,
+          command.threshold.h,
+        );
         break;
+      }
+      case 'grid': {
+        paintGrid(ctx, command.lines, command.color, command.lineWidth);
+        break;
+      }
+      default: {
+        // A command kind with no case here would be dropped in silence by the
+        // one component whose whole job is to execute the list faithfully.
+        // The `never` makes adding a kind a compile error instead.
+        const unreachable: never = command;
+        throw new TypeError(`unknown draw command: ${JSON.stringify(unreachable)}`);
       }
     }
   }

@@ -1,17 +1,27 @@
 import { describe, expect, it } from 'vitest';
 
 import { PIXELS_PER_CELL } from '../core/types';
-import type { LightSource, PlacedProp, Scene, Size, TileRef } from '../core/types';
+import type { Door, LightSource, PlacedProp, Scene, Size, TileRef } from '../core/types';
 import { materialColor } from '../assets/palette';
-import { tileAssetId } from '../assets/contract';
 import { cellRect } from './geometry';
 import {
+  DOOR_COLOR,
+  DOOR_THRESHOLD_COLOR,
   GRID_LINE_COLOR,
   LAYER_ORDER,
   buildDrawList,
+  doorCommand,
   fillCommand,
+  gridLines,
 } from './drawlist';
-import type { AssetCommand, DrawCommand, FillCommand, GridCommand, ShadeCommand } from './drawlist';
+import type {
+  AssetCommand,
+  DoorCommand,
+  DrawCommand,
+  FillCommand,
+  GridCommand,
+  ShadeCommand,
+} from './drawlist';
 
 /**
  * A tile grid from ASCII art, one character per cell, so a test can show the
@@ -23,7 +33,7 @@ import type { AssetCommand, DrawCommand, FillCommand, GridCommand, ShadeCommand 
  */
 function tilesFrom(rows: string[]): { size: Size; tiles: TileRef[][] } {
   const size: Size = { w: rows[0].length, h: rows.length };
-  const material: Record<string, string> = { '#': 'plaster_wall', '.': 'oak_plank', ' ': 'void' };
+  const material: Record<string, string> = { '#': 'plaster_wall', '.': 'wood_plank', ' ': 'void' };
   const tiles = rows.map((row, y) => {
     if (row.length !== size.w) {
       throw new Error(`tilesFrom(): row ${y} is ${row.length} characters, expected ${size.w}`);
@@ -44,10 +54,11 @@ function sceneFrom(
   rows: string[],
   props: PlacedProp[] = [],
   lights: LightSource[] = [],
+  doors: Door[] = [],
 ): Scene {
   const { size, tiles } = tilesFrom(rows);
   return {
-    floorplan: { size, cells: [], doors: [], walls: [] },
+    floorplan: { size, cells: [], doors, walls: [] },
     zones: [],
     tiles,
     props,
@@ -72,6 +83,8 @@ const assets = (commands: DrawCommand[]): AssetCommand[] =>
   commands.filter((c): c is AssetCommand => c.kind === 'asset');
 const shades = (commands: DrawCommand[]): ShadeCommand[] =>
   commands.filter((c): c is ShadeCommand => c.kind === 'shade');
+const doors = (commands: DrawCommand[]): DoorCommand[] =>
+  commands.filter((c): c is DoorCommand => c.kind === 'door');
 
 /** The index of the last command of `kind`, or -1. `findLastIndex` needs ES2023. */
 function lastIndexOfKind(commands: DrawCommand[], kind: DrawCommand['kind']): number {
@@ -159,7 +172,7 @@ describe('the floor', () => {
       return found;
     };
     expect(at(1, 0).material).toBe('plaster_wall');
-    expect(at(0, 1).material).toBe('oak_plank');
+    expect(at(0, 1).material).toBe('wood_plank');
   });
 
   it('places each fill on the cell it names', () => {
@@ -172,16 +185,19 @@ describe('the floor', () => {
   it('carries the material’s colour and its tile asset id', () => {
     const list = buildDrawList(sceneFrom(['..']));
     const [first, second] = fills(list.commands);
-    expect(first.color).toBe(materialColor('oak_plank', 0));
-    expect(first.assetId).toBe(tileAssetId('oak_plank', 0));
+    expect(first.color).toBe(materialColor('wood_plank', 0));
+    // Spelled out rather than compared against `tileAssetId`: asserting the
+    // output against the very function that produced it passes however that
+    // function is changed, including collapsed to a constant.
+    expect(first.assetId).toBe('tile/wood_plank/0');
     // The art helper varies the variant by column, so the two cells differ.
-    expect(second.assetId).toBe(tileAssetId('oak_plank', 1));
+    expect(second.assetId).toBe('tile/wood_plank/1');
     expect(second.color).not.toBe(first.color);
   });
 
   it('keeps the tile’s own rotation, which a real tile bitmap needs', () => {
     const scene = sceneFrom(['.']);
-    scene.tiles[0][0] = { material: 'oak_plank', variant: 0, rotation: 270 };
+    scene.tiles[0][0] = { material: 'wood_plank', variant: 0, rotation: 270 };
     expect(fills(buildDrawList(scene).commands)[0].rotation).toBe(270);
   });
 
@@ -345,18 +361,124 @@ describe('the grid lines', () => {
     expect(last.kind).toBe('grid');
   });
 
-  it('are ruled at the grid pitch across the whole canvas', () => {
+  it('carry their own geometry, so the executor has nothing left to decide', () => {
     const list = buildDrawList(sceneFrom(['...', '...']));
     const grid = list.commands[list.commands.length - 1] as GridCommand;
-    expect(grid.spacing).toBe(PIXELS_PER_CELL);
-    expect(grid.size).toEqual(list.size);
     expect(grid.color).toBe(GRID_LINE_COLOR);
     expect(grid.lineWidth).toBe(1);
+    expect(grid.lines).toEqual(gridLines(list.size, PIXELS_PER_CELL));
   });
 
   it('are ruled exactly once', () => {
     const list = buildDrawList(sceneFrom(['...', '...']));
     expect(list.commands.filter((c) => c.kind === 'grid')).toHaveLength(1);
+  });
+});
+
+describe('gridLines', () => {
+  it('rules the inside of the canvas and leaves its edges alone', () => {
+    // A 2x1 map is 140x70px: one interior line, vertical, down the middle.
+    // Ruling the outer border too would draw a line half outside the canvas
+    // and frame the map; the map's border is the edge of the image.
+    expect(gridLines({ w: 140, h: 70 }, 70)).toEqual([
+      { from: { x: 70.5, y: 0 }, to: { x: 70.5, y: 70 } },
+    ]);
+  });
+
+  it('nudges every line half a pixel, or each one rasterises 2px wide', () => {
+    // A 1px line stroked on an integer coordinate is straddled by the
+    // rasteriser and comes out two grey pixels wide, in every cell of the map.
+    for (const line of gridLines({ w: 280, h: 210 }, 70)) {
+      expect(Math.abs(line.from.x % 1) === 0.5 || Math.abs(line.from.y % 1) === 0.5).toBe(true);
+      expect(line.from.x % 1).toBe(line.to.x % 1);
+      expect(line.from.y % 1).toBe(line.to.y % 1);
+    }
+  });
+
+  it('rules both axes, spanning the canvas', () => {
+    expect(gridLines({ w: 210, h: 140 }, 70)).toEqual([
+      { from: { x: 70.5, y: 0 }, to: { x: 70.5, y: 140 } },
+      { from: { x: 140.5, y: 0 }, to: { x: 140.5, y: 140 } },
+      { from: { x: 0, y: 70.5 }, to: { x: 210, y: 70.5 } },
+    ]);
+  });
+
+  it('rules nothing on a one-cell map', () => {
+    expect(gridLines({ w: 70, h: 70 }, 70)).toEqual([]);
+  });
+
+  it('refuses a spacing that would never terminate', () => {
+    expect(() => gridLines({ w: 140, h: 70 }, 0)).toThrow(RangeError);
+    expect(() => gridLines({ w: 140, h: 70 }, -70)).toThrow(RangeError);
+    expect(() => gridLines({ w: 140, h: 70 }, Number.NaN)).toThrow(RangeError);
+  });
+});
+
+describe('the doors', () => {
+  it('marks every door, or the map goes to the table with no way in', () => {
+    // A door cell stays `CellKind.wall`: the opening lives in `floorplan.doors`
+    // and nothing in `tiles` distinguishes it. A draw list that never reads
+    // `doors` renders a sealed building.
+    const list = buildDrawList(
+      sceneFrom(['###', '#.#', '###'], [], [], [{ cell: { x: 1, y: 0 }, facing: 'n' }]),
+    );
+    expect(doors(list.commands)).toHaveLength(1);
+    expect(doors(list.commands)[0].cell).toEqual({ x: 1, y: 0 });
+    expect(doors(list.commands)[0].color).toBe(DOOR_COLOR);
+    expect(doors(list.commands)[0].thresholdColor).toBe(DOOR_THRESHOLD_COLOR);
+  });
+
+  it('covers the door cell exactly', () => {
+    const command = doorCommand({ cell: { x: 2, y: 3 }, facing: 'n' });
+    expect(command.rect).toEqual({ x: 140, y: 210, w: 70, h: 70 });
+  });
+
+  it('puts the threshold on the side the door faces, which is outwards', () => {
+    // `Door.facing` points out of the building. A threshold on the wrong side
+    // renders every door turned around.
+    const at = (facing: Door['facing']): DoorCommand =>
+      doorCommand({ cell: { x: 1, y: 1 }, facing });
+    expect(at('n').threshold).toEqual({ x: 70, y: 70, w: 70, h: 14 });
+    expect(at('s').threshold).toEqual({ x: 70, y: 126, w: 70, h: 14 });
+    expect(at('e').threshold).toEqual({ x: 126, y: 70, w: 14, h: 70 });
+    expect(at('w').threshold).toEqual({ x: 70, y: 70, w: 14, h: 70 });
+  });
+
+  it('keeps the threshold inside the door cell on every facing', () => {
+    for (const facing of ['n', 'e', 's', 'w'] as Door['facing'][]) {
+      const { rect, threshold } = doorCommand({ cell: { x: 0, y: 0 }, facing });
+      expect(threshold.x).toBeGreaterThanOrEqual(rect.x);
+      expect(threshold.y).toBeGreaterThanOrEqual(rect.y);
+      expect(threshold.x + threshold.w).toBeLessThanOrEqual(rect.x + rect.w);
+      expect(threshold.y + threshold.h).toBeLessThanOrEqual(rect.y + rect.h);
+    }
+  });
+
+  it('draws doors over the floor and under the props', () => {
+    const list = buildDrawList(
+      sceneFrom(
+        ['###', '#.#', '###'],
+        [prop({ cell: { x: 1, y: 1 } })],
+        [],
+        [{ cell: { x: 1, y: 2 }, facing: 's' }],
+      ),
+    );
+    expect(lastIndexOfKind(list.commands, 'fill')).toBeLessThan(
+      firstIndexOfKind(list.commands, 'door'),
+    );
+    expect(lastIndexOfKind(list.commands, 'door')).toBeLessThan(
+      firstIndexOfKind(list.commands, 'asset'),
+    );
+  });
+
+  it('refuses a door outside the map', () => {
+    expect(() =>
+      buildDrawList(sceneFrom(['##', '##'], [], [], [{ cell: { x: 2, y: 0 }, facing: 'e' }])),
+    ).toThrow(/falls outside the 2x2 map/);
+  });
+
+  it('marks nothing when the plan has no doors', () => {
+    expect(doors(buildDrawList(sceneFrom(['##', '##'])).commands)).toEqual([]);
   });
 });
 
