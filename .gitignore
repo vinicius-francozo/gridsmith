@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+
+# Third-party asset libraries are never versioned. See docs/assets.md
+assets/library/
