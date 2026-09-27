@@ -276,8 +276,11 @@ const CANONICAL_BY_VARIANT = buildIndex(SYNONYM_RULES);
  * no tie to break and no length test here.
  */
 function matchCase(sample: string, word: string): string {
-  // Only ever called on a run of letters the regex below matched, so `sample`
-  // has a first character and `sample[0]` is one.
+  // Only ever called on a run of letters and combining marks the regex below
+  // matched, so `sample` has a first character. A decomposed word can in
+  // principle start with a mark rather than a letter; a mark is equal to both
+  // its own cases, so such a sample falls through to the last line and the
+  // canonical word goes in exactly as `SYNONYM_RULES` spells it.
   if (sample === sample.toUpperCase() && sample !== sample.toLowerCase()) {
     return word.toUpperCase();
   }
@@ -293,15 +296,27 @@ function matchCase(sample: string, word: string): string {
  *
  * Whole words only: the match runs over runs of letters, so "colunata" keeps
  * its "coluna", "desafogo" keeps its "fogo" and "restante" keeps its "estante".
- * Everything that is not a letter
+ * Everything that is neither a letter nor a combining mark
  * — spaces, commas, the person's exclamation marks — is carried through
  * character for character, because the premise of an entailment pair is the
  * sentence, not a cleaned-up version of it.
+ *
+ * **Combining marks are part of a word here, and leaving them out was a silent
+ * hole.** A description does not arrive in one normal form: text pasted out of
+ * another editor is routinely NFD, where "porão" is `p o r a ̃ o` — six code
+ * points, the tilde standing on its own. `\p{L}+` alone stops at that tilde, so
+ * the tokens are "pora" and "o", neither is any rule's variant, and the whole
+ * layer does nothing at all without saying so. Measured on this module: "Um
+ * porão de taverna com fogo aceso" applied `[depósito, lareira]` in NFC and
+ * only `[lareira]` in NFD, with "porão" left standing. It hit the five accented
+ * variants — "porão", "porões", "armazém", "armazéns", "balcões" — the first of
+ * which is the whole reason this layer exists. `fold` below has decomposed
+ * since it was written; this is the tokenizer catching up with it.
  */
 export function normalizeForClassifier(text: string): Normalized {
   const applied: AppliedSynonym[] = [];
 
-  const rewritten = text.replace(/\p{L}+/gu, (word) => {
+  const rewritten = text.replace(/[\p{L}\p{M}]+/gu, (word) => {
     const canonical = CANONICAL_BY_VARIANT.get(fold(word));
     if (canonical === undefined) {
       return word;

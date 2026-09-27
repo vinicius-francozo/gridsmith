@@ -8,7 +8,7 @@ import {
   SIZE_HINT_TEMPLATE,
 } from './templates';
 import { SYNONYM_RULES, buildIndex, fold, normalizeForClassifier } from './synonyms';
-import type { SynonymRule } from './synonyms';
+import type { AppliedSynonym, SynonymRule } from './synonyms';
 
 /**
  * Every expectation in this file is written out as a literal sentence.
@@ -230,6 +230,104 @@ describe('what the person typed', () => {
     const once = normalizeForClassifier('porão com fogo, colunas e um beliche').text;
 
     expect(normalizeForClassifier(once).text).toBe(once);
+  });
+});
+
+describe('a description that arrives decomposed', () => {
+  // A sentence does not arrive in one normal form. Text pasted out of another
+  // editor is routinely NFD, where "porão" is six code points with the tilde
+  // standing on its own, and a tokenizer that matched only `\p{L}+` stopped at
+  // that tilde: the tokens were "pora" and "o", no rule fired, and the layer
+  // quietly degraded to doing nothing. These are the five variants with an
+  // accent in them — every one of them was unreachable that way, including the
+  // rule this whole layer was built for.
+  //
+  // Both sides are asserted on purpose. A test on NFD alone would go on passing
+  // if the composed path broke instead.
+
+  /** The same description read in both normal forms, put back together so that
+   *  a `found` the person typed decomposed can be written out here as a word. */
+  function bothWays(description: string): {
+    composed: { text: string; applied: AppliedSynonym[] };
+    decomposed: { text: string; applied: AppliedSynonym[] };
+  } {
+    const read = (form: 'NFC' | 'NFD'): { text: string; applied: AppliedSynonym[] } => {
+      const normalized = normalizeForClassifier(description.normalize(form));
+      return {
+        text: normalized.text.normalize('NFC'),
+        applied: normalized.applied.map((swap) => ({
+          found: swap.found.normalize('NFC'),
+          canonical: swap.canonical,
+        })),
+      };
+    };
+
+    return { composed: read('NFC'), decomposed: read('NFD') };
+  }
+
+  it('reaches "porão" written either way', () => {
+    const { composed, decomposed } = bothWays('tem porão aqui');
+
+    expect(composed).toEqual({
+      text: 'tem depósito aqui',
+      applied: [{ found: 'porão', canonical: 'depósito' }],
+    });
+    expect(decomposed).toEqual(composed);
+  });
+
+  it('reaches "porões" written either way', () => {
+    const { composed, decomposed } = bothWays('tem porões aqui');
+
+    expect(composed).toEqual({
+      text: 'tem depósito aqui',
+      applied: [{ found: 'porões', canonical: 'depósito' }],
+    });
+    expect(decomposed).toEqual(composed);
+  });
+
+  it('reaches "armazém" written either way', () => {
+    const { composed, decomposed } = bothWays('tem armazém aqui');
+
+    expect(composed).toEqual({
+      text: 'tem depósito aqui',
+      applied: [{ found: 'armazém', canonical: 'depósito' }],
+    });
+    expect(decomposed).toEqual(composed);
+  });
+
+  it('reaches "armazéns" written either way', () => {
+    const { composed, decomposed } = bothWays('tem armazéns aqui');
+
+    expect(composed).toEqual({
+      text: 'tem depósito aqui',
+      applied: [{ found: 'armazéns', canonical: 'depósito' }],
+    });
+    expect(decomposed).toEqual(composed);
+  });
+
+  it('reaches "balcões" written either way', () => {
+    const { composed, decomposed } = bothWays('tem balcões aqui');
+
+    expect(composed).toEqual({
+      text: 'tem balcão aqui',
+      applied: [{ found: 'balcões', canonical: 'balcão' }],
+    });
+    expect(decomposed).toEqual(composed);
+  });
+
+  it('applies both rules in the sentence the failure was measured on', () => {
+    // Measured before the fix: NFC applied [depósito, lareira], NFD applied
+    // only [lareira] — "porão" stood there untouched and nothing said so.
+    const { composed, decomposed } = bothWays('Um porão de taverna com fogo aceso');
+
+    expect(composed).toEqual({
+      text: 'Um depósito de taverna com lareira aceso',
+      applied: [
+        { found: 'porão', canonical: 'depósito' },
+        { found: 'fogo', canonical: 'lareira' },
+      ],
+    });
+    expect(decomposed).toEqual(composed);
   });
 });
 
