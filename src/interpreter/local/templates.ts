@@ -26,8 +26,15 @@
  *    case rather than a breach of the rule: a test that writes a measured value
  *    out by hand does not drift quietly, it *fails*, which is the entire point
  *    of writing it down twice. It pins the five hypotheses, the three
- *    thresholds and the shape of the labels — never a label's own wording,
- *    which a later bench is expected to replace.
+ *    thresholds, the shape of the labels, and every label's own wording.
+ *
+ *    That last one is deliberate and it is the expensive one. The wordings are
+ *    not a design choice somebody should feel free to tidy — they are what the
+ *    bench scored, and every accuracy figure below describes them and nothing
+ *    else. Shortening `'usado, mas em ordem'` to `'usado'` breaks no shape
+ *    check and invalidates every number in this file at once. A later bench is
+ *    still expected to replace them; it replaces both files together, on
+ *    purpose, which is exactly what that ought to cost.
  * 3. **Nothing here gets "improved" without a measurement.** The three findings
  *    under the next heading are all cases where the wording a person would
  *    naturally write is the wording that scores worst.

@@ -125,6 +125,63 @@ describe('what the bench measured about the wording', () => {
     }
   });
 
+  it('offers every label in the exact words the bench scored', () => {
+    // ## Why the wording is written out here, and what it costs to change
+    //
+    // These strings are not a design choice, they are the *result of a
+    // measurement*. A bench scored two models over twenty Portuguese
+    // descriptions, and the accuracy figures this front is built on — 90% on
+    // `placeType`, F1 0.94 on `features`, the AUC behind `minConfidence` —
+    // describe these exact phrasings and no others.
+    //
+    // So this test does not claim the labels below are the *right* words. It
+    // claims they are the *measured* words. Without it, somebody tidies
+    // `'usado, mas em ordem'` down to `'usado'` in passing, every number in
+    // `templates.ts` quietly stops describing the code that is running, and
+    // nothing anywhere says so. The shape checks above would not notice: a
+    // one-word condition label is still non-empty, still unique, still free of
+    // "ou".
+    //
+    // The cost is deliberate. A later bench is expected to replace these, and
+    // it has to replace them *here and in `templates.ts` together*, in one
+    // change, on purpose. If you are editing this list, you are invalidating a
+    // measurement — re-run the bench, or the comments in `templates.ts` are
+    // now false.
+    expect(PLACE_TYPE_TEMPLATE.labels).toEqual({
+      tavern_hall: 'salão de taverna',
+      tavern_room: 'quarto de taverna',
+      tavern_storeroom: 'depósito de taverna',
+    });
+    expect(LIGHT_TEMPLATE.labels).toEqual({
+      dark: 'escuridão total, não há luz nenhuma',
+      dim: 'luz fraca, penumbra, meia-luz',
+      bright: 'muita luz, o lugar é claro e bem iluminado',
+    });
+    expect(CONDITION_TEMPLATE.labels).toEqual({
+      tidy: 'limpo e arrumado',
+      lived_in: 'usado, mas em ordem',
+      disordered: 'bagunçado e desarrumado',
+      ruined: 'destruído e em ruínas',
+    });
+    expect(SIZE_HINT_TEMPLATE.labels).toEqual({
+      small: 'pequeno',
+      medium: 'de tamanho médio',
+      large: 'grande',
+    });
+    // These seven are also the words `synonyms.ts` rewrites descriptions
+    // *towards*, which it reads from here rather than restating. Changing one
+    // silently re-points that whole layer.
+    expect(FEATURE_TEMPLATE.labels).toEqual({
+      bar: 'balcão',
+      hearth: 'lareira',
+      stairs: 'escada',
+      pillars: 'pilares',
+      alcove: 'alcova',
+      shelving: 'prateleiras',
+      bunks: 'beliches',
+    });
+  });
+
   it('builds the storeroom label on the word the synonym layer rewrites towards', () => {
     // `synonyms.ts` reads `STOREROOM_WORD`, not this label. If the two ever
     // stopped being the same word, every "porão" would be rewritten into a word
