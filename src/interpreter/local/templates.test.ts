@@ -206,16 +206,24 @@ describe('the thresholds and the clutter table', () => {
 
   it('holds each threshold to the figure it was measured at', () => {
     // Written out rather than read back, so that moving one of these is a
-    // decision somebody makes twice rather than a number that drifts. Each is
-    // a measurement, and the measurement is named beside it.
+    // decision somebody makes twice rather than a number that drifts. Each of
+    // the three is a measurement and each names its own, because the reason a
+    // threshold sits where it does is the only thing that says what a later
+    // bench would have to beat to move it.
 
     // AUC 0.922 of confidence against correctness; at 0.55 the bench accepted
     // 13 of 20 descriptions and all 13 were right.
     expect(PLACE_TYPE_TEMPLATE.minConfidence).toBe(0.55);
-    // The point above which a winning size is a size the description asked for
-    // rather than the top of a three-way tie.
+    // Swept from 0.40 to 0.70 against these labels: 40%, 70%, 80%, then 95% at
+    // 0.55 and 95% at every step above it. 0.55 is the bottom of that plateau,
+    // 19 of 20, the single error a `small` the gate read as no size at all.
+    // Lower is measurably worse; higher buys nothing and only refuses more.
     expect(SIZE_HINT_TEMPLATE.minConfidence).toBe(0.55);
-    // Independent yes/no questions, so the half-way mark is the answer itself.
+    // Swept from 0.2 to 0.999 against these seven labels: F1 tops out at 0.94
+    // across 0.5 and 0.6, with no false positive at either and two features
+    // missed. At 0.4 it is 0.92 and a feature is invented. So 0.5 is the bottom
+    // of that plateau too — and it happens to be the half-way mark, which is
+    // what independent yes/no questions would suggest anyway.
     expect(FEATURE_TEMPLATE.minConfidence).toBe(0.5);
   });
 

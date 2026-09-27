@@ -287,11 +287,15 @@ describe('deriving clutter from the condition distribution', () => {
   });
 
   it('keeps three decimal places, so the same scores give the same number', () => {
-    // The unrounded average here is 0.35050000000000003, which sits exactly on
-    // a rounding boundary: what sends it to 0.351 rather than 0.350 is
-    // half-up, not the floating-point tail. The tail is why it is worth having
-    // a test at all — a third decimal place decided by the last bits of a sum
-    // is a `clutter` nobody could predict from the scores.
+    // The unrounded average here is 0.35050000000000003, and it is the tail
+    // that decides: scaled up it is 350.50000000000006, strictly above 350.5,
+    // so `Math.round` sends it to 351 with no tie for half-up to break. Which
+    // is the whole reason this is worth a test — a third decimal place chosen
+    // by the last bits of a sum of four products is a `clutter` nobody could
+    // predict from the scores, so it gets written down rather than reasoned
+    // about. (An earlier version of this comment credited half-up. There is no
+    // tie here; on the exact decimal 0.3505 there would be, and that is a case
+    // this sum cannot produce.)
     expect(deriveClutter({ tidy: 0.333, lived_in: 0.333, disordered: 0.333, ruined: 0.001 })).toBe(
       0.351,
     );
