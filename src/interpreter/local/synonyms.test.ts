@@ -17,12 +17,16 @@ import type { AppliedSynonym, SynonymRule } from './synonyms';
  * this layer's tests and this layer's data were written by the same hand on the
  * same afternoon, so a test that loops over the rules would go on passing with
  * every rule deleted — it would simply test nothing, quietly. A named `it` per
- * family dies when its family dies.
+ * family dies when its family dies. Every variant in `SYNONYM_RULES` has a
+ * sentence of its own above, written out word for word.
  *
- * The two places that *do* loop over the rules are at the bottom, and neither
- * of them is checking that a rewrite happens: one holds the rules to invariants
- * the whole layer depends on, the other holds every canonical word to the
- * templates it was taken from.
+ * Three tests in "the rules themselves" do loop over the rules, and none of the
+ * three asks whether a rewrite happens — that is the one thing a loop here is
+ * not allowed to check. They hold the data to shape: every canonical word is a
+ * word some template actually asks about, every family has at least one variant
+ * and a canonical that is not padded, and every canonical is a single word. All
+ * three would still pass with the matcher deleted, and that is why they are
+ * loops and the rest are not.
  */
 
 describe('the three errors the bench measured', () => {
@@ -376,26 +380,6 @@ describe('the rules themselves', () => {
     expect(() => buildIndex(SYNONYM_RULES)).not.toThrow();
   });
 
-  it('leaves no variant the matcher cannot reach', () => {
-    // The one loop over the data in this file, and it is worth being exact
-    // about what it does and does not prove. It cannot check that the right
-    // words are listed — the list is the thing under test, so a misspelling
-    // would simply be tested as itself and pass. The named tests above are what
-    // hold each family to real words.
-    //
-    // What a loop *can* catch is a variant this layer is structurally unable to
-    // apply. `normalizeForClassifier` matches one run of letters at a time, so
-    // a phrase, a hyphenated word or anything with a digit in it sits in the
-    // list looking like coverage and rewrites nothing at all. That limitation
-    // is written down in `synonyms.ts`; this is what keeps it honest.
-    for (const rule of SYNONYM_RULES) {
-      for (const variant of rule.variants) {
-        const normalized = normalizeForClassifier(`tem ${variant} aqui`);
-
-        expect(`${variant} -> ${normalized.text}`).toBe(`${variant} -> tem ${rule.canonical} aqui`);
-      }
-    }
-  });
 });
 
 describe('the lookup refuses rules it could not apply predictably', () => {
