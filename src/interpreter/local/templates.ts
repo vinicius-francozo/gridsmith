@@ -2,39 +2,62 @@
  * The hypotheses the local classifier is asked to judge, and nothing else.
  *
  * This file is data. It holds no logic on purpose, because the wording in it is
- * the one part of this front that is *provisional*: a bench is measuring which
- * phrasings a multilingual NLI model actually separates in Portuguese, and the
- * numbers below will be replaced wholesale. Everything here is therefore
- * written so that replacing it is editing strings in a map — never hunting a
- * hypothesis down inside a function.
+ * the part of this front that was *measured* rather than reasoned about: a
+ * bench scored two models against twenty Portuguese descriptions and the
+ * phrasings below are the ones it came back with. Everything here is written so
+ * that replacing it is editing strings in a map — never hunting a hypothesis
+ * down inside a function.
  *
- * Two rules keep it that way, and the reviewer should hold this front to both:
+ * Three rules keep it that way, and the reviewer should hold this front to all
+ * three:
  *
  * 1. **Every label map is an exact `Record` over a closed vocabulary.** A fourth
  *    kind of place, or an eighth feature, stops this file compiling rather than
  *    silently becoming a value the classifier is never asked about. That one is
  *    the compiler's, and `templates.test.ts` restates each vocabulary by hand so
  *    that a type and a template cannot drift together unnoticed.
- * 2. **No hypothesis or label string appears anywhere else in
- *    `src/interpreter/local/`** — a copy is a copy that silently stops matching
- *    when the bench replaces these. That one has no automated check and is
- *    stated rather than pretended: holding it would mean reading the front's
- *    own source files from a test, and this project has no `@types/node` for a
- *    test to do that with. It is a review item, and it is in the report.
+ * 2. **No hypothesis or label string is restated anywhere that has to agree
+ *    with it.** A copy is a copy that silently stops matching when these
+ *    change. `synonyms.ts` is the one file that needs the model's own words,
+ *    and it *derives* them from here rather than restating them — see
+ *    `STOREROOM_WORD` below, which exists exactly so that it can.
+ *
+ *    `templates.test.ts` is the deliberate exception, and it is the opposite
+ *    case rather than a breach of the rule: a test that writes a measured value
+ *    out by hand does not drift quietly, it *fails*, which is the entire point
+ *    of writing it down twice. It pins the five hypotheses, the three
+ *    thresholds and the shape of the labels — never a label's own wording,
+ *    which a later bench is expected to replace.
+ * 3. **Nothing here gets "improved" without a measurement.** The three findings
+ *    under the next heading are all cases where the wording a person would
+ *    naturally write is the wording that scores worst.
+ *
+ * ## What the bench found, so that nobody undoes it
+ *
+ * - **A long, descriptive label collapses.** Phrasing `placeType` as a
+ *   descriptive sentence scored 45%, against 90% for the bare short label below.
+ *   In `features` the same change took F1 from 0.94 to 0.57. The labels here are
+ *   therefore as short as they can be said, and the features are bare nouns.
+ * - **A disjunction in a feature label is worse than either half.** Asking about
+ *   `'pilares ou colunas'` took F1 from 0.94 to 0.79 and invented false
+ *   positives. No label here contains "ou".
+ * - **`tavern_storeroom` deliberately does not say "porão ou adega".** That
+ *   longer label raised raw accuracy and flattened confidence, which is the one
+ *   thing the gate in `PLACE_TYPE_TEMPLATE.minConfidence` cannot survive.
+ *   `synonyms.ts` resolves "porão" and "adega" *before* the model is asked, so
+ *   the short label and the high confidence are no longer a trade.
  *
  * ## Why the labels are in Portuguese when the code is in English
  *
  * These are not identifiers and not screen text — they are the model's input,
  * the second half of an entailment pair whose first half is the game master's
- * own sentence. `Xenova/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7` is trained
- * on cross-lingual NLI, so an English hypothesis against a Portuguese premise is
- * a case it has seen; but it is not the case it is strongest at, and the
- * descriptions this project is written for are Portuguese. Matching the premise
- * is the provisional choice, and it is one of the things the bench is measuring.
+ * own sentence. The bench scored these Portuguese hypotheses against Portuguese
+ * premises, and that pairing is what the numbers above describe.
  *
- * *Known limitation, stated rather than hidden:* a description in a language
- * that is neither is judged against a Portuguese hypothesis. The model is
- * multilingual so this degrades rather than fails, but it degrades.
+ * *Known limitation, stated rather than hidden:* a description in another
+ * language is judged against a Portuguese hypothesis. The model is multilingual
+ * so this degrades rather than fails, but it degrades — and `synonyms.ts`, which
+ * only knows Portuguese words, does nothing for it at all.
  */
 
 import type { Condition, Light, PlaceType } from '../../core/types';
@@ -56,7 +79,7 @@ export const LABEL_PLACEHOLDER = '{}';
  * One classification: a hypothesis, and the sentence each value is phrased as.
  *
  * The `Record` is what makes the vocabulary exhaustive at compile time, and it
- * is also what makes a swap trivial — the bench replaces the values, never the
+ * is also what makes a swap trivial — a bench replaces the values, never the
  * keys.
  */
 export type ChoiceTemplate<T extends string> = {
@@ -65,31 +88,63 @@ export type ChoiceTemplate<T extends string> = {
 };
 
 /**
- * A set of independent yes/no judgements, with the score above which a `yes` is
- * taken to mean the thing is there.
+ * A classification with a score below which its winner is not acted on.
+ *
+ * What "not acted on" means is the reader's business, and it is a different
+ * thing in each of the three places this is used: for `features` the label is
+ * taken as absent, for `sizeHint` the field is left off entirely, and for
+ * `placeType` the answer is kept but marked untrusted. What is common — and
+ * what this type is for — is that the number is *data*, sitting beside the
+ * labels it was measured against, rather than a constant somewhere in a
+ * function.
  */
-export type PresenceTemplate<T extends string> = ChoiceTemplate<T> & {
-  /** At or above this score, the label is read as present. */
+export type GatedTemplate<T extends string> = ChoiceTemplate<T> & {
+  /** At or above this score, the winning label is acted on. */
   readonly minConfidence: number;
 };
 
-/** Which of the three tavern spaces the description is about. */
-export const PLACE_TYPE_TEMPLATE: ChoiceTemplate<PlaceType> = {
-  hypothesis: 'Este texto descreve {}.',
+/**
+ * The noun `tavern_storeroom`'s label is built on.
+ *
+ * It is a constant rather than three syllables inside the label because
+ * `synonyms.ts` has to rewrite "porão" and "adega" into *this exact word* to be
+ * worth anything, and a second copy of it over there would go on pointing at
+ * "depósito" long after a bench had moved the label to something else. The
+ * other six words that layer needs are the feature labels themselves, which it
+ * reads straight out of `FEATURE_TEMPLATE`.
+ */
+export const STOREROOM_WORD = 'depósito';
+
+/**
+ * Which of the three tavern spaces the description is about.
+ *
+ * `minConfidence` is the measured one: with these short labels the bench put
+ * the AUC of confidence against correctness at 0.922 — the model's own
+ * certainty really does tell a right answer from a wrong one — and a gate at
+ * 0.55 accepted 13 of 20 descriptions, all 13 of them correct.
+ *
+ * **Nothing falls back yet.** There is no rule-based interpreter to fall back
+ * *to*, so `readPlaceType` computes the gate, reports it, and the answer is
+ * used either way. The number lives here so that the day that path is built, it
+ * is built against a figure somebody measured.
+ */
+export const PLACE_TYPE_TEMPLATE: GatedTemplate<PlaceType> = {
+  hypothesis: 'Este texto é sobre {}.',
   labels: {
-    tavern_hall: 'o salão comum de uma taverna, onde as pessoas bebem e comem',
-    tavern_room: 'um quarto de hóspedes de uma taverna, com cama',
-    tavern_storeroom: 'o depósito ou a adega de uma taverna, com barris e engradados',
+    tavern_hall: 'salão de taverna',
+    tavern_room: 'quarto de taverna',
+    tavern_storeroom: `${STOREROOM_WORD} de taverna`,
   },
+  minConfidence: 0.55,
 };
 
 /** How lit the place is. */
 export const LIGHT_TEMPLATE: ChoiceTemplate<Light> = {
-  hypothesis: 'A iluminação do lugar é {}.',
+  hypothesis: 'A iluminação do lugar é assim: {}.',
   labels: {
-    dark: 'escura, quase sem luz nenhuma',
-    dim: 'fraca, de penumbra',
-    bright: 'clara e bem iluminada',
+    dark: 'escuridão total, não há luz nenhuma',
+    dim: 'luz fraca, penumbra, meia-luz',
+    bright: 'muita luz, o lugar é claro e bem iluminado',
   },
 };
 
@@ -100,12 +155,12 @@ export const LIGHT_TEMPLATE: ChoiceTemplate<Light> = {
  * derived from its whole distribution — see `CLUTTER_BY_CONDITION`.
  */
 export const CONDITION_TEMPLATE: ChoiceTemplate<Condition> = {
-  hypothesis: 'O estado do lugar é {}.',
+  hypothesis: 'O lugar está {}.',
   labels: {
-    tidy: 'limpo e arrumado, tudo no lugar',
-    lived_in: 'usado no dia a dia, nem arrumado nem bagunçado',
-    disordered: 'bagunçado, com coisas derrubadas e espalhadas pelo chão',
-    ruined: 'arruinado, caindo aos pedaços, abandonado',
+    tidy: 'limpo e arrumado',
+    lived_in: 'usado, mas em ordem',
+    disordered: 'bagunçado e desarrumado',
+    ruined: 'destruído e em ruínas',
   },
 };
 
@@ -118,18 +173,15 @@ export const CONDITION_TEMPLATE: ChoiceTemplate<Condition> = {
  * tied, near a third each, so a threshold above a third is what turns a tie
  * into an absent `sizeHint` — and an absent `sizeHint` is a request the
  * resolver answers with its own default, which is the honest outcome.
- *
- * The number is provisional in the strongest sense of anything in this file:
- * it is the one value here that decides *whether* a field exists.
  */
-export const SIZE_HINT_TEMPLATE: PresenceTemplate<'small' | 'medium' | 'large'> = {
-  hypothesis: 'O tamanho do lugar é {}.',
+export const SIZE_HINT_TEMPLATE: GatedTemplate<'small' | 'medium' | 'large'> = {
+  hypothesis: 'O lugar é {}.',
   labels: {
-    small: 'pequeno e apertado',
-    medium: 'de tamanho comum',
-    large: 'grande e espaçoso',
+    small: 'pequeno',
+    medium: 'de tamanho médio',
+    large: 'grande',
   },
-  minConfidence: 0.5,
+  minConfidence: 0.55,
 };
 
 /**
@@ -140,19 +192,25 @@ export const SIZE_HINT_TEMPLATE: PresenceTemplate<'small' | 'medium' | 'large'> 
  * pipeline is asked for this one with `multiLabel`, which scores each label on
  * its own instead of spreading one unit of probability across all seven.
  *
+ * Each label is a bare noun and that is the measured shape, not laziness —
+ * enriching them ("uma lareira acesa no canto") and adding alternatives
+ * ("pilares ou colunas") were both tried and both scored worse. The words a
+ * person might use *instead* of these seven are handled a layer earlier, in
+ * `synonyms.ts`, where they cost nothing and cannot blur a label.
+ *
  * The `Record<Feature, string>` is tied to `FEATURES` in `../vocabulary.ts`:
  * adding a word there stops this file compiling until it has a hypothesis here.
  */
-export const FEATURE_TEMPLATE: PresenceTemplate<Feature> = {
+export const FEATURE_TEMPLATE: GatedTemplate<Feature> = {
   hypothesis: 'O lugar tem {}.',
   labels: {
-    bar: 'um balcão de servir bebidas',
-    hearth: 'uma lareira',
-    stairs: 'uma escada que sobe ou desce',
-    pillars: 'pilares ou colunas sustentando o teto',
-    alcove: 'uma alcova, um recanto recuado do ambiente',
-    shelving: 'prateleiras ou estantes encostadas na parede',
-    bunks: 'beliches, camas empilhadas',
+    bar: 'balcão',
+    hearth: 'lareira',
+    stairs: 'escada',
+    pillars: 'pilares',
+    alcove: 'alcova',
+    shelving: 'prateleiras',
+    bunks: 'beliches',
   },
   minConfidence: 0.5,
 };
@@ -162,11 +220,16 @@ export const FEATURE_TEMPLATE: PresenceTemplate<Feature> = {
  *
  * `clutter` is the one field of `Constraints` that is a number rather than a
  * word, and a zero-shot classifier cannot produce a number — it produces a
- * distribution over labels. So this front does not ask for `clutter` at all. It
- * reads the condition distribution and takes the average of these four figures
- * weighted by it, which is a genuine derivation rather than a lookup: a
- * description the model reads as half `disordered` and half `ruined` lands
- * between the two, and one it is sure is `tidy` lands on 0.05.
+ * distribution over labels. So this front does not ask for `clutter` at all,
+ * and the bench is why that is a saving rather than a shortfall: asking about
+ * it directly topped out at 63% agreement, which is exactly what this table
+ * gets for free, four forward passes and about 270 ms cheaper.
+ *
+ * The figures themselves are the bench's. They are read as an average weighted
+ * by the whole condition distribution rather than as a lookup on the winner —
+ * see `deriveClutter`, which explains why, and which is also what makes the
+ * schema check in `constraintsFrom` able to notice scores that are not a
+ * distribution at all.
  *
  * The map's own vocabulary says these two axes are separate — a swept room can
  * be crowded — and this front cannot honour that separation, because it has
@@ -175,8 +238,8 @@ export const FEATURE_TEMPLATE: PresenceTemplate<Feature> = {
  * rather than left for someone to discover from a suspiciously tidy map.
  */
 export const CLUTTER_BY_CONDITION: Readonly<Record<Condition, number>> = {
-  tidy: 0.05,
-  lived_in: 0.3,
-  disordered: 0.65,
+  tidy: 0.1,
+  lived_in: 0.35,
+  disordered: 0.6,
   ruined: 0.85,
 };

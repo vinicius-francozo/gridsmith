@@ -213,6 +213,17 @@ describe('deriving clutter from the condition distribution', () => {
     );
   });
 
+  it('gives each certain condition the figure the bench measured', () => {
+    // The four written out, rather than read back from the table they came
+    // from: asking the classifier about `clutter` directly topped out at 63%
+    // agreement, and these four numbers are what matches that for free. A
+    // reading back from `CLUTTER_BY_CONDITION` would agree with any four.
+    expect(deriveClutter({ tidy: 1, lived_in: 0, disordered: 0, ruined: 0 })).toBe(0.1);
+    expect(deriveClutter({ tidy: 0, lived_in: 1, disordered: 0, ruined: 0 })).toBe(0.35);
+    expect(deriveClutter({ tidy: 0, lived_in: 0, disordered: 1, ruined: 0 })).toBe(0.6);
+    expect(deriveClutter({ tidy: 0, lived_in: 0, disordered: 0, ruined: 1 })).toBe(0.85);
+  });
+
   it('lands between two figures when the classifier is split between them', () => {
     const between = deriveClutter({ tidy: 0, lived_in: 0, disordered: 0.5, ruined: 0.5 });
 
@@ -230,8 +241,11 @@ describe('deriving clutter from the condition distribution', () => {
   });
 
   it('keeps three decimal places, so the same scores give the same number', () => {
+    // The unrounded average here is 0.35050000000000003 — a tail that would
+    // make the same description give a different `clutter` on a machine that
+    // adds the four products in another order.
     expect(deriveClutter({ tidy: 0.333, lived_in: 0.333, disordered: 0.333, ruined: 0.001 })).toBe(
-      0.334,
+      0.351,
     );
   });
 });
@@ -390,7 +404,7 @@ describe('classifying a whole description', () => {
 
   it('refuses scores that are not a distribution instead of clamping them', async () => {
     // Every condition at one: not a softmax, so the model or the build is
-    // broken. The weighted average comes out at 1.85 and the schema refuses it.
+    // broken. The weighted average comes out at 1.9 and the schema refuses it.
     const { pipeline } = stubPipeline({
       condition: { tidy: 1, lived_in: 1, disordered: 1, ruined: 1 },
     });
