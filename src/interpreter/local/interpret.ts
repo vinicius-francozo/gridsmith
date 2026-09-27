@@ -36,6 +36,7 @@ import type { Feature } from '../vocabulary';
 
 import { ClassificationFailedError } from './errors';
 import type { ZeroShotOutput, ZeroShotPipeline } from './pipeline';
+import { normalizeForClassifier } from './synonyms';
 import {
   CLUTTER_BY_CONDITION,
   CONDITION_TEMPLATE,
@@ -299,19 +300,31 @@ function describeIssue(issue: { path: PropertyKey[]; message: string }): string 
  * piece of hardware — issuing five at once on the WebAssembly path queues them
  * behind each other anyway, and on WebGPU it contends for the same device.
  *
- * `text` is passed through exactly as it was typed. It is the premise of every
- * entailment pair, and the templates are written in Portuguese to match it.
+ * ## What the model is shown
+ *
+ * Not `text` itself: `synonyms.ts` rewrites the handful of words this model is
+ * known to miss — "porão" for the storeroom, "fogo" for the hearth — into the
+ * words its labels use, and the result of that is the premise of all five
+ * entailment pairs. All five get the *same* premise, so the five answers are
+ * about one sentence.
+ *
+ * `text` is not touched. `premise.original` is it, character for character, and
+ * this function has no business rewriting a description in the first place —
+ * what it needs is a second string to ask about, which is exactly what
+ * `normalizeForClassifier` hands back beside the first.
  *
  * @throws {ClassificationFailedError} if the pipeline answers with something
  *                                     that is not about the question asked, or
  *                                     if the result fails the schema.
  */
 export async function classify(text: string, pipeline: ZeroShotPipeline): Promise<Constraints> {
+  const premise = normalizeForClassifier(text);
+
   const ask = async <T extends string>(
     template: ChoiceTemplate<T>,
     multiLabel: boolean,
   ): Promise<ZeroShotOutput> =>
-    pipeline(text, labelsOf(template), {
+    pipeline(premise.text, labelsOf(template), {
       hypothesisTemplate: template.hypothesis,
       multiLabel,
     });

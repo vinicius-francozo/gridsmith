@@ -413,7 +413,7 @@ describe('classifying a whole description', () => {
     expect(asks[4].labels).toHaveLength(FEATURES.length);
   });
 
-  it('passes the description through exactly as it was typed', async () => {
+  it('passes a description with no synonym in it through exactly as typed', async () => {
     const { pipeline, asks } = stubPipeline();
     // Capitals, an accent and the spacing the person left: the premise of an
     // entailment pair is the sentence, not a cleaned-up version of it, and
@@ -424,6 +424,28 @@ describe('classifying a whole description', () => {
     await classify(description, pipeline);
 
     expect(new Set(asks.map((ask) => ask.text))).toEqual(new Set([description]));
+  });
+
+  it('asks about the rewritten premise when the description uses a synonym', async () => {
+    const { pipeline, asks } = stubPipeline();
+
+    await classify('Um porão de taverna com fogo aceso', pipeline);
+
+    // Written out rather than computed from `normalizeForClassifier`, so that a
+    // rewrite that stopped happening cannot make this test agree with it.
+    expect(new Set(asks.map((ask) => ask.text))).toEqual(
+      new Set(['Um depósito de taverna com lareira aceso']),
+    );
+  });
+
+  it('gives all five questions one premise, so the five answers are about one sentence', async () => {
+    const { pipeline, asks } = stubPipeline();
+
+    await classify('adega com prateleira e escadas', pipeline);
+
+    expect(asks).toHaveLength(5);
+    expect(new Set(asks.map((ask) => ask.text)).size).toBe(1);
+    expect(asks[0].text).toBe('depósito com prateleiras e escada');
   });
 
   it('takes the size hint from the size question and no other', async () => {
