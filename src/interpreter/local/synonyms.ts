@@ -7,11 +7,27 @@
  * Every mistake the winning model made on the bench was a synonym, and nothing
  * else. All three `placeType` errors in twenty descriptions were the same word
  * in three disguises — "porão onde guardam os barris", "adega", "porão de
- * taverna" — every one of them read as `tavern_hall`. Both feature errors in a
- * hundred and forty decisions were the same thing: "fogo aceso" did not reach
- * `hearth`, "colunas de madeira" did not reach `pillars`. A model that is wrong
+ * taverna" — every one of them read as `tavern_hall`. A model that is wrong
  * only about vocabulary does not need a bigger model. It needs a dictionary,
  * and a dictionary costs no milliseconds and no megabytes.
+ *
+ * **The two `features` errors the bench found are no longer repaired here, and
+ * that was a decision rather than an oversight.** They were "fogo aceso" not
+ * reaching `hearth` and "colunas de madeira" not reaching `pillars`, and rules
+ * for "fogo" and "coluna" did repair both — measured, `hearth` 0.018 → 0.973
+ * and `pillars` 0.181 → 0.972. The same two rules also fired on seven
+ * sentences that have no hearth and no pillars in them, every one of them past
+ * the gate. Both gains were given up to close all seven. The principle that
+ * decided it, and that the next person should weigh a rule against before
+ * adding one:
+ *
+ * > A false positive draws furniture nobody asked for and you see it
+ * > immediately. A false negative only omits.
+ *
+ * A map with a fireplace that the description never mentioned is wrong in a way
+ * the person has to notice and undo. A map missing a fireplace they did mention
+ * is a map they can look at and ask for again. Those are not the same cost, so
+ * they are not traded one for one.
  *
  * It also buys back a trade that looked unavoidable. `templates.ts` explains
  * it: the long label "depósito ou adega" scored better and *flattened the
@@ -88,11 +104,35 @@
  *
  * **False positives on `features` are the failure mode this layer reintroduces
  * most easily.** The risk above is about `placeType`, and it does not cover
- * them. A variant that names a part or a cousin of a feature rather than the
- * feature rewrites a premise that merely mentions something into one that
- * asserts the hypothesis, and the classifier then agrees at 0.97–0.99 — see the
- * three families measured out of `SYNONYM_RULES` below. Any variant added later
- * can bring this back, and it will not show up in a `placeType` count.
+ * them. A variant that names a part of a feature, a cousin of one, or a word
+ * that merely *can* mean one rewrites a premise that mentions something into
+ * one that asserts the hypothesis, and the classifier then agrees at 0.86–0.99.
+ * Nine variants have been removed for exactly this, in three rounds and for
+ * three different reasons — all three are named under `SYNONYM_RULES` below.
+ * Any variant added later can bring it back, and it will not show up in a
+ * `placeType` count.
+ *
+ * ## What the table is worth, on the reviewer's corpus
+ *
+ * Measured with the hypotheses and thresholds read out of `templates.ts`, never
+ * retyped, and with `placeType` scored on the argmax because `readPlaceType`
+ * reports the gate rather than obeying it:
+ *
+ * - **`placeType`, 31 descriptions: 27/31 without this layer, 28/31 with it.**
+ *   Unchanged by the nine removals — every one of them is a `features` word, and
+ *   the only description of the 31 containing one was already right both ways.
+ * - **`features`, 28 neutral descriptions, label-level: F1 0.746 without,
+ *   0.769 with.** Exact sets 17/28 either way.
+ *
+ * The second number used to be F1 0.845 and 20/28, with the nine variants in.
+ * **Most of what this layer was worth on a neutral corpus went out with them**,
+ * and that is the honest accounting: on those 28 descriptions the removals
+ * bought one false positive and cost five false negatives. The case for making
+ * them is not there — it is in the adversarial batch, measured separately,
+ * where the same removals take `features` false positives from 7 of 7 to 0 of 7
+ * and spurious `bunks` from 4 of 5 to 0 of 5. Under the rule this front was
+ * given — a false positive draws furniture and a false negative only omits —
+ * that is the trade, and it is a real trade rather than a free win.
  */
 
 import { FEATURE_TEMPLATE, STOREROOM_WORD } from './templates';
@@ -138,48 +178,91 @@ export type Normalized = {
  * exists in `templates.ts` for the same reason — the place-type label is a
  * phrase, and this layer needs the noun out of it.
  *
- * The first three rules are the ones the bench measured; the rest of each list
- * is the same family — plurals, singulars, and the everyday word for the same
- * object. The rule each one is admitted under: it has to be a noun a game
- * master writes *instead of* the label, never a near-thing that might be
- * something else. "bancada" is not here because a workbench in a cellar is not
- * a bar.
+ * The first rule is the one the bench measured a gain on; the rest are the same
+ * families in other numbers — plurals, singulars, and the everyday word for the
+ * same object. What each variant has to satisfy to be here is below, and it has
+ * been tightened twice.
  *
- * **Three families were admitted against that rule and measured out again.**
- * "degrau", "chaminé" and "braseiro" are all quasi-objects — a step is not a
- * staircase, a flue is not a fireplace, a brazier is not a hearth — and each
- * rewrote a sentence into one that asserts the hypothesis outright. Measured,
- * with the six variants in: "O salão tem um único degrau na entrada, e nada
- * mais." took `stairs` from 0.325 to 0.983, "Um quarto pequeno com uma chaminé
- * fria de tijolos atravessando a parede." took `hearth` from 0.082 to 0.988,
- * and "O quarto é aquecido por um braseiro de ferro no canto." took `hearth`
- * from 0.134 to 0.971. Every one of those is a hearth or a staircase drawn on a
- * map nobody asked for. Across 22 feature sentences the layer scored 13/22 with
- * them and 22/22 without, against 16/22 for no layer at all — the six variants
- * were the whole of the difference, and the gains survived their removal.
+ * ## Three ways a variant turns out to be wrong, all of them found the hard way
  *
- * **Two variants collide with verbs, and they stay anyway.** The rule above
- * asks for nouns and these two are not only nouns:
+ * Nine variants have been admitted and measured out again, in three rounds, and
+ * the three failure modes are different enough that the next person needs all
+ * three names. The first two were found by reading the table; the third was not
+ * found that way at all, and the reason is the important part.
  *
- * - **"porão"** is also the future indicative of *pôr*. Measured: "Eles porão
- *   as mesas no salão antes de abrir a taverna." goes from `tavern_hall` at
- *   0.680 to `tavern_storeroom` at 0.488 — a wrong map out of a grammatically
- *   unremarkable sentence. It stays because it repairs two of the three
- *   `placeType` errors the bench found and is the central gain of this layer;
- *   the collision is a known cost, not an oversight.
- * - **"pilar"** is also the infinitive "to pound". No sentence has been
- *   measured against it; it is written down here so that the next person
- *   measuring knows where to look.
+ * **1. Quasi-objects.** "degrau", "chaminé" and "braseiro" — a step is not a
+ * staircase, a flue is not a fireplace, a brazier is not a hearth. Each rewrote
+ * a sentence into one that asserts the hypothesis outright: "O salão tem um
+ * único degrau na entrada, e nada mais." took `stairs` from 0.325 to 0.983, "Um
+ * quarto pequeno com uma chaminé fria de tijolos atravessando a parede." took
+ * `hearth` from 0.082 to 0.988, "O quarto é aquecido por um braseiro de ferro
+ * no canto." took `hearth` from 0.134 to 0.971.
  *
- * **One known side effect, kept because the gain is larger.** "nicho" → "alcova"
- * is a clear win — `alcove` goes from 0.03–0.24 to 0.95–0.98 on every sentence
- * tried — but the rewrite also drags `bunks` up with it, because "alcova"
- * carries a sleeping-place reading that "nicho" does not. Measured over four
- * sentences: `bunks` rose in three, and in two of the four it crossed the 0.5
- * gate that the raw premise had left uncrossed ("No fundo do salão há um nicho
- * com uma estátua." took `bunks` from 0.489 to 0.879). So a recess in a wall
- * can put beds on the map. The alcove it recovers is judged worth that, but it
- * is a cost, not a free win.
+ * **2. Nominal polysemy — the one that hid the longest.** "fogo" and "coluna"
+ * are not near-things at all. Each is a perfectly ordinary noun with a second,
+ * commoner reading that has nothing to do with the label, and prose reaches for
+ * the second reading constantly. Measured, with those four variants in:
+ *
+ * - "O fogo destruiu metade do salão no ano passado." took `hearth` from 0.008
+ *   to 0.956. The fire is the thing that burned the place down.
+ * - "Uma coluna de fumaça sobe da cozinha ao lado." took `pillars` from 0.020
+ *   to 0.971. The column is made of smoke.
+ *
+ * Seven such sentences were measured across the two words and all seven crossed
+ * the gate; with these rules gone, none of them does. **What hid this for two
+ * rounds was the "quasi-object" framing itself.** A reviewer checking the table
+ * against that rule asks "is a *fogo* nearly a *lareira*?", and in the reading
+ * the rule-writer had in mind it is, so the variant passes. Asking instead "what
+ * else can this word mean?" finds it immediately. It also helped that "fogo" and
+ * "coluna" sat in the two families the bench had *measured a gain on* — nobody
+ * reopens a family that already has a number beside it.
+ *
+ * **3. A correct rule feeding a contaminated label.** "nicho" and "nichos" were
+ * removed too, and this one is *not* polysemy — a niche really is an alcove and
+ * the rewrite was right. The damage came from the other end: the label "alcova"
+ * pulls `beliches` up with it, so recovering a true `alcove` also lit a false
+ * `bunks`. Measured, four sentences, `bunks` rose in all four and crossed the
+ * gate in three ("No fundo do salão há um nicho com uma estátua." 0.489 →
+ * 0.879). Recovering one true feature by drawing one false one is not a gain,
+ * so the rule went.
+ *
+ * **The `alcova`/`beliches` contamination is a known defect and removing the
+ * rule did not fix it.** It is in the label pair, not the rule: "Duas alcovas
+ * escuras se abrem no fundo." scores `bunks` at 0.554 **with no layer at all**,
+ * and across eight sentences containing "alcovas" the raw premise puts `bunks`
+ * over the gate in seven. Dropping "nicho" narrowed the exposure and did not
+ * touch the cause. Nothing in this front fixes it; a bench on the label wording
+ * would be where to start.
+ *
+ * **The rule that decides all of this**, now that there are three ways to get it
+ * wrong: a variant has to be a noun whose *ordinary* readings all mean the
+ * label. Not "can mean" — "all mean". "bancada" is not here because a workbench
+ * in a cellar is not a bar; "fogo" is no longer here because a fire in a
+ * doorway is not a fireplace.
+ *
+ * **One variant collides with a verb and stays.** "porão" is also the future
+ * indicative of *pôr*. Measured: "Eles porão as mesas no salão antes de abrir a
+ * taverna." goes from `tavern_hall` at 0.680 to `tavern_storeroom` at 0.488 — a
+ * wrong map out of a grammatically unremarkable sentence. It stays because it
+ * repairs two of the three `placeType` errors the bench found and is the central
+ * gain of this layer; the collision is a known cost, not an oversight.
+ *
+ * "pilar" is also the infinitive "to pound", and that one has now been measured
+ * and is not a problem: "A cozinheira começou a pilar o alho no almofariz."
+ * scores `pillars` at 0.819 **without the layer** and 0.841 with it. The model
+ * reads that sentence wrong on its own and the rule barely moves it — there is
+ * no damage here to attribute to the table. With "coluna" gone, "pilar" is a
+ * singular-to-plural normalisation of the label itself, the same shape as
+ * "escadas" → "escada".
+ *
+ * **There is no `alcove` family any more.** After "nicho" and "nichos" went, the
+ * only variant left was "alcovas", and it was measured before being kept: across
+ * eight sentences it moved `alcove` from an already-correct 0.878–0.966 to
+ * 0.937–0.985 and crossed the gate **zero times**. The model reads the plural
+ * against the singular label perfectly well here — unlike "escadas" against
+ * "escada", which crosses from 0.100 to 0.990 and is why that rule exists. A
+ * rule that changes no decision is worse than no rule, because it reads as
+ * coverage. It was removed with that number.
  */
 export const SYNONYM_RULES: readonly SynonymRule[] = [
   // Measured: "porão onde guardam os barris", "adega" and "porão de taverna"
@@ -188,15 +271,18 @@ export const SYNONYM_RULES: readonly SynonymRule[] = [
     canonical: STOREROOM_WORD,
     variants: ['porão', 'porões', 'adega', 'adegas', 'despensa', 'despensas', 'armazém', 'armazéns'],
   },
-  // Measured: "fogo aceso" did not reach `hearth`.
+  // "fogo" and "fogos" were here and were measured out — see the third failure
+  // mode above. "fogueira" is a fire somebody built and left burning, which is
+  // the only reading it has.
   {
     canonical: FEATURE_TEMPLATE.labels.hearth,
-    variants: ['fogo', 'fogos', 'fogueira', 'fogueiras'],
+    variants: ['fogueira', 'fogueiras'],
   },
-  // Measured: "colunas de madeira" did not reach `pillars`.
+  // "coluna" and "colunas" were here and were measured out for the same
+  // reason. What is left is one noun in two numbers.
   {
     canonical: FEATURE_TEMPLATE.labels.pillars,
-    variants: ['coluna', 'colunas', 'pilar', 'pilastra', 'pilastras'],
+    variants: ['pilar', 'pilastra', 'pilastras'],
   },
   {
     canonical: FEATURE_TEMPLATE.labels.stairs,
@@ -214,10 +300,8 @@ export const SYNONYM_RULES: readonly SynonymRule[] = [
     canonical: FEATURE_TEMPLATE.labels.bar,
     variants: ['balcões'],
   },
-  {
-    canonical: FEATURE_TEMPLATE.labels.alcove,
-    variants: ['alcovas', 'nicho', 'nichos'],
-  },
+  // There is no `alcove` rule. "nicho" and "nichos" were measured out, and
+  // "alcovas" was then measured and bought nothing — see above.
 ];
 
 /**

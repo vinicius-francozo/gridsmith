@@ -47,13 +47,66 @@ describe('the three errors the bench measured', () => {
     expect(normalizeForClassifier('porão de taverna').text).toBe('depósito de taverna');
   });
 
-  // And both feature mistakes in a hundred and forty decisions.
-  it('rewrites "fogo" into the word the hearth label uses', () => {
-    expect(normalizeForClassifier('fogo aceso').text).toBe('lareira aceso');
+  // The two feature mistakes the bench found are deliberately NOT repaired any
+  // more. Rules for "fogo" and "coluna" did repair them and fired on seven
+  // sentences with no hearth and no pillars in them; all seven were closed by
+  // giving the two gains up. These two tests are the record of that decision,
+  // and they fail the moment somebody puts either word back thinking they are
+  // fixing a regression.
+  it('leaves "fogo aceso" alone, though it used to reach the hearth label', () => {
+    expect(normalizeForClassifier('fogo aceso').text).toBe('fogo aceso');
   });
 
-  it('rewrites "colunas" into the word the pillars label uses', () => {
-    expect(normalizeForClassifier('colunas de madeira').text).toBe('pilares de madeira');
+  it('leaves "colunas de madeira" alone, though it used to reach the pillars label', () => {
+    expect(normalizeForClassifier('colunas de madeira').text).toBe('colunas de madeira');
+  });
+});
+
+describe('the words this layer was told to stop rewriting', () => {
+  // Nominal polysemy: an ordinary noun whose commoner reading is not the label.
+  // One measured sentence each, from the batch that decided the removal.
+  it('leaves the fire that burned the place down', () => {
+    expect(normalizeForClassifier('O fogo destruiu metade do salão no ano passado.').text).toBe(
+      'O fogo destruiu metade do salão no ano passado.',
+    );
+  });
+
+  it('leaves the fireworks outside', () => {
+    expect(normalizeForClassifier('Os fogos de artifício estouram lá fora.').text).toBe(
+      'Os fogos de artifício estouram lá fora.',
+    );
+  });
+
+  it('leaves the column of smoke', () => {
+    expect(normalizeForClassifier('Uma coluna de fumaça sobe da cozinha ao lado.').text).toBe(
+      'Uma coluna de fumaça sobe da cozinha ao lado.',
+    );
+  });
+
+  it('leaves the column of soldiers', () => {
+    expect(normalizeForClassifier('Uma coluna de soldados atravessa o salão vazio.').text).toBe(
+      'Uma coluna de soldados atravessa o salão vazio.',
+    );
+  });
+
+  // Not polysemy: a niche really is an alcove. The label "alcova" drags
+  // `beliches` up with it, so recovering the true feature lit a false one.
+  it('leaves a niche alone, because the alcove label pulls bunks with it', () => {
+    expect(normalizeForClassifier('No fundo do salão há um nicho com uma estátua.').text).toBe(
+      'No fundo do salão há um nicho com uma estátua.',
+    );
+  });
+
+  it('leaves niches in the plural alone too', () => {
+    expect(normalizeForClassifier('dois nichos rasos na parede').text).toBe(
+      'dois nichos rasos na parede',
+    );
+  });
+
+  it('has no alcove rule left to reach, so "alcovas" stays as typed', () => {
+    // "alcovas" was the last variant standing and bought no gate crossing in
+    // eight sentences -- the model already reads it against the singular label.
+    expect(normalizeForClassifier('um nicho e duas alcovas').text).toBe('um nicho e duas alcovas');
   });
 });
 
@@ -68,22 +121,24 @@ describe('each family reaches the word the model was asked about', () => {
   });
 
   it('sends the fire words to the hearth word', () => {
-    // "braseiro" and "chaminé" were in this family and were measured out of it
-    // — see `SYNONYM_RULES`. A brazier is not a hearth, and rewriting it into
-    // one took `hearth` from 0.134 to 0.971 on a sentence that has no hearth.
-    expect(normalizeForClassifier('dois fogos e uma fogueira').text).toBe(
-      'dois lareira e uma lareira',
-    );
+    // Four words have been measured out of this family: "braseiro" and
+    // "chaminé" as quasi-objects, "fogo" and "fogos" as nominal polysemy — see
+    // `SYNONYM_RULES`. What is left is the one noun with no second reading.
+    expect(normalizeForClassifier('uma fogueira no centro').text).toBe('uma lareira no centro');
     expect(normalizeForClassifier('três fogueiras apagadas').text).toBe('três lareira apagadas');
-    expect(normalizeForClassifier('um braseiro sob a chaminé').text).toBe(
-      'um braseiro sob a chaminé',
+    expect(normalizeForClassifier('dois fogos e um braseiro sob a chaminé').text).toBe(
+      'dois fogos e um braseiro sob a chaminé',
     );
   });
 
   it('sends the column words to the pillars word', () => {
+    // "coluna" and "colunas" were measured out of this family: a column of
+    // smoke took `pillars` from 0.020 to 0.971. "pilar" stays — its verb
+    // reading was measured and the model gets that sentence wrong on its own,
+    // 0.819 without this layer against 0.841 with it.
     expect(normalizeForClassifier('um pilar e uma pilastra').text).toBe('um pilares e uma pilares');
     expect(normalizeForClassifier('uma coluna entre duas pilastras').text).toBe(
-      'uma pilares entre duas pilares',
+      'uma coluna entre duas pilares',
     );
   });
 
@@ -112,12 +167,6 @@ describe('each family reaches the word the model was asked about', () => {
     expect(normalizeForClassifier('dois balcões').text).toBe('dois balcão');
   });
 
-  it('sends the recess words to the alcove word', () => {
-    expect(normalizeForClassifier('um nicho e duas alcovas').text).toBe('um alcova e duas alcova');
-    expect(normalizeForClassifier('dois nichos rasos na parede').text).toBe(
-      'dois alcova rasos na parede',
-    );
-  });
 });
 
 describe('negation survives the rewrite', () => {
@@ -137,13 +186,13 @@ describe('negation survives the rewrite', () => {
     // produce "...um balcão lareira", which mentions a hearth in the clear and
     // throws the 0.01 away. Substituting in place cannot do that, and this
     // whole-string equality is what would notice if it started to.
-    expect(normalizeForClassifier('o salão não tem fogo, mas tem um balcão').text).toBe(
+    expect(normalizeForClassifier('o salão não tem fogueira, mas tem um balcão').text).toBe(
       BENCH_SENTENCE,
     );
   });
 
   it('adds nothing to the end of a sentence it rewrote', () => {
-    const normalized = normalizeForClassifier('sem fogueira e sem colunas');
+    const normalized = normalizeForClassifier('sem fogueira e sem pilastras');
 
     expect(normalized.text).toBe('sem lareira e sem pilares');
     expect(normalized.text.split(/\s+/)).toHaveLength(5);
@@ -175,7 +224,7 @@ describe('what it refuses to touch', () => {
   });
 
   it('keeps every character that is not a letter', () => {
-    expect(normalizeForClassifier('  (fogo!)  ...  porão?  ').text).toBe(
+    expect(normalizeForClassifier('  (fogueira!)  ...  porão?  ').text).toBe(
       '  (lareira!)  ...  depósito?  ',
     );
   });
@@ -213,14 +262,14 @@ describe('what the person typed', () => {
   });
 
   it('finds a word typed without its accent', () => {
-    expect(normalizeForClassifier('um porao com fogo').text).toBe('um depósito com lareira');
+    expect(normalizeForClassifier('um porao com fogueira').text).toBe('um depósito com lareira');
   });
 
   it('records every swap, in the order they appear', () => {
-    expect(normalizeForClassifier('Porão com fogo e colunas').applied).toEqual([
+    expect(normalizeForClassifier('Porão com fogueira e pilastras').applied).toEqual([
       { found: 'Porão', canonical: 'depósito' },
-      { found: 'fogo', canonical: 'lareira' },
-      { found: 'colunas', canonical: 'pilares' },
+      { found: 'fogueira', canonical: 'lareira' },
+      { found: 'pilastras', canonical: 'pilares' },
     ]);
   });
 
@@ -231,7 +280,7 @@ describe('what the person typed', () => {
   it('changes nothing the second time round', () => {
     // Every canonical word has to be a word no rule rewrites, or a description
     // would mean one thing on its way in and another on its way through again.
-    const once = normalizeForClassifier('porão com fogo, colunas e um beliche').text;
+    const once = normalizeForClassifier('porão com fogueira, pilastras e um beliche').text;
 
     expect(normalizeForClassifier(once).text).toBe(once);
   });
@@ -322,13 +371,13 @@ describe('a description that arrives decomposed', () => {
   it('applies both rules in the sentence the failure was measured on', () => {
     // Measured before the fix: NFC applied [depósito, lareira], NFD applied
     // only [lareira] — "porão" stood there untouched and nothing said so.
-    const { composed, decomposed } = bothWays('Um porão de taverna com fogo aceso');
+    const { composed, decomposed } = bothWays('Um porão de taverna com fogueira acesa');
 
     expect(composed).toEqual({
-      text: 'Um depósito de taverna com lareira aceso',
+      text: 'Um depósito de taverna com lareira acesa',
       applied: [
         { found: 'porão', canonical: 'depósito' },
-        { found: 'fogo', canonical: 'lareira' },
+        { found: 'fogueira', canonical: 'lareira' },
       ],
     });
     expect(decomposed).toEqual(composed);
