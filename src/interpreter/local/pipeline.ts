@@ -31,8 +31,21 @@ import { ClassificationFailedError, ModelUnavailableError } from './errors';
 /**
  * The model this front is written against, and the bench picked.
  *
- * 141M parameters and about 303 MB to fetch, at a median of 786 ms per
- * classification on a CPU.
+ * 141M parameters and about 303 MB to fetch.
+ *
+ * What it costs to run, with the conditions attached, because a bare
+ * millisecond figure is worthless without them: measured in Node on this
+ * machine — `onnxruntime-node`, twelve CPU cores, no GPU — a whole description
+ * takes a median of about 510 ms. That is the five questions this front asks,
+ * twenty forward passes, and it held within 11 ms across three runs of a
+ * hundred timings each. Taken apart, the three-label questions are about 80 ms,
+ * the four-label one about 105 ms and the seven-label `features` question about
+ * 170 ms; `templates.ts` quotes the four-label figure out of this same run, so
+ * the two files cannot drift into contradicting each other.
+ *
+ * The browser is a different runtime — WebGPU or WebAssembly, one tab, whatever
+ * machine the person has — so this is the shape of the cost and not a promise.
+ * Nothing in this front has been timed in a browser.
  *
  * That figure is the whole download, measured off disk after a real one:
  * 302,821,014 B, of which `model_quantized.onnx` is 268,409,234 B and
@@ -41,13 +54,25 @@ import { ClassificationFailedError, ModelUnavailableError } from './errors';
  * what a model card quotes; the browser fetches all of it, so all of it is what
  * the page promises.
  *
- * It replaced `Xenova/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7`, which was
- * four times the download, three times the latency, and — the reason it had to
- * go rather than merely the reason this one is nicer — **unusable for
- * `features`**. In fp32 that model returned 0.998 for labels that were not
- * there, overlapping the ones that were, so no threshold anywhere separated
- * them. Its respectable int8 numbers were an artefact of quantisation. Nothing
- * about that is fixable from this file, which is why the constant moved.
+ * It replaced `Xenova/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7`, which is
+ * larger in every reading and — the reason it had to go rather than merely the
+ * reason this one is nicer — **unusable for `features`**. In fp32 that model
+ * returned 0.998 for labels that were not there, overlapping the ones that
+ * were, so no threshold anywhere separated them. Its respectable int8 numbers
+ * were an artefact of quantisation. Nothing about that is fixable from this
+ * file, which is why the constant moved.
+ *
+ * The sizes, with the dtypes said out loud, because a ratio between two
+ * different dtypes is not a fact about either model. Weights only, both
+ * quantised: its `model_int8.onnx` is 317,250,309 B against this model's
+ * `model_quantized.onnx` at 268,409,234 B — 1.18 times. Weights only, both
+ * float: 1,116,115,064 B against 563,101,474 B — 1.98 times. Whole download,
+ * both quantised: 333,568,013 B against 302,821,014 B — 1.10 times, the gap
+ * narrowed by this model's much larger vocabulary file. All four measured off
+ * disk after a real fetch.
+ *
+ * Its latency has not been measured. The bench that timed this model never ran
+ * a clock against mDeBERTa, so there is no ratio to quote and none is quoted.
  */
 export const MODEL_ID = 'Horizon-Labs/multilingual-zeroshot-small';
 

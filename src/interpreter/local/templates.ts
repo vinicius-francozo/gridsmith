@@ -230,7 +230,13 @@ export const FEATURE_TEMPLATE: GatedTemplate<Feature> = {
  * distribution over labels. So this front does not ask for `clutter` at all,
  * and the bench is why that is a saving rather than a shortfall: asking about
  * it directly topped out at 63% agreement, which is exactly what this table
- * gets for free, four forward passes and about 270 ms cheaper.
+ * gets for free, four forward passes and about 105 ms cheaper.
+ *
+ * That 105 ms is the four-label question timed on its own, out of the same run
+ * `pipeline.ts` quotes the 510 ms whole-description median from, on the same
+ * machine and the same runtime. The two figures were measured together on
+ * purpose: they used to be a 270 ms here and a 786 ms there, and nothing about
+ * four passes out of twenty could make those two numbers both true.
  *
  * The figures themselves are the bench's. They are read as an average weighted
  * by the whole condition distribution rather than as a lookup on the winner —

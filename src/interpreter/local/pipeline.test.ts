@@ -177,7 +177,11 @@ describe('the model this front asks for', () => {
     expect(MODEL_ID).toBe('Horizon-Labs/multilingual-zeroshot-small');
   });
 
-  it('is asked for quantised, because the float build is four times the download', () => {
+  it('is asked for quantised, because the float build is 2.1 times the weights', () => {
+    // 563,101,474 B against 268,409,234 B, both measured on the real files.
+    // The name of this test said "four times" while `pipeline.ts` said 2.1 —
+    // the number corrected there was left standing here, in the test the same
+    // commit added.
     expect(MODEL_DTYPE).toBe('q8');
   });
 });
