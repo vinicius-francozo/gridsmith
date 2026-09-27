@@ -6,6 +6,7 @@ import {
   LIGHT_TEMPLATE,
   PLACE_TYPE_TEMPLATE,
   SIZE_HINT_TEMPLATE,
+  STOREROOM_WORD,
 } from './templates';
 import { SYNONYM_RULES, buildIndex, fold, normalizeForClassifier } from './synonyms';
 import type { AppliedSynonym, SynonymRule } from './synonyms';
@@ -103,6 +104,38 @@ describe('the words this layer was told to stop rewriting', () => {
     );
   });
 
+  // Round three: "fogueira" outlived "fogo" only because this file claimed it
+  // had one reading. Two ordinary sentences say otherwise, with the same shape
+  // and the same magnitude as the ones that convicted "fogo".
+  it('leaves the midsummer bonfires in the village square', () => {
+    expect(normalizeForClassifier('As fogueiras de São João ardem na praça da vila.').text).toBe(
+      'As fogueiras de São João ardem na praça da vila.',
+    );
+  });
+
+  it('leaves the pyre outside the church', () => {
+    expect(normalizeForClassifier('O herege foi queimado na fogueira diante da igreja.').text).toBe(
+      'O herege foi queimado na fogueira diante da igreja.',
+    );
+  });
+
+  // "pilastra" contradicted this project's own gold: `g14` expects only `bar`
+  // because a pilaster is an ornament flat against a wall, and the rule
+  // rewrote it to "pilares" regardless.
+  it('leaves a pilaster a pilaster, because the gold says it is not a pillar', () => {
+    expect(normalizeForClassifier('Pilastras rasas decoram a parede lisa do salão.').text).toBe(
+      'Pilastras rasas decoram a parede lisa do salão.',
+    );
+  });
+
+  // "pilar" was measured alone after the rest of its family went: 0 gate
+  // crossings in 10 sentences, `pillars` already 0.819-0.971 raw.
+  it('leaves the cook pounding garlic, which the model misreads on its own', () => {
+    expect(normalizeForClassifier('A cozinheira começou a pilar o alho no almofariz.').text).toBe(
+      'A cozinheira começou a pilar o alho no almofariz.',
+    );
+  });
+
   it('has no alcove rule left to reach, so "alcovas" stays as typed', () => {
     // "alcovas" was the last variant standing and bought no gate crossing in
     // eight sentences -- the model already reads it against the singular label.
@@ -120,25 +153,25 @@ describe('each family reaches the word the model was asked about', () => {
     );
   });
 
-  it('sends the fire words to the hearth word', () => {
-    // Four words have been measured out of this family: "braseiro" and
-    // "chaminé" as quasi-objects, "fogo" and "fogos" as nominal polysemy — see
-    // `SYNONYM_RULES`. What is left is the one noun with no second reading.
-    expect(normalizeForClassifier('uma fogueira no centro').text).toBe('uma lareira no centro');
-    expect(normalizeForClassifier('três fogueiras apagadas').text).toBe('três lareira apagadas');
+  it('has no fire family left, so every fire word stays as typed', () => {
+    // Eight variants were measured out of this rule, over three rounds, and
+    // nothing survived: "braseiro"/"braseiros" and "chaminé"/"chaminés" as
+    // quasi-objects, "fogo"/"fogos" and then "fogueira"/"fogueiras" as nominal
+    // polysemy. `SYNONYM_RULES` has no `hearth` entry at all.
+    expect(normalizeForClassifier('uma fogueira no centro').text).toBe('uma fogueira no centro');
+    expect(normalizeForClassifier('três fogueiras apagadas').text).toBe('três fogueiras apagadas');
     expect(normalizeForClassifier('dois fogos e um braseiro sob a chaminé').text).toBe(
       'dois fogos e um braseiro sob a chaminé',
     );
   });
 
-  it('sends the column words to the pillars word', () => {
-    // "coluna" and "colunas" were measured out of this family: a column of
-    // smoke took `pillars` from 0.020 to 0.971. "pilar" stays — its verb
-    // reading was measured and the model gets that sentence wrong on its own,
-    // 0.819 without this layer against 0.841 with it.
-    expect(normalizeForClassifier('um pilar e uma pilastra').text).toBe('um pilares e uma pilares');
+  it('has no column family left either', () => {
+    // "coluna"/"colunas" as polysemy, "pilastra"/"pilastras" for contradicting
+    // the project's own gold on `g14`, and "pilar" measured alone afterwards
+    // and bought nothing: 0 gate crossings in 10 sentences.
+    expect(normalizeForClassifier('um pilar e uma pilastra').text).toBe('um pilar e uma pilastra');
     expect(normalizeForClassifier('uma coluna entre duas pilastras').text).toBe(
-      'uma coluna entre duas pilares',
+      'uma coluna entre duas pilastras',
     );
   });
 
@@ -186,15 +219,15 @@ describe('negation survives the rewrite', () => {
     // produce "...um balcão lareira", which mentions a hearth in the clear and
     // throws the 0.01 away. Substituting in place cannot do that, and this
     // whole-string equality is what would notice if it started to.
-    expect(normalizeForClassifier('o salão não tem fogueira, mas tem um balcão').text).toBe(
-      BENCH_SENTENCE,
+    expect(normalizeForClassifier('o salão não tem lareira, mas tem dois balcões').text).toBe(
+      'o salão não tem lareira, mas tem dois balcão',
     );
   });
 
   it('adds nothing to the end of a sentence it rewrote', () => {
-    const normalized = normalizeForClassifier('sem fogueira e sem pilastras');
+    const normalized = normalizeForClassifier('sem estantes e sem escadas');
 
-    expect(normalized.text).toBe('sem lareira e sem pilares');
+    expect(normalized.text).toBe('sem prateleiras e sem escada');
     expect(normalized.text.split(/\s+/)).toHaveLength(5);
   });
 
@@ -208,24 +241,29 @@ describe('negation survives the rewrite', () => {
 
 describe('what it refuses to touch', () => {
   it('does not fire inside a longer word', () => {
-    // "colunata" carries "coluna", "desafogo" carries "fogo" and "restante"
-    // carries "estante", and none of the three is the thing its rule is about.
-    // ("afogado" would not do as an example here: it contains "foga", not
-    // "fogo", so it would pass this test even with no word boundary at all.)
-    expect(normalizeForClassifier('a colunata do desafogo restante').text).toBe(
-      'a colunata do desafogo restante',
+    // "comporão" carries "porão", "restantes" carries "estantes" and
+    // "restante" carries "estante" — and every one of those inner words is a
+    // variant in `SYNONYM_RULES` *today*, which is the only reason any of the
+    // three proves anything. An example built on a word the table no longer
+    // contains would pass with no word boundary at all, which is exactly the
+    // trap the note below describes. This test used to carry two of those.
+    expect(normalizeForClassifier('os músicos comporão o restante do restantes').text).toBe(
+      'os músicos comporão o restante do restantes',
     );
   });
 
   it('does not fire on a word that merely starts the same way', () => {
-    expect(normalizeForClassifier('uma escadinha e um fogão').text).toBe(
-      'uma escadinha e um fogão',
+    // "escadinha" shares "escad" with "escadas", "balconista" shares "balc"
+    // with "balcões". ("afogado" would not do as an example anywhere here: it
+    // contains "foga", not "fogo", so it passed even when "fogo" was a variant.)
+    expect(normalizeForClassifier('uma escadinha e um balconista').text).toBe(
+      'uma escadinha e um balconista',
     );
   });
 
   it('keeps every character that is not a letter', () => {
-    expect(normalizeForClassifier('  (fogueira!)  ...  porão?  ').text).toBe(
-      '  (lareira!)  ...  depósito?  ',
+    expect(normalizeForClassifier('  (estantes!)  ...  porão?  ').text).toBe(
+      '  (prateleiras!)  ...  depósito?  ',
     );
   });
 
@@ -262,14 +300,16 @@ describe('what the person typed', () => {
   });
 
   it('finds a word typed without its accent', () => {
-    expect(normalizeForClassifier('um porao com fogueira').text).toBe('um depósito com lareira');
+    expect(normalizeForClassifier('um porao com estantes').text).toBe(
+      'um depósito com prateleiras',
+    );
   });
 
   it('records every swap, in the order they appear', () => {
-    expect(normalizeForClassifier('Porão com fogueira e pilastras').applied).toEqual([
+    expect(normalizeForClassifier('Porão com estantes e escadas').applied).toEqual([
       { found: 'Porão', canonical: 'depósito' },
-      { found: 'fogueira', canonical: 'lareira' },
-      { found: 'pilastras', canonical: 'pilares' },
+      { found: 'estantes', canonical: 'prateleiras' },
+      { found: 'escadas', canonical: 'escada' },
     ]);
   });
 
@@ -280,7 +320,7 @@ describe('what the person typed', () => {
   it('changes nothing the second time round', () => {
     // Every canonical word has to be a word no rule rewrites, or a description
     // would mean one thing on its way in and another on its way through again.
-    const once = normalizeForClassifier('porão com fogueira, pilastras e um beliche').text;
+    const once = normalizeForClassifier('porão com estantes, escadas e um beliche').text;
 
     expect(normalizeForClassifier(once).text).toBe(once);
   });
@@ -371,13 +411,13 @@ describe('a description that arrives decomposed', () => {
   it('applies both rules in the sentence the failure was measured on', () => {
     // Measured before the fix: NFC applied [depósito, lareira], NFD applied
     // only [lareira] — "porão" stood there untouched and nothing said so.
-    const { composed, decomposed } = bothWays('Um porão de taverna com fogueira acesa');
+    const { composed, decomposed } = bothWays('Um porão de taverna com dois balcões');
 
     expect(composed).toEqual({
-      text: 'Um depósito de taverna com lareira acesa',
+      text: 'Um depósito de taverna com dois balcão',
       applied: [
         { found: 'porão', canonical: 'depósito' },
-        { found: 'fogueira', canonical: 'lareira' },
+        { found: 'balcões', canonical: 'balcão' },
       ],
     });
     expect(decomposed).toEqual(composed);
@@ -419,6 +459,21 @@ describe('the rules themselves', () => {
     for (const canonical of canonicals) {
       expect(`${canonical}: ${String(canonical.split(/\s+/).length)}`).toBe(`${canonical}: 1`);
     }
+  });
+
+  it('has the shape the header states in prose', () => {
+    // `synonyms.ts` says "one rule out of five", "the other four", "eight
+    // variants between them" and "four nouns". Those counts have gone stale
+    // twice now, both times left behind by a commit that removed rules and did
+    // not recount the sentences around them — a file stating a false invariant
+    // about itself is the defect this front has paid for more than any other.
+    // Written out as literals so the prose and the data fail together.
+    const featureRules = SYNONYM_RULES.filter((rule) => rule.canonical !== STOREROOM_WORD);
+
+    expect(SYNONYM_RULES).toHaveLength(5);
+    expect(SYNONYM_RULES.flatMap((rule) => rule.variants)).toHaveLength(16);
+    expect(featureRules).toHaveLength(4);
+    expect(featureRules.flatMap((rule) => rule.variants)).toHaveLength(8);
   });
 
   it('never gives two families the same canonical word', () => {
