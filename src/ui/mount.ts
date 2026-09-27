@@ -116,8 +116,24 @@ const LOCAL_TEXT = {
   engineLabel: 'Interpretador',
   engineClaude: 'Claude — na nuvem, com a sua chave',
   engineLocal: 'Modelo local — neste navegador, sem chave',
+  /**
+   * The figure here is the whole first visit, not the model on its own.
+   *
+   * The model is 302,821,014 B, which every other file in this front calls 303
+   * MB. It is not all that arrives: `vite build` emits
+   * `ort-wasm-simd-threaded.asyncify` at 26.9 MB (6.8 MB gzipped) and the
+   * `transformers.web` chunk at 574 kB (164 kB gzipped), and both sit behind
+   * the same dynamic import as the model — nothing of it is fetched until
+   * somebody picks this engine, and all of it is fetched when they do. Served
+   * gzipped that is about 310 MB; served uncompressed, about 330. The note
+   * says 310 because that is what a host that compresses its assets sends,
+   * and the weights, which are the bulk of it, are the same either way.
+   *
+   * Said here rather than left to the status line, which is where it would be
+   * discovered by waiting.
+   */
   engineLocalNote:
-    'O modelo local baixa cerca de 300 MB na primeira vez e fica guardado no navegador. Depois disso funciona sem rede e sem chave, e entende menos do que o Claude: não sabe dizer o que a descrição pediu e o mapa não tem.',
+    'O modelo local baixa cerca de 310 MB na primeira vez e fica guardado no navegador. Depois disso funciona sem rede e sem chave, e entende menos do que o Claude: não sabe dizer o que a descrição pediu e o mapa não tem.',
   modelStarting: 'Preparando o modelo local…',
   modelDownloading: 'Baixando o modelo local…',
   /** With a percentage, when the server said how large the file is. */
@@ -405,8 +421,9 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
    * because it is not merely unavailable there — it is meaningless, and a
    * greyed-out box invites somebody to wonder what would happen if they filled
    * it. The note appears in its place, because the cost of the local engine is
-   * a 303 MB download and that is something to be told before the first click,
-   * not discovered by waiting.
+   * a download of about 310 MB — the model, the ONNX runtime and the library
+   * that loads them, see `LOCAL_TEXT` — and that is something to be told before
+   * the first click, not discovered by waiting.
    */
   const refreshEngine = (): void => {
     const local = usingLocalEngine();
