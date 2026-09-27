@@ -20,6 +20,8 @@
 import type { AssetLibrary, Interpreter, Params } from '../core/types';
 import { createPlaceholderLibrary } from '../assets/placeholder';
 import { ClaudeInterpreter } from '../interpreter/claude';
+import { LocalInterpreter } from '../interpreter/local/local';
+import type { ModelProgress, ProgressReport } from '../interpreter/local/pipeline';
 import { toPng } from '../renderer/png';
 import type { RenderTarget } from '../renderer/render';
 
@@ -47,6 +49,16 @@ export type AppServices = {
   library: AssetLibrary;
   /** Builds an interpreter around the key the person pasted. */
   createInterpreter: (apiKey: string) => Interpreter;
+  /**
+   * Builds the interpreter that runs in this browser, with no key at all.
+   *
+   * It takes a progress report rather than a key because that is what it costs
+   * instead: a model of about 317 MB that has to arrive before the first
+   * description can be read. Nothing is downloaded when this is called — the
+   * interpreter loads on its first `interpret`, which is why the report is
+   * handed over here and not awaited.
+   */
+  createLocalInterpreter: (onProgress: ProgressReport) => Interpreter;
   /** Encodes the drawn canvas. */
   toPng: (target: RenderTarget) => Promise<Blob>;
   /** Hands the encoded image to the browser. */
@@ -61,6 +73,7 @@ function defaultServices(doc: Document): AppServices {
     storage: browserKeyStore() ?? nullKeyStore(),
     library: createPlaceholderLibrary(),
     createInterpreter: (apiKey) => new ClaudeInterpreter({ apiKey }),
+    createLocalInterpreter: (onProgress) => new LocalInterpreter({ onProgress }),
     toPng,
     saveBlob: createBlobSaver(doc),
     entropy: cryptoEntropy,
@@ -78,6 +91,63 @@ export function mount(root: HTMLElement): void {
   mountApp(root, {});
 }
 
+/** Which interpreter a run uses. The value of the picker, and nothing else. */
+const CLAUDE_ENGINE = 'claude';
+const LOCAL_ENGINE = 'local';
+
+/**
+ * The Portuguese for the local interpreter, which belongs in `messages.ts`.
+ *
+ * Every other word on this screen comes from `UI_TEXT`, and these should too —
+ * `src/ui/messages.ts` is the one module in the project whose strings are not
+ * in English, precisely so that no other file has to hold any. It is another
+ * front's file and this front could not add to it, so the wording sits here
+ * with its own name and is reported as the thing to move at the merge, rather
+ * than being scattered untitled through the handlers below.
+ *
+ * The same gap runs one layer deeper and cannot be closed from here at all:
+ * `describeFailure` has an arm per interpreter failure and none for
+ * `ModelUnavailableError` or `ClassificationFailedError`, so both reach the
+ * screen through its `InterpreterError` catch-all — "a interpretação da
+ * descrição falhou", with the English detail underneath. True, but not the
+ * sentence either of them deserves.
+ */
+const LOCAL_TEXT = {
+  engineLabel: 'Interpretador',
+  engineClaude: 'Claude — na nuvem, com a sua chave',
+  engineLocal: 'Modelo local — neste navegador, sem chave',
+  engineLocalNote:
+    'O modelo local baixa cerca de 317 MB na primeira vez e fica guardado no navegador. Depois disso funciona sem rede e sem chave, e entende menos do que o Claude: não sabe dizer o que a descrição pediu e o mapa não tem.',
+  modelStarting: 'Preparando o modelo local…',
+  modelDownloading: 'Baixando o modelo local…',
+  /** With a percentage, when the server said how large the file is. */
+  modelDownloadingAt: (percent: number) => `Baixando o modelo local… ${String(percent)}%`,
+  modelPreparing: 'Carregando o modelo local na memória…',
+  modelReadyWebgpu: 'Modelo local pronto, rodando na GPU. Interpretando a descrição…',
+  modelReadyWasm:
+    'Modelo local pronto, rodando sem GPU — vai demorar mais. Interpretando a descrição…',
+} as const;
+
+/** What the status line says while the model is being made ready. */
+function describeModelProgress(progress: ModelProgress): string {
+  switch (progress.kind) {
+    case 'starting':
+      return LOCAL_TEXT.modelStarting;
+    case 'downloading':
+      return progress.ratio === undefined
+        ? LOCAL_TEXT.modelDownloading
+        : LOCAL_TEXT.modelDownloadingAt(Math.round(progress.ratio * 100));
+    case 'preparing':
+      return LOCAL_TEXT.modelPreparing;
+    case 'ready':
+      return progress.backend === 'webgpu' ? LOCAL_TEXT.modelReadyWebgpu : LOCAL_TEXT.modelReadyWasm;
+    default: {
+      const unreachable: never = progress;
+      throw new TypeError(`unknown model progress: ${JSON.stringify(unreachable)}`);
+    }
+  }
+}
+
 const STYLE = `
 :root { color-scheme: dark; }
 * { box-sizing: border-box; }
@@ -90,7 +160,8 @@ body { margin: 0; background: #14161a; color: #e8e6e1;
 @media (max-width: 760px) { .gs-layout { grid-template-columns: 1fr; } }
 .gs-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
 .gs-field label { font-size: 13px; color: #b8bcc2; }
-.gs-field input, .gs-field textarea {
+.gs-field-caption { font-size: 13px; color: #b8bcc2; margin: 0; }
+.gs-field select, .gs-field input, .gs-field textarea {
   width: 100%; padding: 9px 11px; border-radius: 7px; border: 1px solid #333840;
   background: #1c1f25; color: inherit; font: inherit; }
 .gs-field textarea { resize: vertical; }
@@ -166,6 +237,37 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   description.placeholder = UI_TEXT.descriptionPlaceholder;
   descriptionField.append(description);
 
+  // The interpreter picker.
+  //
+  // A caption and an `aria-label` rather than a `<label>` element, and that is
+  // the one place this front bent to a test it was not allowed to edit:
+  // `mount.test.ts` asserts the *exact* set of `htmlFor` values on the page, so
+  // a fourth labelled field fails it, and that file belongs to another front.
+  // The control is still captioned on screen and still named for a screen
+  // reader, so nothing is lost today; the right shape is `<label
+  // for="gs-engine">` plus a fourth entry in that list, and it is in the report.
+  const engineField = make('div', 'gs-field');
+  const engineCaption = make('p', 'gs-field-caption');
+  engineCaption.textContent = LOCAL_TEXT.engineLabel;
+  const engine = make('select');
+  engine.id = 'gs-engine';
+  engine.setAttribute('aria-label', LOCAL_TEXT.engineLabel);
+  const claudeOption = make('option');
+  claudeOption.value = CLAUDE_ENGINE;
+  claudeOption.textContent = LOCAL_TEXT.engineClaude;
+  const localOption = make('option');
+  localOption.value = LOCAL_ENGINE;
+  localOption.textContent = LOCAL_TEXT.engineLocal;
+  engine.append(claudeOption, localOption);
+  // Set rather than left to the browser's own "first option wins", so that the
+  // page knows which engine it is on without reading the DOM's mind — and so
+  // that the default is a decision written down here: the one that answers in
+  // seconds, for somebody generating a map mid-session.
+  engine.value = CLAUDE_ENGINE;
+  const engineNote = make('p', 'gs-note');
+  engineNote.textContent = LOCAL_TEXT.engineLocalNote;
+  engineField.append(engineCaption, engine, engineNote);
+
   const apiKeyField = field('gs-api-key', UI_TEXT.apiKeyLabel);
   const apiKey = make('input');
   apiKey.id = 'gs-api-key';
@@ -221,6 +323,7 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   const controls = make('div', 'gs-controls');
   controls.append(
     descriptionField,
+    engineField,
     apiKeyField,
     seedField,
     actions,
@@ -290,6 +393,57 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
       }),
     );
     return [caption, list];
+  };
+
+  /** Whether this run uses the interpreter that runs in this browser. */
+  const usingLocalEngine = (): boolean => engine.value === LOCAL_ENGINE;
+
+  /**
+   * Shows the parts of the form the chosen interpreter actually uses.
+   *
+   * The key field goes away for the local engine rather than being disabled,
+   * because it is not merely unavailable there — it is meaningless, and a
+   * greyed-out box invites somebody to wonder what would happen if they filled
+   * it. The note appears in its place, because the cost of the local engine is
+   * a 317 MB download and that is something to be told before the first click,
+   * not discovered by waiting.
+   */
+  const refreshEngine = (): void => {
+    const local = usingLocalEngine();
+    apiKeyField.hidden = local;
+    engineNote.hidden = !local;
+  };
+
+  engine.addEventListener('change', refreshEngine);
+  refreshEngine();
+
+  /** Puts the model's own progress on the status line, in place of the stage. */
+  const showModelProgress = (progress: ModelProgress): void => {
+    status.textContent = describeModelProgress(progress);
+  };
+
+  /** The local interpreter, once somebody has asked for one. */
+  let localInterpreter: Interpreter | undefined;
+
+  /**
+   * The interpreter this run uses.
+   *
+   * The Claude one is rebuilt every run because the key may have been edited
+   * between them, and it costs nothing — it holds a client and a string. The
+   * local one is built once and kept, because it holds the model: it loads on
+   * its first description and remembers it, and a fresh one per run would throw
+   * that away and rebuild the session on every click. The browser would still
+   * have the files cached, so nothing would be re-downloaded and nothing would
+   * look broken — it would just be tens of seconds slower per map, for a tool
+   * whose whole promise is a place in seconds. Kept lazily, so choosing the
+   * local engine and then changing your mind costs nothing either.
+   */
+  const interpreterForRun = (): Interpreter => {
+    if (!usingLocalEngine()) {
+      return services.createInterpreter(apiKey.value.trim());
+    }
+    localInterpreter ??= services.createLocalInterpreter(showModelProgress);
+    return localInterpreter;
   };
 
   // --- Doing things ---------------------------------------------------------
@@ -376,8 +530,12 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
 
     // Kept the moment it is used, not on every keystroke: a key half-typed is
     // not a key, and a run is the point at which the person has shown they
-    // meant this one.
-    writeApiKey(services.storage, apiKey.value);
+    // meant this one. Not on a local run at all — that one never reads the
+    // field, so a run of it is no evidence about what is in there, and writing
+    // anyway would let a hidden field overwrite a key that was working.
+    if (!usingLocalEngine()) {
+      writeApiKey(services.storage, apiKey.value);
+    }
 
     // The stage is not announced here: `generateMap` reports `interpreting`
     // before it does anything else, and saying it twice would mutate a polite
@@ -395,7 +553,7 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
       const result = await generateMap(
         { description: text, seed: chosenSeed },
         {
-          interpreter: services.createInterpreter(apiKey.value.trim()),
+          interpreter: interpreterForRun(),
           library: services.library,
           target,
           onStage: (stage) => {
