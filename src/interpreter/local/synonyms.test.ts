@@ -58,6 +58,9 @@ describe('each family reaches the word the model was asked about', () => {
     expect(normalizeForClassifier('uma despensa e um armazém e dois porões').text).toBe(
       'uma depósito e um depósito e dois depósito',
     );
+    expect(normalizeForClassifier('as adegas, as despensas e os armazéns da casa').text).toBe(
+      'as depósito, as depósito e os depósito da casa',
+    );
   });
 
   it('sends the fire words to the hearth word', () => {
@@ -67,6 +70,7 @@ describe('each family reaches the word the model was asked about', () => {
     expect(normalizeForClassifier('dois fogos e uma fogueira').text).toBe(
       'dois lareira e uma lareira',
     );
+    expect(normalizeForClassifier('três fogueiras apagadas').text).toBe('três lareira apagadas');
     expect(normalizeForClassifier('um braseiro sob a chaminé').text).toBe(
       'um braseiro sob a chaminé',
     );
@@ -74,6 +78,9 @@ describe('each family reaches the word the model was asked about', () => {
 
   it('sends the column words to the pillars word', () => {
     expect(normalizeForClassifier('um pilar e uma pilastra').text).toBe('um pilares e uma pilares');
+    expect(normalizeForClassifier('uma coluna entre duas pilastras').text).toBe(
+      'uma pilares entre duas pilares',
+    );
   });
 
   it('sends the step words to the stairs word', () => {
@@ -90,6 +97,7 @@ describe('each family reaches the word the model was asked about', () => {
     expect(normalizeForClassifier('uma estante e uma prateleira').text).toBe(
       'uma prateleiras e uma prateleiras',
     );
+    expect(normalizeForClassifier('estantes até o teto').text).toBe('prateleiras até o teto');
   });
 
   it('sends the bed words to the bunks word', () => {
@@ -102,6 +110,9 @@ describe('each family reaches the word the model was asked about', () => {
 
   it('sends the recess words to the alcove word', () => {
     expect(normalizeForClassifier('um nicho e duas alcovas').text).toBe('um alcova e duas alcova');
+    expect(normalizeForClassifier('dois nichos rasos na parede').text).toBe(
+      'dois alcova rasos na parede',
+    );
   });
 });
 
