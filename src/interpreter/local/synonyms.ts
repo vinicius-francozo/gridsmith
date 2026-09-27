@@ -46,12 +46,15 @@
  *   would be a grammar engine to fix an adjective the classifier is not reading
  *   for its endings.
  * - **No rules for `light`, `condition` or `size`.** The bench recorded no
- *   vocabulary errors in those three, so no rule here targets them. That is not
- *   the same as having no effect on them: all five questions are asked about
- *   the *rewritten* premise, so every swap reaches them too. Measured, 5 of 30
- *   answers across those three fields moved after the rewrite — all of them
- *   near-ties that tipped. Small, but not nil, and not something this layer
- *   aimed at.
+ *   vocabulary errors in those three, so no rule here targets them. They are
+ *   exposed to it all the same: all five questions are asked about the
+ *   *rewritten* premise, so every swap reaches them too. Measured over the
+ *   twenty bench descriptions, the layer rewrites seven of them and not one of
+ *   the sixty `light`/`condition`/`size` answers changes. The scores do move —
+ *   the largest single one by 0.100, `size`/`small` on H1 from 0.413 to 0.313 —
+ *   and the closest call among the seven was a 0.010 margin between `dark` and
+ *   `dim`, which the rewrite widened rather than tipped. So: exposed, and
+ *   measurably undamaged on this corpus, which is not a promise about another.
  *
  * ## The risks it takes, written down
  *
@@ -65,15 +68,23 @@
  * noun, the sentence still says the place is a "salão", and the classifier is
  * reading the whole of it.
  *
- * **The rules are asymmetric, and all of the measured `placeType` damage ran
- * the same way.** Every rule that touches the kind of place pushes *towards*
- * "depósito" — "porão", "adega", "despensa", "armazém" — and nothing pushes
- * towards "salão" or "quarto": "taberna", "botequim", "estalagem" and "sala"
- * are not normalised at all. So the layer can only ever move an answer in one
- * direction, and a review that found 3 `placeType` regressions found all 3
- * leaning storeroom. That is not chance, it is the shape of the table. Adding
- * hall and room families would balance it; none has been measured, so none is
- * here.
+ * **The one rule that names a kind of place is asymmetric, and all of the
+ * measured `placeType` damage ran its way.** It pushes *towards* "depósito" —
+ * "porão", "adega", "despensa", "armazém" — and nothing pushes towards "salão"
+ * or "quarto": "taberna", "botequim", "estalagem" and "sala" are not normalised
+ * at all. A review that found 3 `placeType` regressions found all 3 leaning
+ * storeroom. That is not chance, it is the shape of the table. Adding hall and
+ * room families would balance it; none has been measured, so none is here.
+ *
+ * **That is a fact about one rule out of eight, and not about the layer.** The
+ * other seven rewrite features, twenty variants between them, and `placeType`
+ * is asked about the same rewritten premise — so they move it too, in whatever
+ * direction the new word happens to pull. Measured: "Um quarto de hóspedes com
+ * uma estante ao lado da cama." becomes "...com uma prateleiras...", and
+ * `tavern_storeroom` goes 0.286 → 0.228 while `tavern_room` goes 0.568 →
+ * 0.586. The layer moved an answer *away* from the storeroom. Read the
+ * paragraph above as a claim about the whole table and it says that cannot
+ * happen; it is a claim about four nouns.
  *
  * **False positives on `features` are the failure mode this layer reintroduces
  * most easily.** The risk above is about `placeType`, and it does not cover
