@@ -435,12 +435,14 @@ describe('classifying a whole description', () => {
   it('asks about the rewritten premise when the description uses a synonym', async () => {
     const { pipeline, asks } = stubPipeline();
 
-    await classify('Um porão de taverna com fogo aceso', pipeline);
+    await classify('Um porão de taverna com fogueira acesa', pipeline);
 
     // Written out rather than computed from `normalizeForClassifier`, so that a
     // rewrite that stopped happening cannot make this test agree with it.
+    // ("fogo" used to be the second word rewritten here and was measured out of
+    // `SYNONYM_RULES`; "fogueira" is the variant that survived.)
     expect(new Set(asks.map((ask) => ask.text))).toEqual(
-      new Set(['Um depósito de taverna com lareira aceso']),
+      new Set(['Um depósito de taverna com lareira acesa']),
     );
   });
 

@@ -201,9 +201,19 @@ export const SIZE_HINT_TEMPLATE: GatedTemplate<'small' | 'medium' | 'large'> = {
  *
  * Each label is a bare noun and that is the measured shape, not laziness —
  * enriching them ("uma lareira acesa no canto") and adding alternatives
- * ("pilares ou colunas") were both tried and both scored worse. The words a
- * person might use *instead* of these seven are handled a layer earlier, in
- * `synonyms.ts`, where they cost nothing and cannot blur a label.
+ * ("pilares ou colunas") were both tried and both scored worse. Some of the
+ * words a person might use *instead* of these seven are handled a layer
+ * earlier, in `synonyms.ts`, where they cannot blur a label — but they are not
+ * free there either, and that file now carries nine variants it had to take
+ * back out. A word only goes there if every ordinary reading of it means the
+ * label; the rest are left for the classifier to miss.
+ *
+ * One of these seven labels is known to be contaminated and is not fixed:
+ * "alcova" pulls `bunks` up with it. "Duas alcovas escuras se abrem no fundo."
+ * scores `beliches` at 0.554 with no rewriting anywhere, and across eight
+ * sentences containing "alcovas" the raw premise puts `beliches` over the gate
+ * in seven. That is a property of this pair of labels, so it is written here
+ * rather than in the layer that was wrongly blamed for it.
  *
  * The `Record<Feature, string>` is tied to `FEATURES` in `../vocabulary.ts`:
  * adding a word there stops this file compiling until it has a hypothesis here.
