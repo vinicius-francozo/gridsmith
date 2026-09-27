@@ -3,16 +3,16 @@
  * after the first description.
  *
  * `ClaudeInterpreter` sends a sentence to a language model and reads JSON back.
- * This one runs a 279M-parameter multilingual NLI model in the browser and asks
+ * This one runs a 141M-parameter multilingual NLI model in the browser and asks
  * it five entailment questions — see `interpret.ts` for what each one is and
  * `templates.ts` for how each is phrased. The output is the same `Constraints`,
  * through the same schema, and the two are interchangeable at the call site
  * because `Interpreter` was an interface from the first day.
  *
- * What it costs is the model: about 317 MB of int8 ONNX, fetched once and then
+ * What it costs is the model: about 268 MB of int8 ONNX, fetched once and then
  * cached by the browser. That number is the whole reason this class is shaped
  * the way it is. Constructing it downloads nothing; the first `interpret` does,
- * and reports where it has got to through `onProgress`, because 317 MB behind a
+ * and reports where it has got to through `onProgress`, because 268 MB behind a
  * silent page is indistinguishable from a page that has crashed.
  */
 
@@ -69,7 +69,7 @@ export class LocalInterpreter implements Interpreter {
    * @throws {RangeError} if `text` has nothing in it — the same refusal
    *                      `ClaudeInterpreter` makes, for the same reason: there
    *                      is no map in an empty description, and here it would
-   *                      also start a 317 MB download to find that out.
+   *                      also start a 268 MB download to find that out.
    * @throws {ModelUnavailableError} if the model could not be made ready.
    * @throws {ClassificationFailedError} if it ran and answered unusably.
    */

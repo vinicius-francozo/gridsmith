@@ -29,15 +29,20 @@
 import { ClassificationFailedError, ModelUnavailableError } from './errors';
 
 /**
- * The model this front is written against.
+ * The model this front is written against, and the bench picked.
  *
- * 279M parameters, cross-lingual NLI over a hundred languages, and an int8 ONNX
- * build of about 317 MB. Provisional in the same sense the templates are: it is
- * the smallest thing found that judges a Portuguese premise against a
- * Portuguese hypothesis, and a better one replaces this constant and nothing
- * else.
+ * 141M parameters, about 268 MB of int8 ONNX to fetch and roughly 289 MB once
+ * the browser has it, at a median of 786 ms per classification on a CPU.
+ *
+ * It replaced `Xenova/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7`, which was
+ * four times the download, three times the latency, and — the reason it had to
+ * go rather than merely the reason this one is nicer — **unusable for
+ * `features`**. In fp32 that model returned 0.998 for labels that were not
+ * there, overlapping the ones that were, so no threshold anywhere separated
+ * them. Its respectable int8 numbers were an artefact of quantisation. Nothing
+ * about that is fixable from this file, which is why the constant moved.
  */
-export const MODEL_ID = 'Xenova/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7';
+export const MODEL_ID = 'Horizon-Labs/multilingual-zeroshot-small';
 
 /** The quantised build to fetch. The float build is four times the download. */
 export const MODEL_DTYPE = 'q8';
@@ -287,7 +292,7 @@ export type TransformersLoaderOptions = {
  *
  * Lazy by construction: this function builds a loader and touches nothing. The
  * download happens when the loader is called, which `LocalInterpreter` does on
- * the first description and never at construction — 317 MB may not begin
+ * the first description and never at construction — 268 MB may not begin
  * arriving because a page was opened.
  *
  * @throws {ModelUnavailableError} from the returned loader, for every way the

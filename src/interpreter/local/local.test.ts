@@ -117,7 +117,7 @@ describe('loading the model lazily', () => {
 
   it('makes two descriptions asked at once wait on one download', async () => {
     // The promise is held, not the pipeline. Holding the pipeline would start a
-    // second 317 MB download for the second click.
+    // second 268 MB download for the second click.
     const loader = loaderFor();
     const interpreter = new LocalInterpreter({ loadPipeline: loader.loadPipeline });
 

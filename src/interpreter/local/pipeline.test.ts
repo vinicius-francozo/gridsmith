@@ -168,9 +168,23 @@ function fakeLibrary(answer: unknown = { labels: ['a'], scores: [1] }): {
 const NO_GPU = (): GpuProbe | undefined => undefined;
 const WITH_GPU = (): GpuProbe => ({ requestAdapter: () => Promise.resolve({}) });
 
+describe('the model this front asks for', () => {
+  it('is the one the bench picked, by name', () => {
+    // Written out rather than read back from the constant, which would agree
+    // with any model at all. The one it replaced, `Xenova/mDeBERTa-v3-base-
+    // xnli-multilingual-nli-2mil7`, could not do `features` at all in fp32 —
+    // its negatives came back at 0.998, on top of its positives.
+    expect(MODEL_ID).toBe('Horizon-Labs/multilingual-zeroshot-small');
+  });
+
+  it('is asked for quantised, because the float build is four times the download', () => {
+    expect(MODEL_DTYPE).toBe('q8');
+  });
+});
+
 describe('loading a real pipeline', () => {
   it('touches nothing until the loader is called', () => {
-    // The whole reason this front is shaped around a loader: 317 MB may not
+    // The whole reason this front is shaped around a loader: 268 MB may not
     // start arriving because a page was opened.
     const library = fakeLibrary();
 

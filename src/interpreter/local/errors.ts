@@ -4,7 +4,7 @@
  * `../errors.ts` names the failures of a call that leaves the machine — no key,
  * a rejected key, a dead connection, a browser that refused the answer. None of
  * those exist here: this interpreter has no key and, after the first load, no
- * network. What it has instead is a 317 MB model that may never arrive and a
+ * network. What it has instead is a 268 MB model that may never arrive and a
  * quantised classifier that may answer with something unreadable, and those are
  * two different things to be told.
  *

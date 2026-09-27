@@ -53,7 +53,7 @@ export type AppServices = {
    * Builds the interpreter that runs in this browser, with no key at all.
    *
    * It takes a progress report rather than a key because that is what it costs
-   * instead: a model of about 317 MB that has to arrive before the first
+   * instead: a model of about 268 MB that has to arrive before the first
    * description can be read. Nothing is downloaded when this is called — the
    * interpreter loads on its first `interpret`, which is why the report is
    * handed over here and not awaited.
@@ -117,7 +117,7 @@ const LOCAL_TEXT = {
   engineClaude: 'Claude — na nuvem, com a sua chave',
   engineLocal: 'Modelo local — neste navegador, sem chave',
   engineLocalNote:
-    'O modelo local baixa cerca de 317 MB na primeira vez e fica guardado no navegador. Depois disso funciona sem rede e sem chave, e entende menos do que o Claude: não sabe dizer o que a descrição pediu e o mapa não tem.',
+    'O modelo local baixa cerca de 268 MB na primeira vez e fica guardado no navegador. Depois disso funciona sem rede e sem chave, e entende menos do que o Claude: não sabe dizer o que a descrição pediu e o mapa não tem.',
   modelStarting: 'Preparando o modelo local…',
   modelDownloading: 'Baixando o modelo local…',
   /** With a percentage, when the server said how large the file is. */
@@ -405,7 +405,7 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
    * because it is not merely unavailable there — it is meaningless, and a
    * greyed-out box invites somebody to wonder what would happen if they filled
    * it. The note appears in its place, because the cost of the local engine is
-   * a 317 MB download and that is something to be told before the first click,
+   * a 268 MB download and that is something to be told before the first click,
    * not discovered by waiting.
    */
   const refreshEngine = (): void => {
