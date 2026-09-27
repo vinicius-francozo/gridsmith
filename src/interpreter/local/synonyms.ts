@@ -45,20 +45,43 @@
  *   being asked about, which is the whole point; teaching this layer gender
  *   would be a grammar engine to fix an adjective the classifier is not reading
  *   for its endings.
- * - **Nothing for `light`, `condition` or `size`.** The bench recorded no
- *   vocabulary errors in those three, so there is nothing here to justify.
+ * - **No rules for `light`, `condition` or `size`.** The bench recorded no
+ *   vocabulary errors in those three, so no rule here targets them. That is not
+ *   the same as having no effect on them: all five questions are asked about
+ *   the *rewritten* premise, so every swap reaches them too. Measured, 5 of 30
+ *   answers across those three fields moved after the rewrite — all of them
+ *   near-ties that tipped. Small, but not nil, and not something this layer
+ *   aimed at.
  *
- * ## The risk it takes, written down
+ * ## The risks it takes, written down
  *
- * It reads no context at all, so a word that means the storeroom rewrites to
- * the storeroom word wherever it sits. "um salão com uma escada que desce para
- * o porão" is a hall, and this layer hands the classifier a sentence saying
- * "depósito" — pushing the very question it was built to fix the other way.
- * The bench measured the gain on descriptions *of* cellars and did not measure
- * this loss, so the honest statement is that it is a trade whose other half is
- * unmeasured. It is bounded, though: every rewrite is one noun for one noun,
- * the sentence still says the place is a "salão", and the classifier is reading
- * the whole of it.
+ * **It reads no context at all**, so a word that means the storeroom rewrites
+ * to the storeroom word wherever it sits. "um salão com uma escada que desce
+ * para o porão" is a hall, and this layer hands the classifier a sentence
+ * saying "depósito" — pushing the very question it was built to fix the other
+ * way. The bench measured the gain on descriptions *of* cellars and did not
+ * measure this loss, so the honest statement is that it is a trade whose other
+ * half is unmeasured. It is bounded, though: every rewrite is one noun for one
+ * noun, the sentence still says the place is a "salão", and the classifier is
+ * reading the whole of it.
+ *
+ * **The rules are asymmetric, and all of the measured `placeType` damage ran
+ * the same way.** Every rule that touches the kind of place pushes *towards*
+ * "depósito" — "porão", "adega", "despensa", "armazém" — and nothing pushes
+ * towards "salão" or "quarto": "taberna", "botequim", "estalagem" and "sala"
+ * are not normalised at all. So the layer can only ever move an answer in one
+ * direction, and a review that found 3 `placeType` regressions found all 3
+ * leaning storeroom. That is not chance, it is the shape of the table. Adding
+ * hall and room families would balance it; none has been measured, so none is
+ * here.
+ *
+ * **False positives on `features` are the failure mode this layer reintroduces
+ * most easily.** The risk above is about `placeType`, and it does not cover
+ * them. A variant that names a part or a cousin of a feature rather than the
+ * feature rewrites a premise that merely mentions something into one that
+ * asserts the hypothesis, and the classifier then agrees at 0.97–0.99 — see the
+ * three families measured out of `SYNONYM_RULES` below. Any variant added later
+ * can bring this back, and it will not show up in a `placeType` count.
  */
 
 import { FEATURE_TEMPLATE, STOREROOM_WORD } from './templates';
@@ -106,9 +129,46 @@ export type Normalized = {
  *
  * The first three rules are the ones the bench measured; the rest of each list
  * is the same family — plurals, singulars, and the everyday word for the same
- * object. Each is a noun a game master writes instead of the label, never a
- * near-thing that might be something else: "bancada" is not here because a
- * workbench in a cellar is not a bar, and no word here is a verb.
+ * object. The rule each one is admitted under: it has to be a noun a game
+ * master writes *instead of* the label, never a near-thing that might be
+ * something else. "bancada" is not here because a workbench in a cellar is not
+ * a bar.
+ *
+ * **Three families were admitted against that rule and measured out again.**
+ * "degrau", "chaminé" and "braseiro" are all quasi-objects — a step is not a
+ * staircase, a flue is not a fireplace, a brazier is not a hearth — and each
+ * rewrote a sentence into one that asserts the hypothesis outright. Measured,
+ * with the six variants in: "O salão tem um único degrau na entrada, e nada
+ * mais." took `stairs` from 0.325 to 0.983, "Um quarto pequeno com uma chaminé
+ * fria de tijolos atravessando a parede." took `hearth` from 0.082 to 0.988,
+ * and "O quarto é aquecido por um braseiro de ferro no canto." took `hearth`
+ * from 0.134 to 0.971. Every one of those is a hearth or a staircase drawn on a
+ * map nobody asked for. Across 22 feature sentences the layer scored 13/22 with
+ * them and 22/22 without, against 16/22 for no layer at all — the six variants
+ * were the whole of the difference, and the gains survived their removal.
+ *
+ * **Two variants collide with verbs, and they stay anyway.** The rule above
+ * asks for nouns and these two are not only nouns:
+ *
+ * - **"porão"** is also the future indicative of *pôr*. Measured: "Eles porão
+ *   as mesas no salão antes de abrir a taverna." goes from `tavern_hall` at
+ *   0.680 to `tavern_storeroom` at 0.488 — a wrong map out of a grammatically
+ *   unremarkable sentence. It stays because it repairs two of the three
+ *   `placeType` errors the bench found and is the central gain of this layer;
+ *   the collision is a known cost, not an oversight.
+ * - **"pilar"** is also the infinitive "to pound". No sentence has been
+ *   measured against it; it is written down here so that the next person
+ *   measuring knows where to look.
+ *
+ * **One known side effect, kept because the gain is larger.** "nicho" → "alcova"
+ * is a clear win — `alcove` goes from 0.03–0.24 to 0.95–0.98 on every sentence
+ * tried — but the rewrite also drags `bunks` up with it, because "alcova"
+ * carries a sleeping-place reading that "nicho" does not. Measured over four
+ * sentences: `bunks` rose in three, and in two of the four it crossed the 0.5
+ * gate that the raw premise had left uncrossed ("No fundo do salão há um nicho
+ * com uma estátua." took `bunks` from 0.489 to 0.879). So a recess in a wall
+ * can put beds on the map. The alcove it recovers is judged worth that, but it
+ * is a cost, not a free win.
  */
 export const SYNONYM_RULES: readonly SynonymRule[] = [
   // Measured: "porão onde guardam os barris", "adega" and "porão de taverna"
@@ -120,7 +180,7 @@ export const SYNONYM_RULES: readonly SynonymRule[] = [
   // Measured: "fogo aceso" did not reach `hearth`.
   {
     canonical: FEATURE_TEMPLATE.labels.hearth,
-    variants: ['fogo', 'fogos', 'fogueira', 'fogueiras', 'braseiro', 'braseiros', 'chaminé', 'chaminés'],
+    variants: ['fogo', 'fogos', 'fogueira', 'fogueiras'],
   },
   // Measured: "colunas de madeira" did not reach `pillars`.
   {
@@ -129,7 +189,7 @@ export const SYNONYM_RULES: readonly SynonymRule[] = [
   },
   {
     canonical: FEATURE_TEMPLATE.labels.stairs,
-    variants: ['escadas', 'escadaria', 'escadarias', 'degrau', 'degraus'],
+    variants: ['escadas', 'escadaria', 'escadarias'],
   },
   {
     canonical: FEATURE_TEMPLATE.labels.shelving,

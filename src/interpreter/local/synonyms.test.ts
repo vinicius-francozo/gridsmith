@@ -61,8 +61,14 @@ describe('each family reaches the word the model was asked about', () => {
   });
 
   it('sends the fire words to the hearth word', () => {
-    expect(normalizeForClassifier('uma fogueira, um braseiro, uma chaminé').text).toBe(
-      'uma lareira, um lareira, uma lareira',
+    // "braseiro" and "chaminé" were in this family and were measured out of it
+    // — see `SYNONYM_RULES`. A brazier is not a hearth, and rewriting it into
+    // one took `hearth` from 0.134 to 0.971 on a sentence that has no hearth.
+    expect(normalizeForClassifier('dois fogos e uma fogueira').text).toBe(
+      'dois lareira e uma lareira',
+    );
+    expect(normalizeForClassifier('um braseiro sob a chaminé').text).toBe(
+      'um braseiro sob a chaminé',
     );
   });
 
@@ -71,7 +77,11 @@ describe('each family reaches the word the model was asked about', () => {
   });
 
   it('sends the step words to the stairs word', () => {
-    expect(normalizeForClassifier('uma escadaria de degraus').text).toBe('uma escada de escada');
+    // "degrau" was in this family and was measured out of it — a single step is
+    // not a staircase, and rewriting it into one took `stairs` from 0.325 to
+    // 0.983 on "O salão tem um único degrau na entrada, e nada mais."
+    expect(normalizeForClassifier('escadas e escadarias').text).toBe('escada e escada');
+    expect(normalizeForClassifier('um único degrau').text).toBe('um único degrau');
   });
 
   it('sends the shelf words to the shelving word', () => {
@@ -305,7 +315,7 @@ describe('the lookup refuses rules it could not apply predictably', () => {
 describe('folding a word for comparison', () => {
   it('takes accents and case off', () => {
     expect(fold('PORÃO')).toBe('porao');
-    expect(fold('Chaminé')).toBe('chamine');
+    expect(fold('Armazéns')).toBe('armazens');
   });
 
   it('leaves a word that has neither alone', () => {
