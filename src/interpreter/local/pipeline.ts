@@ -31,8 +31,15 @@ import { ClassificationFailedError, ModelUnavailableError } from './errors';
 /**
  * The model this front is written against, and the bench picked.
  *
- * 141M parameters, about 268 MB of int8 ONNX to fetch and roughly 289 MB once
- * the browser has it, at a median of 786 ms per classification on a CPU.
+ * 141M parameters and about 303 MB to fetch, at a median of 786 ms per
+ * classification on a CPU.
+ *
+ * That figure is the whole download, measured off disk after a real one:
+ * 302,821,014 B, of which `model_quantized.onnx` is 268,409,234 B and
+ * `tokenizer.json` is 34,363,287 B — a multilingual ModernBERT vocabulary, and
+ * far too large to round away — plus the two configs. The weights alone are
+ * what a model card quotes; the browser fetches all of it, so all of it is what
+ * the page promises.
  *
  * It replaced `Xenova/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7`, which was
  * four times the download, three times the latency, and — the reason it had to
@@ -44,7 +51,7 @@ import { ClassificationFailedError, ModelUnavailableError } from './errors';
  */
 export const MODEL_ID = 'Horizon-Labs/multilingual-zeroshot-small';
 
-/** The quantised build to fetch. The float build is four times the download. */
+/** The quantised build to fetch. The float build is 2.1 times the weights. */
 export const MODEL_DTYPE = 'q8';
 
 /** Where the model actually runs. */
@@ -268,8 +275,14 @@ type TransformersModule = {
  * No cast. The import is returned as it is, and TypeScript checks the real
  * module against `TransformersModule` — which is the whole of what this front
  * claims the library does. The check is worth more than it looks: it covers the
- * task name, the three options passed below, and the shape of the session that
- * comes back.
+ * task name, the three options passed below, and the *signature* of the session
+ * that comes back — how it is called, and with what.
+ *
+ * What it deliberately does not cover is the session's *answer*:
+ * `ZeroShotSession` resolves to `Promise<unknown>`, because a type here would
+ * be this front asserting a shape it cannot check at run time, which is the
+ * cast this design exists to avoid. `readZeroShotOutput` is what guards that
+ * shape, on the value itself, every call.
  *
  * Still its own function, so that the one dynamic import in this project is one
  * statement with a name, and so that `TransformersLoaderOptions.importModule`
@@ -292,7 +305,7 @@ export type TransformersLoaderOptions = {
  *
  * Lazy by construction: this function builds a loader and touches nothing. The
  * download happens when the loader is called, which `LocalInterpreter` does on
- * the first description and never at construction — 268 MB may not begin
+ * the first description and never at construction — 303 MB may not begin
  * arriving because a page was opened.
  *
  * @throws {ModelUnavailableError} from the returned loader, for every way the

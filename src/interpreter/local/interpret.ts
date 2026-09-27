@@ -220,9 +220,10 @@ export function readFeatures(output: ZeroShotOutput): Feature[] {
  *
  * **It deliberately does not clamp.** A single-label classification is a softmax
  * and sums to one, so a real answer lands between the smallest and the largest
- * figure in `CLUTTER_BY_CONDITION` and cannot leave the legal range. A result outside it therefore means the scores were
- * not a distribution — a broken quantised build, a library that changed what it
- * returns — and clamping would turn that into a plausible map generated from
+ * figure in `CLUTTER_BY_CONDITION` and cannot leave the legal range. A result
+ * outside it therefore means the scores were not a distribution — a broken
+ * quantised build, a library that changed what it returns — and clamping would
+ * turn that into a plausible map generated from
  * nonsense. Letting it through to the schema in `constraintsFrom` is what turns
  * it into a `ClassificationFailedError` the person can act on.
  */

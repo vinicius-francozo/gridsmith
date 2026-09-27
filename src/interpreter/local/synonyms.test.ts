@@ -142,9 +142,13 @@ describe('negation survives the rewrite', () => {
 
 describe('what it refuses to touch', () => {
   it('does not fire inside a longer word', () => {
-    // "colunata" carries "coluna", "afogado" carries "fogo", and neither is the
-    // thing the rule is about.
-    expect(normalizeForClassifier('a colunata do afogado').text).toBe('a colunata do afogado');
+    // "colunata" carries "coluna", "desafogo" carries "fogo" and "restante"
+    // carries "estante", and none of the three is the thing its rule is about.
+    // ("afogado" would not do as an example here: it contains "foga", not
+    // "fogo", so it would pass this test even with no word boundary at all.)
+    expect(normalizeForClassifier('a colunata do desafogo restante').text).toBe(
+      'a colunata do desafogo restante',
+    );
   });
 
   it('does not fire on a word that merely starts the same way', () => {

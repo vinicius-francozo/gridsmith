@@ -269,11 +269,16 @@ const CANONICAL_BY_VARIANT = buildIndex(SYNONYM_RULES);
  * The point is narrow — a premise that reads "Depósito grande" instead of
  * "depósito grande" is the sentence the person wrote, and this layer has no
  * business tidying their capitals any more than their wording.
+ *
+ * A one-letter sample would be ambiguous between the last two — "A" is both
+ * capitalised and shouted — but it cannot occur: this is only ever called on a
+ * word that matched a variant, and the shortest variant is "fogo". So there is
+ * no tie to break and no length test here.
  */
 function matchCase(sample: string, word: string): string {
   // Only ever called on a run of letters the regex below matched, so `sample`
   // has a first character and `sample[0]` is one.
-  if (sample.length > 1 && sample === sample.toUpperCase() && sample !== sample.toLowerCase()) {
+  if (sample === sample.toUpperCase() && sample !== sample.toLowerCase()) {
     return word.toUpperCase();
   }
   if (sample[0] === sample[0].toUpperCase() && sample[0] !== sample[0].toLowerCase()) {
@@ -287,7 +292,8 @@ function matchCase(sample: string, word: string): string {
  * about, and `text` itself, untouched, beside it.
  *
  * Whole words only: the match runs over runs of letters, so "colunata" keeps
- * its "coluna" and "afogado" keeps its "fogo". Everything that is not a letter
+ * its "coluna", "desafogo" keeps its "fogo" and "restante" keeps its "estante".
+ * Everything that is not a letter
  * — spaces, commas, the person's exclamation marks — is carried through
  * character for character, because the premise of an entailment pair is the
  * sentence, not a cleaned-up version of it.

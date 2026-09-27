@@ -9,11 +9,12 @@
  * through the same schema, and the two are interchangeable at the call site
  * because `Interpreter` was an interface from the first day.
  *
- * What it costs is the model: about 268 MB of int8 ONNX, fetched once and then
- * cached by the browser. That number is the whole reason this class is shaped
- * the way it is. Constructing it downloads nothing; the first `interpret` does,
- * and reports where it has got to through `onProgress`, because 268 MB behind a
- * silent page is indistinguishable from a page that has crashed.
+ * What it costs is the model: about 303 MB — int8 ONNX weights plus a large
+ * multilingual tokenizer — fetched once and then cached by the browser. That
+ * number is the whole reason this class is shaped the way it is. Constructing
+ * it downloads nothing; the first `interpret` does, and reports where it has
+ * got to through `onProgress`, because 303 MB behind a silent page is
+ * indistinguishable from a page that has crashed.
  */
 
 import type { Constraints, Interpreter } from '../../core/types';
@@ -69,7 +70,7 @@ export class LocalInterpreter implements Interpreter {
    * @throws {RangeError} if `text` has nothing in it — the same refusal
    *                      `ClaudeInterpreter` makes, for the same reason: there
    *                      is no map in an empty description, and here it would
-   *                      also start a 268 MB download to find that out.
+   *                      also start a 303 MB download to find that out.
    * @throws {ModelUnavailableError} if the model could not be made ready.
    * @throws {ClassificationFailedError} if it ran and answered unusably.
    */

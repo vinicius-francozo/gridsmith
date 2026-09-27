@@ -184,7 +184,7 @@ describe('the model this front asks for', () => {
 
 describe('loading a real pipeline', () => {
   it('touches nothing until the loader is called', () => {
-    // The whole reason this front is shaped around a loader: 268 MB may not
+    // The whole reason this front is shaped around a loader: 303 MB may not
     // start arriving because a page was opened.
     const library = fakeLibrary();
 
