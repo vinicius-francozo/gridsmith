@@ -137,6 +137,11 @@ describe('the derived wall contour', () => {
     // This is what "walls are derived from the footprint" buys. A per-cell
     // sampler would leave a gap here every so often, and the room would spill
     // into nothing at that one square.
+    // One assertion, not one per neighbour. The inner loop runs hundreds of
+    // thousands of times across every plan; an `expect` with an interpolated
+    // string and a regex in there costs enough to time the test out under
+    // worker contention, which made the suite flaky without ever being wrong.
+    const spills: string[] = [];
     for (const { placeType, seed, floorplan } of everyPlan()) {
       for (const cell of floorCells(floorplan)) {
         for (const offset of AROUND) {
@@ -144,12 +149,13 @@ describe('the derived wall contour', () => {
           const kind: CellKind | 'off-grid' = inBounds(neighbor, floorplan.size)
             ? cellAt(floorplan.cells, neighbor)
             : 'off-grid';
-          expect(`${placeType}/${seed} ${cellKey(neighbor)}: ${kind}`).not.toMatch(
-            /void|off-grid/,
-          );
+          if (kind === 'void' || kind === 'off-grid') {
+            spills.push(`${placeType}/${seed} ${cellKey(neighbor)}: ${kind}`);
+          }
         }
       }
     }
+    expect(spills).toEqual([]);
   });
 
   it('leaves no wall cell stranded away from the floor', () => {
