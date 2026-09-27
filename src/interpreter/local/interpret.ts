@@ -141,9 +141,37 @@ export function bestOf<T extends string>(
   return { value: best, confidence: scores[best] };
 }
 
-/** Which of the three kinds of tavern space this is. */
-export function readPlaceType(output: ZeroShotOutput): PlaceType {
-  return bestOf(PLACE_TYPE_TEMPLATE, output).value;
+/** A kind of place, how sure the classifier was, and whether that is enough. */
+export type PlaceTypeReading = Scored<PlaceType> & {
+  /**
+   * Whether the confidence cleared `PLACE_TYPE_TEMPLATE.minConfidence`.
+   *
+   * Nothing acts on this yet, and that is deliberate rather than an oversight —
+   * see `readPlaceType`.
+   */
+  readonly trusted: boolean;
+};
+
+/**
+ * Which of the three kinds of tavern space this is, and whether to believe it.
+ *
+ * The gate is worth computing because it was measured to mean something: with
+ * the short labels in `templates.ts`, confidence separates a right answer from
+ * a wrong one at an AUC of 0.922, and at the threshold there the bench's twenty
+ * descriptions split into thirteen accepted — all thirteen correct — and seven
+ * held back.
+ *
+ * **`trusted` is reported and not obeyed.** Obeying it would mean falling back
+ * to something, and there is nothing to fall back to: no rule-based reader of a
+ * description exists in this project, and inventing one here to have somewhere
+ * to fall would be a second interpreter smuggled in under a threshold. So the
+ * answer is used either way, exactly as it was before this gate existed, and
+ * what the gate buys today is that the number is computed, named and reachable
+ * for the day the other path is built.
+ */
+export function readPlaceType(output: ZeroShotOutput): PlaceTypeReading {
+  const best = bestOf(PLACE_TYPE_TEMPLATE, output);
+  return { ...best, trusted: best.confidence >= PLACE_TYPE_TEMPLATE.minConfidence };
 }
 
 /** How lit it is. */
@@ -190,8 +218,8 @@ export function readFeatures(output: ZeroShotOutput): Feature[] {
  * to one of four numbers and lose every description in between.
  *
  * **It deliberately does not clamp.** A single-label classification is a softmax
- * and sums to one, so a real answer lands between 0.05 and 0.85 and cannot
- * leave the legal range. A result outside it therefore means the scores were
+ * and sums to one, so a real answer lands between the smallest and the largest
+ * figure in `CLUTTER_BY_CONDITION` and cannot leave the legal range. A result outside it therefore means the scores were
  * not a distribution — a broken quantised build, a library that changed what it
  * returns — and clamping would turn that into a plausible map generated from
  * nonsense. Letting it through to the schema in `constraintsFrom` is what turns
@@ -288,7 +316,8 @@ export async function classify(text: string, pipeline: ZeroShotPipeline): Promis
       multiLabel,
     });
 
-  const placeType = readPlaceType(await ask(PLACE_TYPE_TEMPLATE, false));
+  // `trusted` is read by nobody yet; `readPlaceType` says why it is computed.
+  const placeType = readPlaceType(await ask(PLACE_TYPE_TEMPLATE, false)).value;
   const light = readLight(await ask(LIGHT_TEMPLATE, false));
 
   const conditionOutput = await ask(CONDITION_TEMPLATE, false);

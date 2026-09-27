@@ -127,11 +127,57 @@ describe('choosing the best-scoring value', () => {
 
 describe('reading the closed fields', () => {
   it('reads the kind of place', () => {
-    expect(readPlaceType(outputFor(PLACE_TYPE_TEMPLATE, CERTAIN_HALL))).toBe('tavern_hall');
+    expect(readPlaceType(outputFor(PLACE_TYPE_TEMPLATE, CERTAIN_HALL)).value).toBe('tavern_hall');
   });
 
   it('reads the light', () => {
     expect(readLight(outputFor(LIGHT_TEMPLATE, CERTAIN_DIM))).toBe('dim');
+  });
+});
+
+describe('the confidence gate on the kind of place', () => {
+  it('trusts an answer the classifier was sure of', () => {
+    const reading = readPlaceType(outputFor(PLACE_TYPE_TEMPLATE, CERTAIN_HALL));
+
+    expect(reading).toEqual({ value: 'tavern_hall', confidence: CERTAIN_HALL.tavern_hall, trusted: true });
+  });
+
+  it('does not trust an answer below the threshold', () => {
+    // What the bench saw on "porão de taverna" before the synonym layer: the
+    // wrong kind of place, at a confidence that does not look uncertain.
+    const just = PLACE_TYPE_TEMPLATE.minConfidence - 0.01;
+    const rest = (1 - just) / 2;
+    const reading = readPlaceType(
+      outputFor(PLACE_TYPE_TEMPLATE, { tavern_hall: just, tavern_room: rest, tavern_storeroom: rest }),
+    );
+
+    expect(reading.value).toBe('tavern_hall');
+    expect(reading.trusted).toBe(false);
+  });
+
+  it('trusts an answer exactly on the threshold', () => {
+    const at = PLACE_TYPE_TEMPLATE.minConfidence;
+    const rest = (1 - at) / 2;
+
+    expect(
+      readPlaceType(
+        outputFor(PLACE_TYPE_TEMPLATE, { tavern_hall: at, tavern_room: rest, tavern_storeroom: rest }),
+      ).trusted,
+    ).toBe(true);
+  });
+
+  it('gives the winning value whether it is trusted or not', () => {
+    // Nothing falls back yet, so an untrusted answer is still the answer.
+    const untrusted: Record<PlaceType, number> = {
+      tavern_hall: 0.2,
+      tavern_room: 0.3,
+      tavern_storeroom: 0.5,
+    };
+
+    expect(readPlaceType(outputFor(PLACE_TYPE_TEMPLATE, untrusted))).toMatchObject({
+      value: 'tavern_storeroom',
+      trusted: false,
+    });
   });
 });
 
