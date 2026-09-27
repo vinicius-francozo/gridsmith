@@ -383,13 +383,13 @@ describe('the rules themselves', () => {
 });
 
 describe('the lookup refuses rules it could not apply predictably', () => {
-  it('refuses a word two families both claim', () => {
+  it('refuses a word two families both claim, and names both', () => {
     const rules: SynonymRule[] = [
       { canonical: 'lareira', variants: ['fogo'] },
       { canonical: 'balcão', variants: ['fogo'] },
     ];
 
-    expect(() => buildIndex(rules)).toThrow(/two synonym rules/);
+    expect(() => buildIndex(rules)).toThrow('"fogo" is claimed twice, by "lareira" and by "balcão"');
   });
 
   it('refuses a word that is another family\'s canonical', () => {
@@ -407,7 +407,20 @@ describe('the lookup refuses rules it could not apply predictably', () => {
   it('refuses the same word twice however it was accented', () => {
     const rules: SynonymRule[] = [{ canonical: 'depósito', variants: ['porão', 'porao'] }];
 
-    expect(() => buildIndex(rules)).toThrow(/two synonym rules/);
+    expect(() => buildIndex(rules)).toThrow(
+      '"porao" is claimed twice, by "depósito" and by "depósito"',
+    );
+  });
+
+  it('refuses one family listing a word twice, and says it was one family', () => {
+    // The old message said "claimed by two synonym rules" for this too, which
+    // sent whoever read it looking for a second rule that is not there. The
+    // same canonical on both sides of the message is what says so.
+    const rules: SynonymRule[] = [{ canonical: 'lareira', variants: ['fogo', 'fogo'] }];
+
+    expect(() => buildIndex(rules)).toThrow(
+      '"fogo" is claimed twice, by "lareira" and by "lareira"',
+    );
   });
 });
 

@@ -237,9 +237,12 @@ export function fold(word: string): string {
  * Exported so that a test can hand it broken rules and watch it refuse them,
  * which is the only way the two refusals below are reachable at all.
  *
- * @throws {RangeError} if two rules claim the same variant — the rewrite would
- *                      then depend on declaration order, which is not a thing a
- *                      reader of the data could see.
+ * @throws {RangeError} if the same variant is claimed twice. By two rules, the
+ *                      rewrite would depend on declaration order, which is not
+ *                      a thing a reader of the data could see; by one rule
+ *                      twice over, it is a typo in a list nobody reads to the
+ *                      end. The message names both canonicals, so which of the
+ *                      two it is can be read off it.
  * @throws {RangeError} if a variant is some rule's canonical word. That is a
  *                      rewrite that undoes another one, and which of the two
  *                      wins would depend on where the word sat in the sentence.
@@ -251,8 +254,14 @@ export function buildIndex(rules: readonly SynonymRule[]): ReadonlyMap<string, s
   for (const rule of rules) {
     for (const variant of rule.variants) {
       const key = fold(variant);
-      if (index.has(key)) {
-        throw new RangeError(`"${variant}" is claimed by two synonym rules`);
+      const claimed = index.get(key);
+      if (claimed !== undefined) {
+        // Both canonicals, rather than "by two rules": one rule listing the
+        // same word twice reaches here as well, and then the two names are the
+        // same word, which is exactly what tells the two cases apart.
+        throw new RangeError(
+          `"${variant}" is claimed twice, by "${claimed}" and by "${rule.canonical}"`,
+        );
       }
       if (canonicals.has(key)) {
         throw new RangeError(`"${variant}" is already a canonical word`);
