@@ -80,7 +80,9 @@ describe('each family reaches the word the model was asked about', () => {
     // "degrau" was in this family and was measured out of it — a single step is
     // not a staircase, and rewriting it into one took `stairs` from 0.325 to
     // 0.983 on "O salão tem um único degrau na entrada, e nada mais."
-    expect(normalizeForClassifier('escadas e escadarias').text).toBe('escada e escada');
+    expect(normalizeForClassifier('escadas, escadaria e escadarias').text).toBe(
+      'escada, escada e escada',
+    );
     expect(normalizeForClassifier('um único degrau').text).toBe('um único degrau');
   });
 
