@@ -8,20 +8,22 @@
  * front stand the classifier in without a download, and it is what keeps
  * `@huggingface/transformers` out of the files that decide anything.
  *
- * ## The dependency this front could not add
+ * ## The hand-written shape, now that the dependency is here
  *
- * `package.json` belongs to the orchestrator, so `@huggingface/transformers` is
- * not installed and the import below does not resolve. It is suppressed with
- * `@ts-expect-error`, which is the same mechanism `src/main.ts` used for
- * `./ui/mount` before the UI front landed, and it works the same way round: the
- * moment the package is installed, TypeScript reports the directive as unused
- * (TS2578) and `npm run typecheck` fails until somebody deletes it. That is the
- * alarm, not a regression — it is what forces the real module's types to be
- * looked at instead of the hand-written shape below being trusted for ever.
+ * This file used to import the library behind a `@ts-expect-error`, because
+ * `package.json` belonged to another front and the package was not installed.
+ * That directive was written to become a TS2578 the moment it was — an alarm
+ * whose whole purpose was to force somebody to read the real module's types
+ * instead of trusting the shape below for ever. It went off, and this is that
+ * reading: `TransformersModule` is now narrow enough that the real module is
+ * *assignable* to it, so `importTransformers` returns the import with no cast
+ * at all. A library that changes its signature now fails `npm run typecheck`
+ * here, which is what the alarm was for.
  *
- * Until then, `npm run typecheck` and `npm run test` pass and `npm run build`
- * does not: a bundler cannot resolve a package that is not there. See the
- * report.
+ * It is still hand-written and still three fields wide, on purpose. Taking the
+ * library's own types would put `PipelineType`, `DataType` and a hundred other
+ * names into a front that asks one question, and would make the stand-in every
+ * test uses something that has to implement a module.
  */
 
 import { ClassificationFailedError, ModelUnavailableError } from './errors';
@@ -221,31 +223,55 @@ export function readZeroShotOutput(raw: unknown): ZeroShotOutput {
   return { labels, scores };
 }
 
-/** What the library exposes, as much of it as is used. */
+/**
+ * A built classifier, as much of it as is called.
+ *
+ * The option names are the library's, not this project's — this is the one
+ * boundary where they are allowed, and `ZeroShotPipeline` is the same thing in
+ * this front's own words on the other side of it.
+ */
+type ZeroShotSession = (
+  text: string,
+  labels: string[],
+  options: { hypothesis_template: string; multi_label: boolean },
+) => Promise<unknown>;
+
+/**
+ * What the library exposes, as much of it as is used.
+ *
+ * Every type here is as narrow as the one call site needs — the literal task
+ * name, the two devices this front detects, the one dtype it asks for. That
+ * narrowness is what makes the real module assignable to it: a wider `task:
+ * string` or `dtype: string` would not be, because the library's own signature
+ * accepts neither.
+ */
 type TransformersModule = {
   pipeline: (
-    task: string,
+    task: 'zero-shot-classification',
     model: string,
-    options: Record<string, unknown>,
-  ) => Promise<(text: string, labels: string[], options: Record<string, unknown>) => Promise<unknown>>;
+    options: {
+      device: Backend;
+      dtype: typeof MODEL_DTYPE;
+      progress_callback: (raw: unknown) => void;
+    },
+  ) => Promise<ZeroShotSession>;
 };
 
 /**
  * The library itself.
  *
- * Split into its own function so the suppression covers one statement and
- * nothing else. The value is taken as `unknown` and cast afterwards, on purpose:
- * an `unknown` assignment cannot fail, so once the package is installed the
- * line stops erring and the directive above it becomes the TS2578 that this
- * file's header describes — which is the whole mechanism. Casting on the same
- * line would let a mismatch between the real module and `TransformersModule` be
- * suppressed along with the missing module, and nobody would hear about it.
+ * No cast. The import is returned as it is, and TypeScript checks the real
+ * module against `TransformersModule` — which is the whole of what this front
+ * claims the library does. The check is worth more than it looks: it covers the
+ * task name, the three options passed below, and the shape of the session that
+ * comes back.
+ *
+ * Still its own function, so that the one dynamic import in this project is one
+ * statement with a name, and so that `TransformersLoaderOptions.importModule`
+ * has something to stand in for.
  */
 async function importTransformers(): Promise<TransformersModule> {
-  // @ts-expect-error `@huggingface/transformers` is not in package.json yet — it is the
-  // orchestrator's file. Delete this directive when the dependency lands; see the header.
-  const loaded: unknown = await import('@huggingface/transformers');
-  return loaded as TransformersModule;
+  return await import('@huggingface/transformers');
 }
 
 /** What `createTransformersLoader` may be told to do differently, for tests. */
