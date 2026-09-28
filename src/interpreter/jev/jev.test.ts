@@ -1,0 +1,255 @@
+import { describe, expect, it } from 'vitest';
+
+import { InterpreterError } from '../errors';
+
+import { JevRejectedKeyError, JevUnavailableError, JevUnusableAnswerError } from './errors';
+import { JevInterpreter, JEV_KEY_HEADER, JEV_MODEL, JEV_PROXY_ENDPOINT } from './jev';
+
+/**
+ * No test here reaches the network. Every interpreter is built with a
+ * `fetchImpl`, and the one test that reads the default never calls it.
+ *
+ * The response below is JSON text in the shape the proxy relays, typed out by
+ * hand — not built from `QUESTIONS` or from the reader's schemas. The names on
+ * this side of the boundary are what the request is asserted against, and a
+ * fake assembled out of the code under test would make both sides move
+ * together and assert nothing. Same rule as `read.test.ts`, which says why at
+ * more length.
+ */
+const ANSWER = `{
+  "model": "jev-1.13.0",
+  "answers": {
+    "place_type": {
+      "type": "choice",
+      "choice": "tavern_storeroom",
+      "probabilities": { "tavern_hall": 0, "tavern_room": 0, "tavern_storeroom": 1 },
+      "confidence": 0.94
+    },
+    "out_of_vocabulary": { "type": "noul", "noul": 0.08 },
+    "light": { "type": "score", "score": 0.2, "legend": {}, "probabilities": {}, "confidence": 0.81 },
+    "condition": { "type": "score", "score": 2, "legend": {}, "probabilities": {}, "confidence": 0.77 },
+    "size": { "type": "score", "score": 0.1, "legend": {}, "probabilities": {}, "confidence": 0.72 },
+    "feature_bar": { "type": "noul", "noul": 0.04 },
+    "feature_hearth": { "type": "noul", "noul": 0.03 },
+    "feature_stairs": { "type": "noul", "noul": 0.91 },
+    "feature_pillars": { "type": "noul", "noul": 0.12 },
+    "feature_alcove": { "type": "noul", "noul": 0.07 },
+    "feature_shelving": { "type": "noul", "noul": 0.88 },
+    "feature_bunks": { "type": "noul", "noul": 0.02 }
+  },
+  "usage": { "input_tokens": 307, "output_tokens": 72 }
+}`;
+
+/** The twelve names the request has to carry, written out rather than derived. */
+const QUESTION_NAMES = [
+  'condition',
+  'feature_alcove',
+  'feature_bar',
+  'feature_bunks',
+  'feature_hearth',
+  'feature_pillars',
+  'feature_shelving',
+  'feature_stairs',
+  'light',
+  'out_of_vocabulary',
+  'place_type',
+  'size',
+];
+
+const KEY = 'ts-key-for-tests';
+
+type Call = { input: RequestInfo | URL; init: RequestInit | undefined };
+
+/** A `fetch` that records what it was handed and answers with `respond`. */
+function stubFetch(respond: () => Response | Promise<Response>): {
+  fetchImpl: typeof fetch;
+  calls: Call[];
+} {
+  const calls: Call[] = [];
+  const fetchImpl: typeof fetch = async (input, init) => {
+    calls.push({ input, init });
+    return respond();
+  };
+  return { fetchImpl, calls };
+}
+
+/** A `fetch` that rejects, the way a dead connection does. */
+function failingFetch(error: unknown): typeof fetch {
+  return () => Promise.reject(error);
+}
+
+function answering(body: string, status = 200): () => Response {
+  return () => new Response(body, { status, headers: { 'content-type': 'application/json' } });
+}
+
+/** The parsed body of the one request that was made. */
+function sentBody(calls: Call[]): Record<string, unknown> {
+  expect(calls).toHaveLength(1);
+  return JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
+}
+
+describe('refusing before the request', () => {
+  it('refuses an empty description without a round trip', async () => {
+    const { fetchImpl, calls } = stubFetch(answering(ANSWER));
+    const interpreter = new JevInterpreter({ apiKey: KEY, fetchImpl });
+
+    await expect(interpreter.interpret('   ')).rejects.toThrow(RangeError);
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a missing key without a round trip, rather than buying a 401', async () => {
+    const { fetchImpl, calls } = stubFetch(answering(ANSWER));
+    const interpreter = new JevInterpreter({ apiKey: '  ', fetchImpl });
+
+    await expect(interpreter.interpret('uma adega')).rejects.toThrow(JevRejectedKeyError);
+    expect(calls).toEqual([]);
+  });
+});
+
+describe('the request the proxy is handed', () => {
+  it('posts every question in one call, to the proxy', async () => {
+    const { fetchImpl, calls } = stubFetch(answering(ANSWER));
+
+    await new JevInterpreter({ apiKey: KEY, fetchImpl }).interpret('uma adega fria');
+
+    expect(calls[0].input).toBe(JEV_PROXY_ENDPOINT);
+    expect(JEV_PROXY_ENDPOINT).toBe('/api/jev');
+    expect(calls[0].init?.method).toBe('POST');
+
+    const body = sentBody(calls);
+    expect(body.state).toBe('uma adega fria');
+    expect(body.model).toBe(JEV_MODEL);
+    expect(JEV_MODEL).toBe('jev-latest');
+    expect(Object.keys(body.questions as object).sort()).toEqual(QUESTION_NAMES);
+  });
+
+  it('asks each question as the primitive it was designed for', async () => {
+    // The mapping is the measured part of this front: an ordered scale asked
+    // as a choice is exactly the information the zero-shot path had to discard.
+    const { fetchImpl, calls } = stubFetch(answering(ANSWER));
+
+    await new JevInterpreter({ apiKey: KEY, fetchImpl }).interpret('uma adega fria');
+
+    const questions = sentBody(calls).questions as Record<string, { type: string }>;
+    expect(questions.place_type.type).toBe('choice');
+    expect(questions.out_of_vocabulary.type).toBe('noul');
+    expect(questions.light.type).toBe('score');
+    expect(questions.condition.type).toBe('score');
+    expect(questions.size.type).toBe('score');
+    for (const name of QUESTION_NAMES.filter((n) => n.startsWith('feature_'))) {
+      expect(questions[name].type).toBe('noul');
+    }
+  });
+
+  it('puts the key in a header and nowhere else', async () => {
+    const { fetchImpl, calls } = stubFetch(answering(ANSWER));
+
+    await new JevInterpreter({ apiKey: KEY, fetchImpl }).interpret('uma adega fria');
+
+    const headers = calls[0].init?.headers as Record<string, string>;
+    expect(headers[JEV_KEY_HEADER]).toBe(KEY);
+    expect(JEV_KEY_HEADER).toBe('x-typesafe-key');
+    expect(headers['content-type']).toBe('application/json');
+    // The URL is logged by every server between here and the proxy.
+    expect(String(calls[0].input)).not.toContain(KEY);
+    expect(String(calls[0].init?.body)).not.toContain(KEY);
+  });
+
+  it('goes where it is told to, when it is told', async () => {
+    const { fetchImpl, calls } = stubFetch(answering(ANSWER));
+
+    await new JevInterpreter({
+      apiKey: KEY,
+      endpoint: 'http://localhost:5173/api/jev',
+      fetchImpl,
+    }).interpret('uma adega fria');
+
+    expect(calls[0].input).toBe('http://localhost:5173/api/jev');
+  });
+});
+
+describe('what comes back', () => {
+  it('reads a whole answer into constraints', async () => {
+    const { fetchImpl } = stubFetch(answering(ANSWER));
+
+    const constraints = await new JevInterpreter({ apiKey: KEY, fetchImpl }).interpret(
+      'Um depósito escuro nos fundos, com prateleiras e uma escada.',
+    );
+
+    expect(constraints).toEqual({
+      placeType: 'tavern_storeroom',
+      sizeHint: 'small',
+      light: 'dark',
+      condition: 'disordered',
+      clutter: 0.6,
+      features: ['stairs', 'shelving'],
+      unresolved: [],
+    });
+  });
+
+  it('reports a refused key as a refused key, on both statuses', async () => {
+    for (const status of [401, 403]) {
+      const { fetchImpl } = stubFetch(answering('{"error":"unauthorized"}', status));
+      const interpreter = new JevInterpreter({ apiKey: KEY, fetchImpl });
+
+      await expect(interpreter.interpret('uma adega')).rejects.toThrow(JevRejectedKeyError);
+    }
+  });
+
+  it('reports every other bad status as a request that did not get through', async () => {
+    // 502 is the proxy saying TypeSafe did not answer; 500 and 429 are it
+    // saying something else went wrong. One thing to do about all of them.
+    for (const status of [500, 502, 429]) {
+      const { fetchImpl } = stubFetch(answering('', status));
+      const interpreter = new JevInterpreter({ apiKey: KEY, fetchImpl });
+
+      await expect(interpreter.interpret('uma adega')).rejects.toThrow(JevUnavailableError);
+    }
+  });
+
+  it('reports a dead connection as the same thing, keeping the cause', async () => {
+    const cause = new TypeError('fetch failed');
+    const interpreter = new JevInterpreter({ apiKey: KEY, fetchImpl: failingFetch(cause) });
+
+    await expect(interpreter.interpret('uma adega')).rejects.toThrow(JevUnavailableError);
+    await expect(interpreter.interpret('uma adega')).rejects.toMatchObject({ cause });
+  });
+
+  it('reports a success that is not JSON as an answer it cannot read', async () => {
+    // What a gateway in front of the proxy answers with when it is the one
+    // that is broken: HTTP 200 and a page of HTML.
+    const { fetchImpl } = stubFetch(answering('<!doctype html><title>502</title>'));
+    const interpreter = new JevInterpreter({ apiKey: KEY, fetchImpl });
+
+    await expect(interpreter.interpret('uma adega')).rejects.toThrow(JevUnusableAnswerError);
+  });
+
+  it('reports a JSON body that is not a set of answers as the same', async () => {
+    const { fetchImpl } = stubFetch(answering('{"model":"jev-1.13.0"}'));
+    const interpreter = new JevInterpreter({ apiKey: KEY, fetchImpl });
+
+    await expect(interpreter.interpret('uma adega')).rejects.toThrow(JevUnusableAnswerError);
+  });
+
+  it('raises every failure as an InterpreterError, so the interface can catch one type', async () => {
+    const failures = [
+      new JevInterpreter({ apiKey: '', fetchImpl: failingFetch(new Error('unused')) }),
+      new JevInterpreter({ apiKey: KEY, fetchImpl: failingFetch(new Error('down')) }),
+      new JevInterpreter({ apiKey: KEY, fetchImpl: stubFetch(answering('nope')).fetchImpl }),
+    ];
+
+    for (const interpreter of failures) {
+      await expect(interpreter.interpret('uma adega')).rejects.toBeInstanceOf(InterpreterError);
+    }
+  });
+});
+
+describe('the default seam', () => {
+  it('defaults to the proxy on this origin, and is never called here', () => {
+    // Built, not used: the point is that constructing one reaches nothing.
+    const interpreter = new JevInterpreter({ apiKey: KEY });
+
+    expect(interpreter).toBeInstanceOf(JevInterpreter);
+    expect(JEV_PROXY_ENDPOINT.startsWith('/')).toBe(true);
+  });
+});
