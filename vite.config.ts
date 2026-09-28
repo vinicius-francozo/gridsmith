@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
-import handleJevRequest, { relayUnavailable } from './api/jev';
+import handleJevRequest, { relayUnavailable } from './api/jev.ts';
 
 /**
  * `/api/jev` during `npm run dev`.
@@ -71,10 +71,14 @@ async function relay(req: IncomingMessage, res: ServerResponse): Promise<void> {
     // holding the key. The binding is omitted so there is nothing to log.
     //
     // Reachable without anything going wrong upstream: `new Request()` throws
-    // for `TRACE`, `CONNECT` and `TRACK`, so those land here. The answer comes
-    // from the handler's own module so that it carries the CORS headers and
-    // the body every other answer on this route carries — a bare status code
-    // reaches the page as a network error instead of as a 502.
+    // on a `TRACE`, and a `TRACE` arrives here intact. Measured, because the
+    // obvious neighbours turn out not to arrive at all — Node's HTTP parser
+    // answers `TRACK` with a 400 of its own before any middleware runs, and
+    // treats `CONNECT` as a tunnel, so it never becomes a request.
+    //
+    // The answer comes from the handler's own module so that it carries the
+    // CORS headers and the body every other answer on this route carries — a
+    // bare status code reaches the page as a network error, not as a 502.
     if (res.headersSent) {
       res.end();
       return;
