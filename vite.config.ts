@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
-import handleJevRequest from './api/jev.ts';
+import handleJevRequest, { relayUnavailable } from './api/jev';
 
 /**
  * `/api/jev` during `npm run dev`.
@@ -18,6 +18,14 @@ import handleJevRequest from './api/jev.ts';
  * contract and production exercises the first, which is precisely the
  * arrangement that lets one of them be wrong unnoticed. So this runs the
  * handler that ships.
+ *
+ * Running it is not enough on its own: Vite answers `OPTIONS` with its own
+ * `cors` middleware before this one is consulted, so the preflight — the one
+ * clause of the contract this route exists to provide, since the live API
+ * answers `OPTIONS` with a 400 and no `allow-origin` — was the single clause
+ * development never exercised. `corsHeaders()` could have been wrong and
+ * `npm run dev` would have gone on working. `server.cors` is off below for
+ * that reason, and the handler answers every method on this route.
  */
 function jevProxy(): Plugin {
   return {
@@ -54,19 +62,41 @@ async function relay(req: IncomingMessage, res: ServerResponse): Promise<void> {
       }),
     );
 
-    res.statusCode = response.status;
-    response.headers.forEach((value, name) => res.setHeader(name, value));
-    res.end(Buffer.from(await response.arrayBuffer()));
+    await write(res, response);
   } catch {
     // Nothing is logged, here least of all: the request that failed is the one
     // holding the key. The binding is omitted so there is nothing to log.
-    res.statusCode = 502;
-    res.end();
+    //
+    // Reachable without anything going wrong upstream: `new Request()` throws
+    // for `TRACE`, `CONNECT` and `TRACK`, so those land here. The answer comes
+    // from the handler's own module so that it carries the CORS headers and
+    // the body every other answer on this route carries — a bare status code
+    // reaches the page as a network error instead of as a 502.
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
+    await write(res, relayUnavailable());
   }
+}
+
+/** One `Response` out through Node's response object. */
+async function write(res: ServerResponse, response: Response): Promise<void> {
+  res.statusCode = response.status;
+  response.headers.forEach((value, name) => res.setHeader(name, value));
+  res.end(Buffer.from(await response.arrayBuffer()));
 }
 
 export default defineConfig({
   plugins: [jevProxy()],
+  server: {
+    // Off so that `/api/jev` gets its preflight from the handler that ships
+    // rather than from Vite's `cors` middleware, which answers `OPTIONS` with
+    // `GET,HEAD,PUT,PATCH,POST,DELETE` and the request's own origin — neither
+    // of which is what this contract promises. The page is served from this
+    // same server, so nothing here needs CORS of Vite's own.
+    cors: false,
+  },
   build: {
     target: 'es2022',
   },
