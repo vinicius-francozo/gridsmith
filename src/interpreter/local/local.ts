@@ -28,7 +28,7 @@ import type { PipelineLoader, ModelProgress, ProgressReport, ZeroShotPipeline } 
 /** How to build one. */
 export type LocalInterpreterOptions = {
   /**
-   * Told where the load has got to, and which backend it ended on.
+   * Told where the load has got to.
    *
    * Optional because the contract is `Interpreter`, and a caller that does not
    * want a status line should not have to invent one. A page that omits it on a

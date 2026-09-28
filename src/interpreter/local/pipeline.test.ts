@@ -3,49 +3,44 @@ import { describe, expect, it } from 'vitest';
 import { ClassificationFailedError, ModelUnavailableError } from './errors';
 import {
   createTransformersLoader,
-  detectBackend,
+  MODEL_DEVICE,
   MODEL_DTYPE,
   MODEL_ID,
   readRawProgress,
   readZeroShotOutput,
 } from './pipeline';
-import type { GpuProbe, ModelProgress } from './pipeline';
+import type { ModelProgress } from './pipeline';
 
 /**
  * Nothing here downloads a model or reaches `@huggingface/transformers`. The
  * library is handed in through `importModule`, which exists for exactly this.
  */
 
-describe('choosing where the model runs', () => {
-  it('falls back to WebAssembly when the browser has no WebGPU at all', async () => {
-    await expect(detectBackend(undefined)).resolves.toBe('wasm');
-  });
-
-  it('falls back to WebAssembly when WebGPU hands back no adapter', async () => {
-    // A browser that exposes `navigator.gpu` on a machine whose GPU is
-    // blocklisted. `'gpu' in navigator` would have said yes here.
-    const gpu: GpuProbe = { requestAdapter: () => Promise.resolve(null) };
-
-    await expect(detectBackend(gpu)).resolves.toBe('wasm');
-  });
-
-  it('falls back to WebAssembly when asking for an adapter throws', async () => {
-    const gpu: GpuProbe = { requestAdapter: () => Promise.reject(new Error('no device')) };
-
-    await expect(detectBackend(gpu)).resolves.toBe('wasm');
-  });
-
-  it('uses WebGPU when an adapter comes back', async () => {
-    const gpu: GpuProbe = { requestAdapter: () => Promise.resolve({ name: 'adapter' }) };
-
-    await expect(detectBackend(gpu)).resolves.toBe('webgpu');
+describe('where the model runs', () => {
+  it('is WebAssembly, and is not asked of the browser', () => {
+    // Written out as a literal rather than read back from the constant, which
+    // would agree with `'webgpu'` just as happily. The four tests that used to
+    // stand here drove a `detectBackend` that probed `navigator.gpu`; the probe
+    // is gone because WebGPU's `DequantizeLinear` bug returns wrong numbers on
+    // q8 weights rather than throwing, and a fallback cannot catch that.
+    expect(MODEL_DEVICE).toBe('wasm');
   });
 });
 
 describe('reading the library progress events', () => {
   it('ignores anything that is not a download step', () => {
     expect(readRawProgress({ status: 'initiate', file: 'model.onnx' })).toBeUndefined();
-    expect(readRawProgress({ status: 'done', file: 'model.onnx' })).toBeUndefined();
+    expect(readRawProgress({ status: 'download', file: 'model.onnx' })).toBeUndefined();
+  });
+
+  it('reads the library\'s "done" as the graph compile starting', () => {
+    // `done` is dispatched by `getModelFile` once a file's last byte is in,
+    // cache hit or fetch alike, and it is the only such signal this front gets.
+    // It used to be thrown away, which is why `preparing` was reported from the
+    // wrong side of the await that holds the compile.
+    expect(readRawProgress({ status: 'done', file: 'model_quantized.onnx' })).toEqual({
+      kind: 'preparing',
+    });
   });
 
   it('ignores an event that is not an object at all', () => {
@@ -165,9 +160,6 @@ function fakeLibrary(answer: unknown = { labels: ['a'], scores: [1] }): {
   };
 }
 
-const NO_GPU = (): GpuProbe | undefined => undefined;
-const WITH_GPU = (): GpuProbe => ({ requestAdapter: () => Promise.resolve({}) });
-
 describe('the model this front asks for', () => {
   it('is the one the bench picked, by name', () => {
     // Written out rather than read back from the constant, which would agree
@@ -192,14 +184,14 @@ describe('loading a real pipeline', () => {
     // start arriving because a page was opened.
     const library = fakeLibrary();
 
-    createTransformersLoader({ importModule: library.importModule, gpu: NO_GPU });
+    createTransformersLoader({ importModule: library.importModule });
 
     expect(library.built).toEqual([]);
   });
 
   it('asks the library for the model this front is written against', async () => {
     const library = fakeLibrary();
-    const load = createTransformersLoader({ importModule: library.importModule, gpu: WITH_GPU });
+    const load = createTransformersLoader({ importModule: library.importModule });
 
     await load(() => undefined);
 
@@ -207,33 +199,39 @@ describe('loading a real pipeline', () => {
       {
         task: 'zero-shot-classification',
         model: MODEL_ID,
-        options: expect.objectContaining({ device: 'webgpu', dtype: MODEL_DTYPE }) as unknown,
+        options: expect.objectContaining({ device: 'wasm', dtype: MODEL_DTYPE }) as unknown,
       },
     ]);
   });
 
-  it('builds on WebAssembly when there is no WebGPU', async () => {
+  it('asks for WebAssembly however capable the browser is', async () => {
+    // Nothing is probed and nothing is passed in: there is no arm of this
+    // function that can reach `'webgpu'` any more, and that is the fix. The
+    // browser's own WebGPU support is irrelevant to what is asked for.
     const library = fakeLibrary();
-    const load = createTransformersLoader({ importModule: library.importModule, gpu: NO_GPU });
+    const load = createTransformersLoader({ importModule: library.importModule });
 
     await load(() => undefined);
 
     expect(library.built[0].options.device).toBe('wasm');
   });
 
-  it('says where it got to, and which backend it ended on', async () => {
+  it('says where it got to', async () => {
+    // No `preparing` here, and that is not an omission: this library stand-in
+    // emits no `done`, and `preparing` is now raised from `done`. The step is
+    // covered by the two tests below, which emit one.
     const library = fakeLibrary();
-    const load = createTransformersLoader({ importModule: library.importModule, gpu: NO_GPU });
+    const load = createTransformersLoader({ importModule: library.importModule });
     const seen: ModelProgress[] = [];
 
     await load((progress) => seen.push(progress));
 
-    expect(seen).toEqual([{ kind: 'starting' }, { kind: 'preparing' }, { kind: 'ready', backend: 'wasm' }]);
+    expect(seen).toEqual([{ kind: 'starting' }, { kind: 'ready' }]);
   });
 
   it('passes the library download events on as progress', async () => {
     const library = fakeLibrary();
-    const load = createTransformersLoader({ importModule: library.importModule, gpu: NO_GPU });
+    const load = createTransformersLoader({ importModule: library.importModule });
     const seen: ModelProgress[] = [];
 
     await load((progress) => seen.push(progress));
@@ -246,9 +244,78 @@ describe('loading a real pipeline', () => {
     ]);
   });
 
+  it('goes back to downloading when another file follows the one that finished', async () => {
+    // Every file gets its own `done`, so `preparing` is raised more than once
+    // and most of them are wrong the moment they are raised. What makes that
+    // correct is that the next file's `progress` overwrites it: the only `done`
+    // left standing is the last one, which is the one the compile follows. No
+    // list of filenames is needed to know which that is.
+    const library = fakeLibrary();
+    const load = createTransformersLoader({ importModule: library.importModule });
+    const seen: ModelProgress[] = [];
+
+    await load((progress) => seen.push(progress));
+    const report = library.built[0].options.progress_callback as (raw: unknown) => void;
+    report({ status: 'progress', file: 'tokenizer.json', loaded: 1, total: 2 });
+    report({ status: 'done', file: 'tokenizer.json' });
+    report({ status: 'progress', file: 'model_quantized.onnx', loaded: 2, total: 4 });
+    report({ status: 'done', file: 'model_quantized.onnx' });
+
+    expect(seen.map((progress) => progress.kind)).toEqual([
+      'starting',
+      'ready',
+      'downloading',
+      'preparing',
+      'downloading',
+      'preparing',
+    ]);
+  });
+
+  it('reports the compile from inside the await that holds it, not after it', async () => {
+    // The defect this replaced: `preparing` and `ready` were two synchronous
+    // statements in a row, with no suspension between them, and a browser
+    // paints between tasks rather than between statements. Measured, the state
+    // was current for 0.04 ms and no macrotask turn observed it — the page sat
+    // on "Baixando o modelo local… 100%" for the whole compile.
+    //
+    // So asserting that `preparing` is reported would not be enough: it was
+    // reported before, too. What has to hold is that a turn of the event loop
+    // runs while it is still the current state. `whileCompiling` is taken after
+    // a real macrotask boundary inside the library's own `pipeline()` call,
+    // which is where the graph compile lives.
+    const seen: ModelProgress[] = [];
+    const whileCompiling: ModelProgress[] = [];
+
+    const load = createTransformersLoader({
+      importModule: () =>
+        Promise.resolve({
+          pipeline: async (_task: string, _model: string, options: Record<string, unknown>) => {
+            const notify = options.progress_callback as (raw: unknown) => void;
+            notify({ status: 'progress', file: 'model_quantized.onnx', loaded: 4, total: 4 });
+            notify({ status: 'done', file: 'model_quantized.onnx' });
+            // The compile, standing in for seconds of WebAssembly. One
+            // macrotask turn is the browser's chance to paint.
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            whileCompiling.push(...seen);
+            return () => Promise.resolve({ labels: ['a'], scores: [1] });
+          },
+        }),
+    });
+
+    await load((progress) => seen.push(progress));
+
+    expect(whileCompiling.at(-1)).toEqual({ kind: 'preparing' });
+    expect(seen.map((progress) => progress.kind)).toEqual([
+      'starting',
+      'downloading',
+      'preparing',
+      'ready',
+    ]);
+  });
+
   it('translates the request into the names the library uses', async () => {
     const library = fakeLibrary();
-    const load = createTransformersLoader({ importModule: library.importModule, gpu: NO_GPU });
+    const load = createTransformersLoader({ importModule: library.importModule });
 
     const pipeline = await load(() => undefined);
     await pipeline('um salão', ['a', 'b'], { hypothesisTemplate: 'É {}.', multiLabel: true });
@@ -264,7 +331,7 @@ describe('loading a real pipeline', () => {
 
   it('checks what the library answered before handing it on', async () => {
     const library = fakeLibrary({ labels: ['a', 'b'], scores: [1] });
-    const load = createTransformersLoader({ importModule: library.importModule, gpu: NO_GPU });
+    const load = createTransformersLoader({ importModule: library.importModule });
 
     const pipeline = await load(() => undefined);
 
@@ -276,7 +343,6 @@ describe('loading a real pipeline', () => {
   it('reports a library that will not load as the model being unavailable', async () => {
     const load = createTransformersLoader({
       importModule: () => Promise.reject(new Error('failed to fetch the module')),
-      gpu: NO_GPU,
     });
 
     await expect(load(() => undefined)).rejects.toThrow(ModelUnavailableError);
@@ -288,7 +354,6 @@ describe('loading a real pipeline', () => {
         Promise.resolve({
           pipeline: () => Promise.reject(new Error('Unable to load model from hub')),
         }),
-      gpu: NO_GPU,
     });
 
     await expect(load(() => undefined)).rejects.toThrow(/Unable to load model from hub/);
@@ -297,7 +362,6 @@ describe('loading a real pipeline', () => {
   it('never reports a backend for a load that failed', async () => {
     const load = createTransformersLoader({
       importModule: () => Promise.reject(new Error('offline')),
-      gpu: NO_GPU,
     });
     const seen: ModelProgress[] = [];
 

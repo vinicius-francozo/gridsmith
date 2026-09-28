@@ -225,7 +225,7 @@ describe('saying where the load has got to', () => {
       loadPipeline: (report) => {
         report({ kind: 'starting' });
         report({ kind: 'downloading', file: 'model_quantized.onnx', ratio: 0.5 });
-        report({ kind: 'ready', backend: 'wasm' });
+        report({ kind: 'ready' });
         return Promise.resolve(answering);
       },
     });
@@ -235,7 +235,7 @@ describe('saying where the load has got to', () => {
     expect(seen).toEqual([
       { kind: 'starting' },
       { kind: 'downloading', file: 'model_quantized.onnx', ratio: 0.5 },
-      { kind: 'ready', backend: 'wasm' },
+      { kind: 'ready' },
     ]);
   });
 

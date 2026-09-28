@@ -43,9 +43,9 @@ import { ClassificationFailedError, ModelUnavailableError } from './errors';
  * 170 ms; `templates.ts` quotes the four-label figure out of this same run, so
  * the two files cannot drift into contradicting each other.
  *
- * The browser is a different runtime — WebGPU or WebAssembly, one tab, whatever
- * machine the person has — so this is the shape of the cost and not a promise.
- * Nothing in this front has been timed in a browser.
+ * The browser is a different runtime — WebAssembly, one tab, whatever machine
+ * the person has — so this is the shape of the cost and not a promise. Nothing
+ * in this front has been timed in a browser.
  *
  * That figure is the whole download, measured off disk after a real one:
  * 302,821,014 B, of which `model_quantized.onnx` is 268,409,234 B and
@@ -79,8 +79,50 @@ export const MODEL_ID = 'Horizon-Labs/multilingual-zeroshot-small';
 /** The quantised build to fetch. The float build is 2.1 times the weights. */
 export const MODEL_DTYPE = 'q8';
 
-/** Where the model actually runs. */
-export type Backend = 'webgpu' | 'wasm';
+/**
+ * Where the model runs. Fixed, and not detected.
+ *
+ * This front used to probe `navigator.gpu` and ask for `'webgpu'` whenever an
+ * adapter came back. It does not any more, and the reason is not that WebGPU is
+ * awkward to start — it is that it can answer **wrongly**.
+ *
+ * `MODEL_DTYPE` is `q8`, so every weight in this model goes through
+ * `DequantizeLinear`. The open bug in that operator on onnxruntime-web's JSEP
+ * WebGPU backend is not specific to one architecture: it is in the operator
+ * that *every* per-tensor uint8/int8 model runs, which is exactly this one.
+ *
+ * - https://github.com/microsoft/onnxruntime/issues/32578 — open.
+ *   `DequantizeLinear` under JSEP, with JSEP itself declared to be in
+ *   maintenance mode in favour of a new WebGPU EP.
+ * - https://github.com/huggingface/transformers.js/issues/1512 — open. WASM and
+ *   WebGPU returning *different results* for int8 models.
+ * - https://github.com/huggingface/transformers.js/issues/1317 —
+ *   `[MatMul] ... shared dimension does not match`.
+ *
+ * Retrying — try WebGPU, fall back to WebAssembly when it throws — was weighed
+ * and refused, and the reasoning belongs here because the next reader will
+ * think of it again. Measured, the failure it would repair is real: a loader
+ * whose `pipeline()` throws was called three times in a row and chose
+ * `["webgpu","webgpu","webgpu"]`, because `local.ts` clears its cached load on
+ * failure and a redetection lands on the same answer — the person fetches
+ * 310 MB and gets "A interpretação da descrição falhou." for ever in that
+ * browser. But retry only repairs the case where WebGPU fails *loudly*. It does
+ * nothing for the case where it returns a tensor of the right shape holding the
+ * wrong numbers, which is what the three issues above describe and which
+ * nothing in this front can tell apart from a right answer. A wrong answer
+ * wearing the face of a right one is the failure mode `unresolved` spent four
+ * rounds of review removing from this project. Speed does not buy it back.
+ *
+ * Revisit this when the new WebGPU EP reaches transformers.js: that is the
+ * event that makes the question worth measuring again, and it is the only one.
+ *
+ * And the measurement that does **not** exist should be said out loud, because
+ * its absence is half of the decision: nothing in this front has ever been
+ * timed in a browser. The ~510 ms quoted against `MODEL_ID` is Node with
+ * `onnxruntime-node` on twelve CPU cores, not WebAssembly in a tab, and it is
+ * no evidence about what is being given up here.
+ */
+export const MODEL_DEVICE = 'wasm';
 
 /**
  * What the loader is doing, for the status line to say.
@@ -88,12 +130,19 @@ export type Backend = 'webgpu' | 'wasm';
  * `downloading` carries a ratio rather than a byte count because the page shows
  * a percentage, and `undefined` when the server sent no length — which happens,
  * and is better said as "baixando" than as a percentage invented from nothing.
+ *
+ * `preparing` is the graph compile — see `readRawProgress`, which is where it
+ * is raised from and where the reason it is raised from there is written down.
+ *
+ * `ready` carries nothing. It used to carry the backend, so that the page could
+ * say which of the two the person had got; there is only `MODEL_DEVICE` now, so
+ * a field reporting it would be a constant travelling through three files.
  */
 export type ModelProgress =
   | { readonly kind: 'starting' }
   | { readonly kind: 'downloading'; readonly file: string; readonly ratio: number | undefined }
   | { readonly kind: 'preparing' }
-  | { readonly kind: 'ready'; readonly backend: Backend };
+  | { readonly kind: 'ready' };
 
 /** Told each time the load moves on. */
 export type ProgressReport = (progress: ModelProgress) => void;
@@ -134,50 +183,6 @@ export type ZeroShotPipeline = (
 /** How a pipeline is obtained. Injected, so the tests never download one. */
 export type PipelineLoader = (report: ProgressReport) => Promise<ZeroShotPipeline>;
 
-/** The part of `navigator.gpu` that answers whether WebGPU is usable. */
-export type GpuProbe = { requestAdapter: () => Promise<unknown> };
-
-/**
- * `navigator.gpu`, when there is one.
- *
- * Read through a cast because `lib.dom` in this TypeScript version does not
- * declare `gpu`, and declaring it globally from here would put a WebGPU type on
- * `navigator` for the whole project.
- */
-export function browserGpu(): GpuProbe | undefined {
-  if (typeof navigator === 'undefined') {
-    return undefined;
-  }
-  const gpu = (navigator as unknown as { gpu?: GpuProbe }).gpu;
-  return typeof gpu?.requestAdapter === 'function' ? gpu : undefined;
-}
-
-/**
- * Where the model will run, given what the browser offers.
- *
- * The library falls back to WebAssembly on its own when WebGPU is missing, so
- * this is not what makes the fallback work — it is what makes the fallback
- * *honest*. The page tells the person which one they got, because the
- * difference between the two is seconds against tens of seconds per
- * classification, and a page that stays silent about that reads as a page that
- * has hung.
- *
- * Asking for an adapter is the real test, not `'gpu' in navigator`: a browser
- * can expose the object and still hand back no adapter on a machine whose GPU
- * is blocklisted, and a `requestAdapter` that throws is the same answer as one
- * that returns null.
- */
-export async function detectBackend(gpu: GpuProbe | undefined): Promise<Backend> {
-  if (gpu === undefined) {
-    return 'wasm';
-  }
-  try {
-    return (await gpu.requestAdapter()) === null ? 'wasm' : 'webgpu';
-  } catch {
-    return 'wasm';
-  }
-}
-
 /** What the library's `progress_callback` is handed, as much of it as is read. */
 type RawProgress = {
   status?: unknown;
@@ -196,12 +201,41 @@ type RawProgress = {
  * from the bytes avoids a second rounding. When the response carried no length
  * there is no ratio to give, and saying so is better than showing a bar that
  * fills by guesswork.
+ *
+ * ## Why `done` becomes `preparing` here, of all places
+ *
+ * The library emits `initiate`, `download`, `progress` and `done` per file —
+ * `getModelFile` in `@huggingface/transformers/src/utils/hub.js`, which
+ * dispatches `done` unconditionally at the end, on a cache hit as well as after
+ * a real fetch. `done` is therefore the only signal this front gets that a
+ * file's last byte is in, and after the *last* file's `done` comes the thing
+ * the status line exists to explain: `pipeline()` builds the inference session
+ * and the runtime compiles the graph, which on the WebAssembly path is seconds
+ * of a frozen page.
+ *
+ * That state was reported from the loader instead, one statement before
+ * `ready`, with no `await` between the two. No browser paints between two
+ * synchronous statements of the same task, and it does not here either:
+ * measured, `preparing` was the current state for **0.04 ms** and not one
+ * macrotask turn observed it. The page sat on "Baixando o modelo local… 100%"
+ * for the whole compile, and the single sentence written to explain the pause
+ * never reached anybody. Moving that same report to *before* the await would
+ * have been the opposite lie — "carregando na memória" across the entire
+ * download.
+ *
+ * Raising it on *every* `done` is what makes it right without having to know
+ * which file is last: a `done` followed by more downloading is overwritten by
+ * the next `progress` event, and the one that is not followed by anything is
+ * the one left on screen, across the compile, where it belongs.
  */
 export function readRawProgress(raw: unknown): ModelProgress | undefined {
   if (typeof raw !== 'object' || raw === null) {
     return undefined;
   }
   const event = raw as RawProgress;
+  if (event.status === 'done') {
+    return { kind: 'preparing' };
+  }
   if (event.status !== 'progress') {
     return undefined;
   }
@@ -277,7 +311,7 @@ type ZeroShotSession = (
  * What the library exposes, as much of it as is used.
  *
  * Every type here is as narrow as the one call site needs — the literal task
- * name, the two devices this front detects, the one dtype it asks for. That
+ * name, the one device this front asks for, the one dtype it asks for. That
  * narrowness is what makes the real module assignable to it: a wider `task:
  * string` or `dtype: string` would not be, because the library's own signature
  * accepts neither.
@@ -287,7 +321,7 @@ type TransformersModule = {
     task: 'zero-shot-classification',
     model: string,
     options: {
-      device: Backend;
+      device: typeof MODEL_DEVICE;
       dtype: typeof MODEL_DTYPE;
       progress_callback: (raw: unknown) => void;
     },
@@ -321,8 +355,6 @@ async function importTransformers(): Promise<TransformersModule> {
 export type TransformersLoaderOptions = {
   /** Where the library comes from. */
   readonly importModule?: () => Promise<TransformersModule>;
-  /** What WebGPU looks like. */
-  readonly gpu?: () => GpuProbe | undefined;
 };
 
 /**
@@ -338,17 +370,15 @@ export type TransformersLoaderOptions = {
  */
 export function createTransformersLoader(options: TransformersLoaderOptions = {}): PipelineLoader {
   const importModule = options.importModule ?? importTransformers;
-  const gpu = options.gpu ?? browserGpu;
 
   return async (report: ProgressReport): Promise<ZeroShotPipeline> => {
     report({ kind: 'starting' });
-    const backend = await detectBackend(gpu());
 
     let classify;
     try {
       const transformers = await importModule();
       classify = await transformers.pipeline('zero-shot-classification', MODEL_ID, {
-        device: backend,
+        device: MODEL_DEVICE,
         dtype: MODEL_DTYPE,
         progress_callback: (raw: unknown) => {
           const progress = readRawProgress(raw);
@@ -361,10 +391,12 @@ export function createTransformersLoader(options: TransformersLoaderOptions = {}
       throw new ModelUnavailableError(messageOf(error), { cause: error });
     }
 
-    // Between the last byte and the first answer the runtime is still compiling
-    // the graph, which on the WebAssembly path is seconds of a frozen page.
-    report({ kind: 'preparing' });
-    report({ kind: 'ready', backend });
+    // `preparing` is deliberately not reported here. The compile it describes
+    // happens inside the await above, so a report on this side of it is a state
+    // no browser turn can observe — measured at 0.04 ms of visibility before it
+    // was moved. It is raised from the library's `done` event instead; see
+    // `readRawProgress`.
+    report({ kind: 'ready' });
 
     return async (text, labels, zeroShotOptions) => {
       const raw = await classify(text, [...labels], {
