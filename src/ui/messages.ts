@@ -34,6 +34,7 @@ import {
   FEATURE_NOT_IN_PLACE,
   FEATURE_NOT_IN_VOCABULARY,
   FEATURE_OVER_BUDGET,
+  PLACE_NOT_IN_VOCABULARY,
   UNSUPPORTED_REQUEST,
 } from '../interpreter/codes';
 import type { Code } from '../interpreter/codes';
@@ -94,6 +95,23 @@ function featureWord(detail: string): string {
 }
 
 /**
+ * The kind of place `detail` names, in the wording the rest of the page uses.
+ *
+ * Reads `PLACE_NAMES` rather than spelling the three names again, so the notice
+ * above the map and the line beneath it call the place the same thing. The
+ * detail of `PLACE_NOT_IN_VOCABULARY` is the `PlaceType` the generator settled
+ * on, written by this project rather than by a model — but it still arrives as
+ * a string, so an unrecognised one is shown as it came instead of dropped, the
+ * same way `featureWord` does.
+ *
+ * `Object.hasOwn` for the reason `isKnownCode` states: a plain lookup would
+ * answer a prototype member for `constructor` or `toString`.
+ */
+function placeWord(detail: string): string {
+  return Object.hasOwn(PLACE_NAMES, detail) ? PLACE_NAMES[detail as PlaceType] : detail;
+}
+
+/**
  * Every code this interface can be handed, and how it reads.
  *
  * The `Record<Code, CodePhrase>` is exact, like `FEATURE_WORDS`, `SCENE_ISSUES`
@@ -133,6 +151,16 @@ export const CODE_PHRASES: Readonly<Record<Code, CodePhrase>> = {
   [UNSUPPORTED_REQUEST]: {
     bare: 'A descrição pediu algo que este mapa não tem como representar.',
     detailed: (detail) => `Pedido que este mapa não tem como representar: ${quoted(detail)}.`,
+  },
+  // Said as a map that was drawn, not as a failure: the person gets a place,
+  // and what they need to know is that it is the nearest one rather than the
+  // one they described. Same posture as the codes above, which leave a feature
+  // out and say so instead of refusing to draw.
+  [PLACE_NOT_IN_VOCABULARY]: {
+    bare: 'A descrição não parece ser nenhum dos lugares que o gerador conhece; o mapa é o mais próximo deles.',
+    detailed: (detail) =>
+      'A descrição não parece ser nenhum dos lugares que o gerador conhece. ' +
+      `Desenhei o mais próximo: ${quoted(placeWord(detail))}.`,
   },
 };
 

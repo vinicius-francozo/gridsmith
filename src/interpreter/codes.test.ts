@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import type { Constraints, PlaceType } from '../core/types';
 
-import { CONFLICT_CODES, codeOf, entry, normalizeUnresolved, UNRESOLVED_CODES, UNSUPPORTED_REQUEST } from './codes';
+import {
+  CONFLICT_CODES,
+  codeOf,
+  entry,
+  normalizeUnresolved,
+  PLACE_NOT_IN_VOCABULARY,
+  UNRESOLVED_CODES,
+  UNSUPPORTED_REQUEST,
+} from './codes';
+import { readAnswers } from './jev/read';
 import { resolve } from './resolve';
 
 const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
@@ -41,6 +50,55 @@ function everyConflict(): string[] {
   return conflicts;
 }
 
+/**
+ * A System One response for a place outside the vocabulary, as JSON text.
+ *
+ * Typed out by hand, not built from the Jev reader's own constants — the rule
+ * `jev/read.test.ts` states and the reason it states it. `out_of_vocabulary`
+ * here is 0.98, well over the threshold, and the place Jev fell back to is the
+ * hall.
+ */
+const OUT_OF_VOCABULARY_ANSWER = `{
+  "model": "jev-1.13.0",
+  "answers": {
+    "place_type": {
+      "type": "choice",
+      "choice": "tavern_hall",
+      "probabilities": { "tavern_hall": 0.71, "tavern_room": 0.2, "tavern_storeroom": 0.09 },
+      "confidence": 0.71
+    },
+    "out_of_vocabulary": { "type": "noul", "noul": 0.98 },
+    "light": { "type": "score", "score": 1.8, "legend": {}, "probabilities": {}, "confidence": 0.8 },
+    "condition": { "type": "score", "score": 1.2, "legend": {}, "probabilities": {}, "confidence": 0.7 },
+    "size": { "type": "score", "score": 1, "legend": {}, "probabilities": {}, "confidence": 0.3 },
+    "feature_bar": { "type": "noul", "noul": 0.03 },
+    "feature_hearth": { "type": "noul", "noul": 0.96 },
+    "feature_stairs": { "type": "noul", "noul": 0.05 },
+    "feature_pillars": { "type": "noul", "noul": 0.04 },
+    "feature_alcove": { "type": "noul", "noul": 0.02 },
+    "feature_shelving": { "type": "noul", "noul": 0.08 },
+    "feature_bunks": { "type": "noul", "noul": 0.01 }
+  },
+  "usage": { "input_tokens": 311, "output_tokens": 70 }
+}`;
+
+/**
+ * Every entry the interpreter can put in `unresolved`, from both producers.
+ *
+ * Two engines write this field now. `normalizeUnresolved` is the Claude path,
+ * where the model writes prose and it is coded here; `readAnswers` is the Jev
+ * path, which is asked whether the place is one of the three at all. Running
+ * both is what makes the claim below mean something — a code declared with no
+ * producer behind it shows up as an entry nothing emits, and a producer with no
+ * declaration shows up as an entry nothing declared.
+ */
+function everyUnresolved(): string[] {
+  return [
+    ...normalizeUnresolved(['a cellar below', 'unsupported_request:a trapdoor', 'chuva lá fora']),
+    ...readAnswers(JSON.parse(OUT_OF_VOCABULARY_ANSWER)).unresolved,
+  ];
+}
+
 describe('the list of codes is the whole list', () => {
   it('declares every code resolve can emit, and nothing resolve cannot', () => {
     // Both directions on purpose. Left out, a new code reaches the interface
@@ -52,9 +110,7 @@ describe('the list of codes is the whole list', () => {
   });
 
   it('declares every code the interpreter can put in unresolved', () => {
-    const emitted = new Set(
-      normalizeUnresolved(['a cellar below', 'unsupported_request:a trapdoor', 'chuva lá fora']).map(codeOf),
-    );
+    const emitted = new Set(everyUnresolved().map(codeOf));
 
     expect([...emitted].sort()).toEqual([...UNRESOLVED_CODES].sort());
   });
@@ -87,7 +143,7 @@ describe('what an entry may look like', () => {
     for (const conflict of everyConflict()) {
       expect(codeOf(conflict)).toMatch(/^[a-z]+(_[a-z]+)*$/);
     }
-    for (const unresolved of normalizeUnresolved(['a cellar below', 'um alçapão'])) {
+    for (const unresolved of everyUnresolved()) {
       expect(codeOf(unresolved)).toMatch(/^[a-z]+(_[a-z]+)*$/);
     }
   });
@@ -143,5 +199,28 @@ describe('normalising what the model wrote in unresolved', () => {
 
   it('keeps an empty list empty, which is the common answer', () => {
     expect(normalizeUnresolved([])).toEqual([]);
+  });
+});
+
+describe('the place the vocabulary has no word for', () => {
+  it('is an entry of the form the interface reads, with the place built as the detail', () => {
+    // `describeEntry` splits on the first colon: the code is what it looks a
+    // phrase up by, and the detail is what the phrase puts in front of the
+    // person. The detail here is the `PlaceType` the map was built as, so the
+    // sentence can say what they got instead of only what they did not.
+    const entries = readAnswers(JSON.parse(OUT_OF_VOCABULARY_ANSWER)).unresolved;
+
+    expect(entries).toEqual([entry(PLACE_NOT_IN_VOCABULARY, 'tavern_hall')]);
+    expect(codeOf(entries[0])).toBe(PLACE_NOT_IN_VOCABULARY);
+    expect(entries[0].slice(codeOf(entries[0]).length + 1)).toBe('tavern_hall');
+  });
+
+  it('survives normalizing, because the code is one the list declares', () => {
+    // The Claude path runs every entry through `normalizeUnresolved`. A code
+    // missing from `UNRESOLVED_CODES` would be rewrapped as an
+    // `unsupported_request` carrying the whole entry as prose.
+    const entries = readAnswers(JSON.parse(OUT_OF_VOCABULARY_ANSWER)).unresolved;
+
+    expect(normalizeUnresolved(entries)).toEqual(entries);
   });
 });

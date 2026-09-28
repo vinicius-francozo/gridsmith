@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Params } from '../core/types';
+import type { Params, PlaceType } from '../core/types';
 import { SceneValidationError } from '../generator/validate';
 import {
   CLUTTER_NOT_A_NUMBER,
@@ -10,6 +10,7 @@ import {
   FEATURE_NOT_IN_PLACE,
   FEATURE_NOT_IN_VOCABULARY,
   FEATURE_OVER_BUDGET,
+  PLACE_NOT_IN_VOCABULARY,
   UNRESOLVED_CODES,
   UNSUPPORTED_REQUEST,
 } from '../interpreter/codes';
@@ -36,6 +37,9 @@ import {
 
 /** Every code any layer of the interpreter can put in front of a person. */
 const EVERY_CODE: readonly Code[] = [...CONFLICT_CODES, ...UNRESOLVED_CODES];
+
+/** The three kinds of place the generator can build. */
+const PLACE_TYPES: readonly PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
 
 describe('the table covers the codes, and only the codes', () => {
   // This is the test the whole design of `codes.ts` rests on. The interpreter
@@ -134,6 +138,67 @@ describe('an entry becomes a sentence', () => {
     // normalised version of it would not be recognised as their own request.
     expect(describeEntry(entry(FEATURE_NOT_IN_VOCABULARY, 'Fonte de Mármore'))).toContain(
       'Fonte de Mármore',
+    );
+  });
+
+  it('says the right Portuguese word for every one of the three kinds of place', () => {
+    // Pinned one at a time for the same reason the seven features above are.
+    // `Record<PlaceType, string>` refuses a missing name and "is not the
+    // identifier" refuses an untranslated one, but between them
+    // `tavern_room: 'Depósito de taverna'` passes both: every kind named,
+    // nothing in English, and the person told the generator built a storeroom
+    // when it built a bedroom.
+    const names: Readonly<Record<PlaceType, string>> = {
+      tavern_hall: 'Salão de taverna',
+      tavern_room: 'Quarto de taverna',
+      tavern_storeroom: 'Depósito de taverna',
+    };
+
+    for (const placeType of PLACE_TYPES) {
+      const sentence = describeEntry(entry(PLACE_NOT_IN_VOCABULARY, placeType));
+
+      expect(sentence).toContain(`“${names[placeType]}”`);
+      expect(sentence).not.toContain(placeType);
+    }
+  });
+
+  it('shows a place detail the table has no word for exactly as it arrived', () => {
+    // The same rule `feature_not_in_vocabulary` follows: the last layer shows a
+    // detail it does not recognise rather than dropping it.
+    expect(describeEntry(entry(PLACE_NOT_IN_VOCABULARY, 'tavern_cellar'))).toContain(
+      '“tavern_cellar”',
+    );
+  });
+
+  it('answers a place detail that names a prototype member with the detail itself', () => {
+    // The `Object.hasOwn` guard in `placeWord`, and it is reachable from the
+    // outside rather than theoretical. `place_not_in_vocabulary` is in
+    // `UNRESOLVED_CODES`, so `normalizeUnresolved` keeps the entry instead of
+    // repacking it as `unsupported_request` and the detail travels verbatim —
+    // and `unresolved` is written by a language model, so
+    // `place_not_in_vocabulary:constructor` is an entry that can actually
+    // arrive. A plain lookup would answer the prototype member, and the line
+    // above the map would read `Desenhei o mais próximo: “function Object() {
+    // [native code] }”`.
+    for (const key of ['constructor', '__proto__', 'toString', 'valueOf', 'hasOwnProperty']) {
+      expect(describeEntry(entry(PLACE_NOT_IN_VOCABULARY, key))).toBe(
+        'A descrição não parece ser nenhum dos lugares que o gerador conhece. ' +
+          `Desenhei o mais próximo: “${key}”.`,
+      );
+    }
+  });
+
+  it('reads a place outside the vocabulary as a map that was drawn, not as a refusal', () => {
+    // Both halves of the entry, whole. The detailed one says which of the three
+    // the person is looking at; the bare one can arrive because `unresolved` is
+    // a model's text and `place_not_in_vocabulary:` with nothing after the
+    // colon normalises to the code alone.
+    expect(describeEntry(entry(PLACE_NOT_IN_VOCABULARY, 'tavern_hall'))).toBe(
+      'A descrição não parece ser nenhum dos lugares que o gerador conhece. ' +
+        'Desenhei o mais próximo: “Salão de taverna”.',
+    );
+    expect(describeEntry(PLACE_NOT_IN_VOCABULARY)).toBe(
+      'A descrição não parece ser nenhum dos lugares que o gerador conhece; o mapa é o mais próximo deles.',
     );
   });
 
@@ -319,9 +384,7 @@ describe('the line under a finished map', () => {
   });
 
   it('has a different name for each kind of place', () => {
-    const names = (['tavern_hall', 'tavern_room', 'tavern_storeroom'] as const).map((placeType) =>
-      describeResult({ ...params, placeType }),
-    );
+    const names = PLACE_TYPES.map((placeType) => describeResult({ ...params, placeType }));
 
     expect(new Set(names).size).toBe(3);
   });
