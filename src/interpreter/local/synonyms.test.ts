@@ -474,18 +474,49 @@ describe('the rules themselves', () => {
   });
 
   it('has the shape the header states in prose', () => {
-    // `synonyms.ts` says "one rule out of five", "the other four", "eight
+    // `synonyms.ts` says "one rule out of five", "the other four", "seven
     // variants between them" and "four nouns". Those counts have gone stale
-    // twice now, both times left behind by a commit that removed rules and did
-    // not recount the sentences around them — a file stating a false invariant
-    // about itself is the defect this front has paid for more than any other.
-    // Written out as literals so the prose and the data fail together.
+    // three times now, each time left behind by a commit that removed rules and
+    // did not recount the sentences around them — a file stating a false
+    // invariant about itself is the defect this front has paid for more than
+    // any other. Written out as literals so the prose and the data fail
+    // together.
+    //
+    // The third round is the one this comment has to answer for: the last
+    // expectation below already said seven while the comment above it said
+    // eight, and so did the paragraph in `synonyms.ts` it was written to pin.
+    // A guard whose own comment carries the drift is not a guard.
     const featureRules = SYNONYM_RULES.filter((rule) => rule.canonical !== STOREROOM_WORD);
 
     expect(SYNONYM_RULES).toHaveLength(5);
     expect(SYNONYM_RULES.flatMap((rule) => rule.variants)).toHaveLength(15);
     expect(featureRules).toHaveLength(4);
     expect(featureRules.flatMap((rule) => rule.variants)).toHaveLength(7);
+  });
+
+  it('names the three canonicals no rule rewrites towards any more', () => {
+    // `synonyms.ts` said "two whole rules died in the process" for four rounds
+    // while four other places said three. It is tempting to write this test up
+    // as the guard that was missing, and that would be false: the test below
+    // already asserted three uncovered feature labels, with the literal 3 in
+    // it, the whole time. A sentence in another file cannot fail an assertion
+    // here, and no assertion anywhere was going to catch prose contradicting
+    // prose — four different readers caught it by checking one against the
+    // other, which is still the only thing that works on that class of defect.
+    //
+    // What this adds over the test below is narrower and worth having anyway:
+    // it names the canonicals that are *dead* rather than the ones that are
+    // alive, so swapping which family is empty fails here; and it counts over
+    // all eight words a rule could exist for — the seven features plus the
+    // storeroom noun — rather than the seven, so emptying the `depósito` family
+    // is in scope too. Both sides come off the data; neither reads the prose.
+    const possible = [STOREROOM_WORD, ...Object.values(FEATURE_TEMPLATE.labels)];
+    const alive = new Set(SYNONYM_RULES.map((rule) => rule.canonical));
+    const dead = possible.filter((label) => !alive.has(label));
+
+    expect(possible).toHaveLength(8);
+    expect(dead).toHaveLength(3);
+    expect([...dead].sort()).toEqual(['alcova', 'lareira', 'pilares']);
   });
 
   it('holds the count of feature labels with no rule, which `templates.ts` states', () => {

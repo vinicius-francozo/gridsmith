@@ -205,9 +205,11 @@ export const SIZE_HINT_TEMPLATE: GatedTemplate<'small' | 'medium' | 'large'> = {
  * words a person might use *instead* of these seven are handled a layer
  * earlier, in `synonyms.ts`, where they cannot blur a label — but they are not
  * free there either, and that file has had to take nineteen variants back out,
- * two whole families with them. **Three of these seven labels have no synonym
- * rule at all** — `hearth`, `pillars` and `alcove` lost theirs to measurement —
- * and the other four, `stairs`, `shelving`, `bunks` and `bar`, still have one.
+ * three whole families with them. (This said "two" while the sentence directly
+ * after it named three, for four rounds of review.) **Three of these seven
+ * labels have no synonym rule at all** — `hearth`, `pillars` and `alcove` lost
+ * theirs to measurement — and the other four, `stairs`, `shelving`, `bunks`
+ * and `bar`, still have one.
  * A word only goes there if every ordinary reading of it means the label *and*
  * the swap has been measured for what else it moves; the rest are left for the
  * classifier to miss.

@@ -110,7 +110,7 @@
  * room families would balance it; none has been measured, so none is here.
  *
  * **That is a fact about one rule out of five, and not about the layer.** The
- * other four rewrite features, eight variants between them, and `placeType` is
+ * other four rewrite features, seven variants between them, and `placeType` is
  * asked about the same rewritten premise — so they move it too, in whatever
  * direction the new word happens to pull. Measured: "Um quarto de hóspedes com
  * uma estante ao lado da cama." becomes "...com uma prateleiras...", and
@@ -119,9 +119,13 @@
  * paragraph above as a claim about the whole table and it says that cannot
  * happen; it is a claim about four nouns.
  *
- * (These counts have been wrong in this file once already, left behind by a
- * commit that removed rules without recounting the prose around them. They are
- * five, four, eight and four, and `synonyms.test.ts` holds each of them.)
+ * (These counts have gone stale three times now, each time left behind by a
+ * commit that removed rules without recounting the prose around them. The third
+ * time is worth the extra sentence: the shape test in `synonyms.test.ts` was
+ * already asserting the right **seven**, while this paragraph and that test's
+ * own comment both went on saying eight. A guard the prose beside it
+ * contradicts is a guard nobody reads. They are five, four, seven and four, and
+ * `synonyms.test.ts` holds each of them.)
  *
  * **False positives on `features` are the failure mode this layer reintroduces
  * most easily.** The risk above is about `placeType`, and it does not cover
@@ -147,7 +151,7 @@
  *   (g15's `stairs`) and invents one (f10's `alcove`).
  *
  * **So the measured value of this whole file is one `placeType` answer, and the
- * `depósito` family carries all of it.** The three feature rules that remain buy
+ * `depósito` family carries all of it.** The four feature rules that remain buy
  * nothing on this corpus that they do not also give back.
  *
  * **Do not quote the F1 here as the score.** It moves 0.746 → 0.754, and it
@@ -251,9 +255,34 @@ export type Normalized = {
  *
  * **Nineteen variants have been admitted and measured back out**, in three
  * rounds, and the five failure modes are different enough that the next person
- * needs all five names. Two whole rules died in the process: there is no
- * `hearth` family and no `pillars` family left, and the count of what survives
- * is five rules and fifteen variants.
+ * needs all five names. Three whole rules died in the process: there is no
+ * `hearth` family, no `pillars` family and no `alcove` family left, and the
+ * count of what survives is five rules and fifteen variants.
+ *
+ * That "three" said **two** for four rounds of review, and four independent
+ * places said otherwise the whole time: the last line of `SYNONYM_RULES`
+ * (`// There is no alcove rule.`), the paragraph closing mode 5, the label
+ * sentence in `templates.ts`, and a test in `synonyms.test.ts` — the one
+ * checking the sentence `templates.ts` states — which already counted three
+ * feature labels with no rule, with the literal 3 in it. The arithmetic closes
+ * it too: seven feature labels plus `depósito` is eight rules possible, five
+ * survive.
+ *
+ * **Why it survived is worth being exact about, because the obvious answer is
+ * wrong.** It is not that the data went unguarded. A test asserting three had
+ * been standing the whole time. The drift was **prose against prose**: this
+ * sentence and the test that contradicted it are in different files, and no
+ * assertion can fail because a paragraph somewhere else says "two". Nothing
+ * mechanical was ever going to catch it. What caught it — four times, each time
+ * a different reader — was somebody checking the prose against the data by
+ * hand, and that remains the only thing that will.
+ *
+ * The guard added below is kept for a narrower claim than that. It names the
+ * three dead canonicals rather than the four live ones, and it counts over all
+ * eight labels a rule could exist for rather than the seven features, so a
+ * removal in the `depósito` family is in its scope too. It does not stop the
+ * next false sentence; it makes one more of them a compile-and-run failure
+ * instead of a reading failure.
  *
  * Each mode was found by a *different question*, and the questions are the
  * reusable part — reading the table against the previous mode's question never
@@ -320,7 +349,10 @@ export type Normalized = {
  * **four moved a label that was not the firing rule's** — "adega" → depósito
  * lighting `alcove`, "fogueira" → lareira lighting `bar`, "estantes" →
  * prateleiras lighting `alcove`, "pilastras" → pilares lighting `shelving`.
- * Three of those four rules have since been removed for it.
+ * Three of those four **variants** have since been removed. Variants, not
+ * rules: only two rules died of this mode, and read as a claim about rules the
+ * sentence is false. "adega" is the one of the four that stayed, and it is the
+ * one still firing on f10 in the paragraph below.
  *
  * On the table as it stands, two descriptions move their set and **one of the
  * two is still collateral drag**: f10, where "adega" → depósito lights
@@ -360,8 +392,16 @@ export type Normalized = {
  *   and they were confused for one before being measured apart.
  *
  * A rule that changes no decision is worse than no rule, because it reads as
- * coverage. That is why `hearth`, `pillars` and `alcove` have no family left at
- * all: what survived the first four modes then failed this one.
+ * coverage. That is why **`pillars` and `alcove`** have no family left at all:
+ * what survived the first four modes then failed this one, and "pilar" and
+ * "alcovas" are two of the three variants named just above.
+ *
+ * This sentence named `hearth` too, for four rounds, and that was never true —
+ * no word for a fireplace appears in this mode's three. The `hearth` family
+ * died earlier and entirely: four of its eight variants under mode 1
+ * ("chaminé", "chaminés", "braseiro", "braseiros") and four under mode 2
+ * ("fogo", "fogos", "fogueira", "fogueiras"). Nothing of it ever reached this
+ * test. Three families are gone; they did not all go the same way.
  *
  * The verb reading of "pilar" is a model defect and not a rule defect, and that
  * is measured twice: "A cozinheira começou a pilar o alho no almofariz." scores

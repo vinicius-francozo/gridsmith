@@ -139,7 +139,16 @@ const LOCAL_TEXT = {
   /** With a percentage, when the server said how large the file is. */
   modelDownloadingAt: (percent: number) => `Baixando o modelo local… ${String(percent)}%`,
   modelPreparing: 'Carregando o modelo local na memória…',
-  modelReadyWebgpu: 'Modelo local pronto, rodando na GPU. Interpretando a descrição…',
+  /**
+   * The only one there is, now that `pipeline.ts` fixes `MODEL_DEVICE` to
+   * `wasm`.
+   *
+   * There used to be a `modelReadyWebgpu` beside it, picked by reading
+   * `progress.backend`. The backend is no longer detected — the q8 weights this
+   * front downloads go through `DequantizeLinear`, whose open bug on the WebGPU
+   * path returns wrong numbers rather than failing — so the GPU sentence was a
+   * string nothing could reach. Its reasoning is written out at `MODEL_DEVICE`.
+   */
   modelReadyWasm:
     'Modelo local pronto, rodando sem GPU — vai demorar mais. Interpretando a descrição…',
 } as const;
@@ -156,7 +165,7 @@ function describeModelProgress(progress: ModelProgress): string {
     case 'preparing':
       return LOCAL_TEXT.modelPreparing;
     case 'ready':
-      return progress.backend === 'webgpu' ? LOCAL_TEXT.modelReadyWebgpu : LOCAL_TEXT.modelReadyWasm;
+      return LOCAL_TEXT.modelReadyWasm;
     default: {
       const unreachable: never = progress;
       throw new TypeError(`unknown model progress: ${JSON.stringify(unreachable)}`);

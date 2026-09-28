@@ -25,10 +25,11 @@ import { InterpreterError } from '../errors';
  *
  * Every reason lands here and that is deliberate. The download is hundreds of
  * megabytes over a connection this code cannot see, the runtime may be a
- * browser without WebGPU *and* without enough memory for the WebAssembly
- * fallback, and the failure the library reports for each is a message string
- * rather than a type. Splitting them would mean matching on that prose, which
- * is exactly what `../errors.ts` exists to avoid doing.
+ * browser without enough memory to compile the graph on the one path this
+ * front asks for — `MODEL_DEVICE` is `wasm` and there is no second path to
+ * fall back to — and the failure the library reports for each is a message
+ * string rather than a type. Splitting them would mean matching on that prose,
+ * which is exactly what `../errors.ts` exists to avoid doing.
  */
 export class ModelUnavailableError extends InterpreterError {
   constructor(detail: string, options?: ErrorOptions) {
