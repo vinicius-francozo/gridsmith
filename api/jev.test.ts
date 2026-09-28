@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { handleJevRequest, KEY_HEADER, TYPESAFE_ENDPOINT, UPSTREAM_TIMEOUT_MS } from './jev';
+import jevEntry, { handleJevRequest, KEY_HEADER, TYPESAFE_ENDPOINT, UPSTREAM_TIMEOUT_MS, worker } from './jev';
 
 /**
  * No test here reaches the network. Every call goes through a `fetchImpl` the
@@ -41,6 +41,35 @@ function stubFetch(answer: (call: Call) => Response | Promise<Response>): {
 /** A `fetch` that fails the way a dead host does. */
 function deadUpstream(): typeof fetch {
   return (() => Promise.reject(new TypeError('fetch failed'))) as unknown as typeof fetch;
+}
+
+/** A `fetch` whose answer arrives with a status line and no body behind it. */
+function truncatedUpstream(): typeof fetch {
+  return stubFetch(
+    () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(new Error('connection reset'));
+          },
+        }),
+      ),
+  ).fetchImpl;
+}
+
+/**
+ * An answer carrying a status the `Response` constructor refuses.
+ *
+ * It cannot be built as a real `Response` — the constructor is the thing being
+ * guarded against. `fetch` has no such limit and hands these straight through,
+ * which is how a `999` from a CDN in front of the API arrives.
+ */
+function impossibleStatus(status: number): Response {
+  return {
+    status,
+    headers: new Headers({ 'content-type': 'text/html' }),
+    text: () => Promise.resolve('<html>Attention Required</html>'),
+  } as unknown as Response;
 }
 
 function jsonResponse(status: number, payload: unknown): Response {
@@ -192,6 +221,33 @@ describe('relaying a call to the System One endpoint', () => {
     expect(response.status).toBe(204);
     expect(await response.text()).toBe('');
   });
+
+  it('reports a status HTTP does not define as a 502, not as a crash', async () => {
+    // `fetch` surfaces whatever the wire said, and a CDN or a WAF in front of
+    // the API is allowed to say `999` — Cloudflare does. `new Response(body,
+    // { status: 999 })` throws, and an unhandled throw here is a 500 from the
+    // host with no CORS header on it, which the page can only report as an
+    // opaque network error.
+    for (const status of [999, 600, 199, 101]) {
+      const { fetchImpl } = stubFetch(() => impossibleStatus(status));
+
+      const response = await handleJevRequest(pageRequest(), { fetchImpl });
+
+      expect(response.status).toBe(502);
+      expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    }
+  });
+
+  it('still relays the last status HTTP does define', async () => {
+    // The other side of the range, so the guard above cannot quietly grow into
+    // a refusal of answers the API is entitled to give.
+    const { fetchImpl } = stubFetch(() => new Response('{}', { status: 599 }));
+
+    const response = await handleJevRequest(pageRequest(), { fetchImpl });
+
+    expect(response.status).toBe(599);
+    expect(await response.text()).toBe('{}');
+  });
 });
 
 describe('answering the key', () => {
@@ -257,14 +313,7 @@ describe('answering silence', () => {
   it('reports an answer that stops halfway through its body as a 502', async () => {
     // The status line arrived and the bytes did not. Downstream, that is still
     // silence.
-    const truncated = new Response(new ReadableStream({
-      start(controller) {
-        controller.error(new Error('connection reset'));
-      },
-    }));
-    const { fetchImpl } = stubFetch(() => truncated);
-
-    const response = await handleJevRequest(pageRequest(), { fetchImpl });
+    const response = await handleJevRequest(pageRequest(), { fetchImpl: truncatedUpstream() });
 
     expect(response.status).toBe(502);
   });
@@ -329,6 +378,7 @@ describe('answering a browser', () => {
     const response = await handleJevRequest(pageRequest({ method: 'GET' }), { fetchImpl });
 
     expect(response.status).toBe(405);
+    expect(response.headers.get('allow')).toBe('POST, OPTIONS');
     expect(calls).toHaveLength(0);
   });
 
@@ -388,6 +438,11 @@ describe('never writing the key down', () => {
       await handleJevRequest(pageRequest(), { fetchImpl: forbidden }),
       await handleJevRequest(pageRequest({ body: '{"broken": ' }), { fetchImpl: malformed }),
       await handleJevRequest(pageRequest(), { fetchImpl: deadUpstream() }),
+      // The upstream body failing to arrive is its own refusal, written with
+      // the key in scope, and it is not the same line as the request body
+      // failing to arrive below.
+      await handleJevRequest(pageRequest(), { fetchImpl: truncatedUpstream() }),
+      await handleJevRequest(pageRequest(), { fetchImpl: stubFetch(() => impossibleStatus(999)).fetchImpl }),
       await handleJevRequest(unreadableRequest(), { fetchImpl: ok }),
       await handleJevRequest(pageRequest({ headers: {} }), { fetchImpl: ok }),
       await handleJevRequest(pageRequest({ method: 'GET' }), { fetchImpl: ok }),
@@ -443,5 +498,50 @@ describe('never writing the key down', () => {
     await handleJevRequest(pageRequest(), { fetchImpl });
 
     expect(calls[0].url).not.toContain(KEY.slice(0, 8));
+  });
+});
+
+describe('the entry a host calls', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('drops everything after the request, so a host cannot redirect the relay', async () => {
+    // A Worker is invoked as `fetch(request, env, ctx)`, and the handler's
+    // second parameter is the test seam. If a host could reach it, a binding
+    // or a var named `upstream` would become the address this relay sends the
+    // user's key to as a bearer token — the whole exfiltration in one line of
+    // configuration, with no change to any code.
+    const hostile = {
+      upstream: 'https://attacker.example/collect',
+      fetchImpl: deadUpstream(),
+      timeoutMs: 1,
+    };
+
+    for (const entry of [jevEntry, worker.fetch]) {
+      const asked: string[] = [];
+      vi.spyOn(globalThis, 'fetch').mockImplementation(((url: string) => {
+        asked.push(String(url));
+        return Promise.resolve(jsonResponse(200, { answers: [] }));
+      }) as unknown as typeof fetch);
+
+      const call = entry as unknown as (request: Request, env: unknown, ctx: unknown) => Promise<Response>;
+      const response = await call(pageRequest(), hostile, {});
+
+      expect(asked).toEqual([TYPESAFE_ENDPOINT]);
+      expect(response.status).toBe(200);
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('keeps the seam itself, because the tests are inside the module', async () => {
+    // Said out loud so that closing the hole above is not read as an argument
+    // for closing the seam: `handleJevRequest` is still the tested surface,
+    // and it is the export no host is given.
+    const { fetchImpl, calls } = stubFetch(() => jsonResponse(200, {}));
+
+    await handleJevRequest(pageRequest(), { fetchImpl, upstream: 'https://elsewhere.example/v1' });
+
+    expect(calls[0].url).toBe('https://elsewhere.example/v1');
   });
 });

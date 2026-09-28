@@ -29,11 +29,13 @@
  * request is ever interpolated into one.
  *
  * The signature is the Web standard `Request` in, `Response` out, because that
- * is the shape both candidate hosts speak: Vercel invokes the default export
- * with a `Request`, and a Cloudflare Worker entry is `export default { fetch:
- * handleJevRequest }` over the same function. Nothing here touches a
- * platform-specific request or response object, and nothing here is imported
- * from a dependency: the runtime's own `fetch` does the work.
+ * is the shape both candidate hosts speak. Neither of them is handed
+ * `handleJevRequest` itself, though: its second parameter is a test seam, and
+ * a host fills that slot with something of its own. The entry points at the
+ * bottom of this file take a request and nothing else, and they are what a
+ * host calls. Nothing here touches a platform-specific request or response
+ * object, and nothing here is imported from a dependency: the runtime's own
+ * `fetch` does the work.
  */
 
 /** Where the question actually goes. */
@@ -57,6 +59,15 @@ export const KEY_HEADER = 'x-typesafe-key';
  */
 export const UPSTREAM_TIMEOUT_MS = 30_000;
 
+/**
+ * The seams the tests drive this handler through.
+ *
+ * Every field here overrides something the relay would otherwise take from the
+ * constants above — `upstream` included, which is the address the user's key
+ * is carried to as a bearer token. That makes this parameter unsafe in any
+ * position a host might fill on its own, which is why nothing a host calls
+ * accepts it. See the entry points at the bottom of the file.
+ */
 export type JevProxyOptions = {
   /** Test seam: stands in for `globalThis.fetch`. */
   readonly fetchImpl?: typeof fetch;
@@ -91,8 +102,29 @@ function corsHeaders(): Headers {
  * so rebuilding an upstream answer without checking this would turn an
  * ordinary status into a crash — and a crash is a 500 from the host, which is
  * a status this contract never promised anybody.
+ *
+ * `101` and `103` are on the same list in the spec and are deliberately not
+ * here: `new Response(null, { status: 101 })` throws on the status by itself,
+ * before any question about the body is asked. The range check below is what
+ * actually covers them, and a membership test never gets the chance to.
  */
-const NULL_BODY_STATUSES: ReadonlySet<number> = new Set([101, 103, 204, 205, 304]);
+const NULL_BODY_STATUSES: ReadonlySet<number> = new Set([204, 205, 304]);
+
+/**
+ * Whether a status can be rebuilt into a `Response` at all.
+ *
+ * `fetch` hands back whatever the wire said, and the wire is allowed to say
+ * things the `Response` constructor refuses: a CDN or a WAF in front of
+ * `api.typesafe.ai` can answer `999`, which Cloudflare does. Feeding that to
+ * the constructor throws a `RangeError`, so without this the crash the
+ * null-body set above exists to prevent walks in through the other door — an
+ * unhandled rejection, a 500 from the host carrying no CORS header at all, and
+ * a page that can only report an opaque network error for what is really a bad
+ * gateway.
+ */
+function isRelayableStatus(status: number): boolean {
+  return status >= 200 && status <= 599;
+}
 
 /**
  * A refusal this file wrote itself.
@@ -118,7 +150,10 @@ export async function handleJevRequest(request: Request, options: JevProxyOption
     return new Response(null, { status: 204, headers: corsHeaders() });
   }
   if (request.method !== 'POST') {
-    return refuse(405, 'This route only answers POST.');
+    const refusal = refuse(405, 'This route only answers POST.');
+    // A 405 without `Allow` tells the caller it guessed wrong and nothing else.
+    refusal.headers.set('allow', 'POST, OPTIONS');
+    return refusal;
   }
 
   // No trimming: a `Headers` value arrives with leading and trailing whitespace
@@ -163,6 +198,12 @@ export async function handleJevRequest(request: Request, options: JevProxyOption
     return refuse(502, 'The TypeSafe API did not answer.');
   }
 
+  if (!isRelayableStatus(upstream.status)) {
+    // Something answered, but not in a word this contract is able to repeat.
+    // Refused rather than rebuilt, because rebuilding it is the crash.
+    return refuse(502, 'The TypeSafe API answered with a status HTTP does not define.');
+  }
+
   let answer: string;
   try {
     answer = await upstream.text();
@@ -185,4 +226,43 @@ export async function handleJevRequest(request: Request, options: JevProxyOption
   return new Response(relayed, { status: upstream.status, headers });
 }
 
-export default handleJevRequest;
+/**
+ * The answer for a request that never reached the handler.
+ *
+ * The dev adapter in `vite.config.ts` has to build a `Request` out of Node's
+ * own objects, and that construction can throw before this file is called at
+ * all: `new Request()` refuses `TRACE`, `CONNECT` and `TRACK` outright. A bare
+ * status code there would answer without the CORS headers every answer here
+ * carries and without a body, and a browser reports that as a network error
+ * rather than as the gateway failure it is — which is the exact defect the
+ * rest of this file is arranged to avoid. Exported as a finished response
+ * rather than as `refuse`, so that every message in this contract stays a
+ * literal written in this file.
+ */
+export function relayUnavailable(): Response {
+  return refuse(502, 'The request could not be relayed.');
+}
+
+/**
+ * What a host actually calls.
+ *
+ * `handleJevRequest` takes a second argument and a host supplies one: a
+ * Worker's entry is `fetch(request, env, ctx)`, so a binding or a var named
+ * `upstream` would quietly become the address this relay sends the user's key
+ * to as a bearer token, and `fetchImpl` and `timeoutMs` collide the same way.
+ * A Vercel invocation puts its own context in that slot. So the seam is not
+ * reachable from outside the module: this takes the request and drops
+ * everything after it on the floor.
+ */
+export function fetchJev(request: Request): Promise<Response> {
+  return handleJevRequest(request);
+}
+
+/**
+ * The Cloudflare Worker entry, for a Worker module to re-export as its own
+ * default. `env` and `ctx` arrive nowhere near the options parameter.
+ */
+export const worker = { fetch: fetchJev };
+
+/** The Vercel entry: the default export, invoked with a `Request`. */
+export default fetchJev;
