@@ -72,26 +72,47 @@ export type ConflictCode = (typeof CONFLICT_CODES)[number];
 export const UNSUPPORTED_REQUEST = 'unsupported_request';
 
 /**
+ * The description is of a kind of place this vocabulary has no word for — a
+ * forge, a crypt, a courtyard — and the nearest of the three was built.
+ *
+ * Detail: the `PlaceType` that was built, so the wording can say what the
+ * person got and not only what they did not get.
+ *
+ * Only an interpreter that can be *asked* this ever emits it. A classifier
+ * compares the labels it was handed and returns the least unlikely one, so it
+ * has nowhere to put "none of these"; `local/interpret.ts` says so in its
+ * header and leaves `unresolved` empty for exactly that reason. Building the
+ * nearest place rather than refusing follows `resolve.ts:221-237`, where a
+ * feature that does not fit the place is left out and recorded instead of
+ * rejected.
+ */
+export const PLACE_NOT_IN_VOCABULARY = 'place_not_in_vocabulary';
+
+/**
  * Every code that may appear in `Constraints.unresolved`.
  *
- * There is exactly one, and that is a decision rather than an omission, for
- * two reasons.
+ * Two, and the line between them is where it is on purpose.
  *
- * What a game master can ask for and this vocabulary cannot express is an open
- * set — naming a few kinds of it here would invite the model to round a
+ * `UNSUPPORTED_REQUEST` stays one code over an open set, for two reasons. What
+ * a game master can ask for and this vocabulary cannot express has no
+ * enumeration — naming a few kinds of it here would invite the model to round a
  * request to the nearest one, which is the same failure the prompt already
- * warns it away from for `features`.
- *
- * And nothing downstream would do anything different with the distinction. The
- * one consumer the plan asks for displays the list; a second floor and the
- * weather are shown the same way, so telling them apart buys the interface
+ * warns it away from for `features`. And nothing downstream would do anything
+ * different with the distinction: the interface displays the list, and a second
+ * floor and the weather are shown the same way, so telling them apart buys it
  * nothing it could act on. A taxonomy invented before the consumer that needs
- * it is a taxonomy drawn along the wrong lines, and it will have to be redrawn
- * — after it is already in saved maps — the day something actually branches on
- * it. One code with the request kept in the detail says the true thing now:
- * this was asked for, and the map will not have it.
+ * it is drawn along the wrong lines, and it has to be redrawn — after it is
+ * already in saved maps — the day something actually branches on it. One code
+ * with the request kept in the detail says the true thing now: this was asked
+ * for, and the map will not have it.
+ *
+ * `PLACE_NOT_IN_VOCABULARY` is not a slice of that set. It is not something the
+ * description asked for *besides* the place; it is the place, answered by a
+ * question of its own, and the interface has a different thing to say about it
+ * — the map in front of the person is of another kind of place, and the detail
+ * names which. That is a branch, and it is the one the second code is for.
  */
-export const UNRESOLVED_CODES = [UNSUPPORTED_REQUEST] as const;
+export const UNRESOLVED_CODES = [UNSUPPORTED_REQUEST, PLACE_NOT_IN_VOCABULARY] as const;
 
 /** A code the interpreter can report in `Constraints.unresolved`. */
 export type UnresolvedCode = (typeof UNRESOLVED_CODES)[number];
