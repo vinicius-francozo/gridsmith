@@ -24,29 +24,43 @@ import type {
 } from './drawlist';
 
 /**
- * A tile grid from ASCII art, one character per cell, so a test can show the
- * plan it is talking about.
+ * A tile grid and the plan's own cells from ASCII art, one character per
+ * cell, so a test can show the plan it is talking about.
  *
- * `#` is wall, `.` is floor, ` ` is void. Rows short of the first one are
- * rejected: a ragged sketch would otherwise leave holes in a grid the whole
- * module treats as total, and the very check under test would go unexercised.
+ * `#` is wall, `.` is floor, ` ` is void. One table carries both the material
+ * and the cell kind of a glyph, so the art cannot be drawn as one thing and
+ * declared as another: a second table would paint a fourth glyph as itself
+ * and declare it a wall, and now that shadows are cut to the floor that would
+ * quietly change what these tests watch instead of failing.
+ *
+ * Rows short of the first one are rejected: a ragged sketch would otherwise
+ * leave holes in a grid the whole module treats as total, and the very check
+ * under test would go unexercised.
  */
-function tilesFrom(rows: string[]): { size: Size; tiles: TileRef[][] } {
+function tilesFrom(rows: string[]): { size: Size; tiles: TileRef[][]; cells: CellKind[][] } {
   const size: Size = { w: rows[0].length, h: rows.length };
-  const material: Record<string, string> = { '#': 'plaster_wall', '.': 'wood_plank', ' ': 'void' };
-  const tiles = rows.map((row, y) => {
+  const glyphs: Record<string, { material: string; kind: CellKind }> = {
+    '#': { material: 'plaster_wall', kind: 'wall' },
+    '.': { material: 'wood_plank', kind: 'floor' },
+    ' ': { material: 'void', kind: 'void' },
+  };
+  const art = rows.map((row, y) => {
     if (row.length !== size.w) {
       throw new Error(`tilesFrom(): row ${y} is ${row.length} characters, expected ${size.w}`);
     }
-    return [...row].map((char, x) => {
-      const name = material[char];
-      if (name === undefined) {
+    return [...row].map((char) => {
+      const glyph = glyphs[char];
+      if (glyph === undefined) {
         throw new Error(`tilesFrom(): unknown character ${JSON.stringify(char)}`);
       }
-      return { material: name, variant: x % 2, rotation: 0 } as TileRef;
+      return glyph;
     });
   });
-  return { size, tiles };
+  const tiles = art.map((row) =>
+    row.map((glyph, x) => ({ material: glyph.material, variant: x % 2, rotation: 0 }) as TileRef),
+  );
+  const cells = art.map((row) => row.map((glyph) => glyph.kind));
+  return { size, tiles, cells };
 }
 
 /** A scene over `rows`, with props and lights supplied by the test. */
@@ -56,7 +70,7 @@ function sceneFrom(
   lights: LightSource[] = [],
   doors: Door[] = [],
 ): Scene {
-  const { size, tiles } = tilesFrom(rows);
+  const { size, tiles, cells } = tilesFrom(rows);
   // The plan's own cells, read off the same art as the tiles, because shadows
   // are cut to the floor and the cut reads them. A scene that drew a room and
   // left `cells` empty does not quietly lose its shadows: it throws
@@ -64,9 +78,6 @@ function sceneFrom(
   // row, which is four of the tests in this file. That is the same invariant
   // `floorCells` (`generator/floorplan.ts`) already enforces on every
   // generated plan.
-  const cells: CellKind[][] = rows.map((row) =>
-    [...row].map((char) => (char === '.' ? 'floor' : char === ' ' ? 'void' : 'wall')),
-  );
   return {
     floorplan: { size, cells, doors, walls: [] },
     zones: [],
