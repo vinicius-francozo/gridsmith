@@ -247,6 +247,25 @@ export function redactKeys(text: string): string {
   return text.replace(/sk-ant-[A-Za-z0-9_-]+/g, 'sk-ant-***');
 }
 
+/**
+ * Whether `key` is plainly an Anthropic key rather than anybody else's.
+ *
+ * Here, beside `redactKeys`, because the two encode the same fact about the
+ * same prefix and a change to one without the other would be a redaction that
+ * misses or a refusal that fires on nothing.
+ *
+ * It answers one question and not its opposite: `sk-ant-` is Anthropic's
+ * documented prefix, so a key wearing it is Anthropic's. **A key without it is
+ * not thereby TypeSafe's** — this project has no documented shape for that one,
+ * so there is no symmetric test to write, and inventing one would refuse keys
+ * that work. That asymmetry is why the field is also emptied when the engine
+ * changes: the clearing covers both directions and this covers only the one
+ * where a shape is actually known.
+ */
+export function looksLikeAnthropicKey(key: string): boolean {
+  return /^sk-ant-/.test(key.trim());
+}
+
 /** A failure, as a headline and an optional technical line under it. */
 export type Failure = {
   /** What happened and what to do about it, in Portuguese. */
@@ -437,13 +456,27 @@ function fileName(path: string): string {
  * layer. Getting them would mean changing `ModelProgress` in
  * `src/interpreter/local/pipeline.ts`, which is outside this front.
  *
- * And it would still not buy a percentage that only ever rises. A file's size
- * is knowable no earlier than its own first `progress` event, so the
- * denominator grows as files appear: the model alone at 50% is 50%, and the
- * moment the tokenizer announces itself the same bytes are
- * 268,409,234 × 0.5 / 302,821,014 ≈ 44%. The fall the change set out to remove
- * survives it, smaller. So the cheap fix is the one taken, and what it fixes is
- * stated rather than the defect being called closed.
+ * And it would still not remove the fall — in the order the files actually
+ * announce themselves it barely dents it. A file's size is knowable no earlier
+ * than its own first `progress` event, so the denominator only ever grows, and
+ * a figure over a growing denominator drops every time a file appears. The
+ * configs land first, then `tokenizer.json`, then `model_quantized.onnx`:
+ *
+ * ```
+ * configs in, nothing else known : 48,493 / 48,493          = 100%
+ * tokenizer announces its size   : 48,493 / 34,411,780      ≈ 0.14%
+ * tokenizer in                   : 34,411,780 / 34,411,780  = 100%
+ * model announces its size       : 34,411,780 / 302,821,014 ≈ 11.4%
+ * ```
+ *
+ * That is the same full-bar-to-nothing fall the per-file ratio gives, bought
+ * at the price of a change to `ModelProgress` in another front's file. The
+ * order is a tendency rather than a guarantee — `pipelines.js` awaits the
+ * tokenizer and the model in one `Promise.all` — so the figures move with it.
+ * The growing denominator does not.
+ *
+ * So the cheap fix is the one taken, and what it fixes is stated rather than
+ * the defect being called closed.
  */
 export function describeModelProgress(progress: ModelProgress): string {
   switch (progress.kind) {
@@ -520,7 +553,7 @@ export const UI_TEXT = {
   apiKeyLabelJev: 'Chave da API do Jev (TypeSafe)',
   apiKeyPlaceholderJev: 'a sua chave da TypeSafe',
   apiKeyNoteJev:
-    'A chave fica guardada só neste navegador e não aparece no endereço da página. Ela passa por um servidor desta página, que só a repassa para a TypeSafe e não guarda nem registra nada.',
+    'A chave vale para esta visita: não fica guardada no navegador e não aparece no endereço da página. Ela passa por um servidor desta página, que só a repassa para a TypeSafe e não guarda nem registra nada.',
   seedLabel: 'Semente',
   seedPlaceholder: 'em branco, sorteia uma',
   seedNote: 'A mesma descrição com a mesma semente devolve o mesmo mapa.',
@@ -530,6 +563,19 @@ export const UI_TEXT = {
   unresolvedHeading: 'O que a descrição pediu e o mapa não tem',
   conflictsHeading: 'O que o gerador teve de ajustar',
   emptyDescription: 'Escreva uma descrição do lugar antes de gerar.',
+  /**
+   * Said instead of making the request, and it leads with the one thing that
+   * decides what the person has to do next.
+   *
+   * "Não foi enviada" is the headline because the alternative sentence — the
+   * one this replaces — was `JevRejectedKeyError`'s "confira se ela é uma
+   * chave da TypeSafe", which sends somebody to fetch another key and says
+   * nothing about the key they just handed to a third party. A disclosed
+   * credential has to be rotated and a refused one does not, so which of the
+   * two happened is the whole message.
+   */
+  anthropicKeyOnJev:
+    'A chave no campo é uma chave da Anthropic e o motor escolhido é o Jev, então ela não foi enviada. Cole a sua chave da TypeSafe, ou escolha o Claude.',
   seedNotAnInteger: 'A semente precisa ser um número inteiro. Deixe em branco para sortear uma.',
   seedOutOfRange: 'A semente precisa estar entre 0 e 4294967295. Deixe em branco para sortear uma.',
   interpreting: 'Interpretando a descrição…',
@@ -563,7 +609,7 @@ export const UI_TEXT = {
    * discovered by waiting.
    */
   engineLocalNote:
-    'O modelo local baixa cerca de 310 MB na primeira vez e fica guardado no navegador. Depois disso funciona sem rede e sem chave, e entende menos do que o Claude: não sabe dizer o que a descrição pediu e o mapa não tem.',
+    'O modelo local baixa cerca de 310 MB na primeira vez e fica guardado no navegador. Depois disso funciona sem rede e sem chave, e entende menos do que os outros dois: não sabe dizer o que a descrição pediu e o mapa não tem, que é justamente o que o Jev sabe.',
   modelStarting: 'Preparando o modelo local…',
   modelDownloading: 'Baixando o modelo local…',
   /** With a percentage, when the server said how large the file is. */

@@ -41,6 +41,7 @@ import {
   describeFailure,
   describeModelProgress,
   describeResult,
+  looksLikeAnthropicKey,
   redactKeys,
 } from './messages';
 
@@ -548,7 +549,9 @@ describe('what the status line says while the local model is arriving', () => {
     const ready = describeModelProgress({ kind: 'ready' });
 
     expect(ready).not.toContain('GPU');
-    expect(ready).not.toContain('mais');
+    // A whole word: a substring test would fall over the next sentence that
+    // happens to contain "demais" or "jamais".
+    expect(ready).not.toMatch(/\bmais\b/);
     expect(ready).not.toMatch(/\d/);
   });
 
@@ -616,5 +619,29 @@ describe('what the status line says while the local model is arriving', () => {
     expect(() => describeModelProgress({ kind: 'finished' } as unknown as ModelProgress)).toThrow(
       TypeError,
     );
+  });
+});
+
+describe('telling one provider’s key from the other', () => {
+  it('knows an Anthropic key by the prefix the rest of this file already assumes', () => {
+    // The same fact `redactKeys` is built on. If the two ever disagree, one of
+    // them is a redaction that misses or a refusal that fires on nothing.
+    expect(looksLikeAnthropicKey('sk-ant-api03-qualquer')).toBe(true);
+    expect(looksLikeAnthropicKey('  sk-ant-api03-qualquer\n')).toBe(true);
+    expect(redactKeys('sk-ant-api03-qualquer')).toBe('sk-ant-***');
+  });
+
+  it('claims nothing about a key that is not wearing that prefix', () => {
+    // Deliberately one-directional. This project has no documented shape for a
+    // TypeSafe key, so "not Anthropic's" cannot be turned into "is TypeSafe's"
+    // — and a page that refused everything it did not recognise would refuse
+    // keys that work.
+    for (const key of ['ts-chave-do-usuario', 'qualquer-coisa', '', '   ']) {
+      expect(looksLikeAnthropicKey(key)).toBe(false);
+    }
+  });
+
+  it('is not fooled by the prefix turning up later in the string', () => {
+    expect(looksLikeAnthropicKey('ts-sk-ant-disfarcada')).toBe(false);
   });
 });

@@ -33,6 +33,7 @@ import {
   describeFailure,
   describeModelProgress,
   describeResult,
+  looksLikeAnthropicKey,
   UI_TEXT,
 } from './messages';
 import type { Failure } from './messages';
@@ -400,6 +401,15 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   };
 
   /**
+   * Which engine the key now in the box was put there for.
+   *
+   * Claude at mount, because the slot the box is prefilled from can only hold
+   * an Anthropic key — see the refusal to store a Jev key in `run` below, which
+   * is what makes that true rather than assumed.
+   */
+  let keyEngine: Engine = chosenEngine();
+
+  /**
    * Shows the parts of the form the chosen interpreter actually uses.
    *
    * The key field goes away for the local engine rather than being disabled,
@@ -420,6 +430,26 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
    */
   const refreshEngine = (): void => {
     const chosen = chosenEngine();
+    // The box is emptied, not just recaptioned, and that is the part that
+    // matters. Nothing anywhere checks the shape of what is in it — the proxy
+    // relays whatever it is handed and `JevInterpreter` only checks it is not
+    // empty — so a key left behind by the previous engine is sent to the new
+    // one's API on the next click. With the field prefilled from storage at
+    // mount, that is not a slip somebody has to make: it is what a return visit
+    // looks like by default, in both directions. The person is then told the
+    // key was rejected, which sends them to fetch another one and says nothing
+    // about the credential that was just handed to a third party and now has to
+    // be rotated.
+    //
+    // Passing through the local engine is not a change of key: it does not read
+    // the field, so what is in there still belongs to whichever of the two put
+    // it there.
+    if (chosen !== LOCAL_ENGINE) {
+      if (chosen !== keyEngine) {
+        apiKey.value = '';
+      }
+      keyEngine = chosen;
+    }
     apiKeyField.hidden = chosen === LOCAL_ENGINE;
     engineNote.hidden = chosen !== LOCAL_ENGINE;
     const jev = chosen === JEV_ENGINE;
@@ -567,6 +597,19 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
       return;
     }
 
+    // Before the seed is drawn, beside the other refusal that costs nothing.
+    // The clearing in `refreshEngine` is what makes a key of the wrong
+    // provider's rare; this is what makes sending one impossible, and it is
+    // needed because the clearing cannot see a key pasted straight into a Jev
+    // session out of the wrong password-manager entry. Only this direction can
+    // be checked: `sk-ant-` is Anthropic's documented prefix, and there is no
+    // published shape for a TypeSafe key to test the other way round with.
+    if (chosenEngine() === JEV_ENGINE && looksLikeAnthropicKey(apiKey.value)) {
+      status.textContent = '';
+      showFailure({ title: UI_TEXT.anthropicKeyOnJev });
+      return;
+    }
+
     const chosenSeed = takeSeed();
     if (chosenSeed === undefined) {
       status.textContent = '';
@@ -579,17 +622,21 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
     // field, so a run of it is no evidence about what is in there, and writing
     // anyway would let a hidden field overwrite a key that was working.
     //
-    // A Jev run does read the field, so it stores, and that is the choice
-    // rather than an oversight: `storage.ts` has one slot, `API_KEY_ITEM`, and
-    // it is that file's constant rather than this one's. So the slot holds the
-    // last key typed, whichever engine it was typed for, and somebody who runs
-    // Claude and then Jev comes back next visit to the TypeSafe key in the
-    // field. The alternative — not storing on a Jev run — costs the same person
-    // a paste on every visit to the engine this front exists to add, and leaves
-    // the Anthropic key prefilled into a field captioned for TypeSafe, which is
-    // the more confusing of the two. A slot per engine is the real answer and
-    // it belongs in `storage.ts`; it is reported rather than reached into.
-    if (chosenEngine() !== LOCAL_ENGINE) {
+    // A Jev run reads the field and still does not store, and that is the
+    // choice rather than an oversight. `storage.ts` has one slot,
+    // `API_KEY_ITEM`, and it is that file's constant; the box is prefilled from
+    // it at mount, before any engine has been picked. So a slot that could hold
+    // either provider's key is a slot whose contents cannot be attributed, and
+    // an unattributable prefill is a key handed to whichever engine the page
+    // happens to open on — which is Claude, every time. Storing a TypeSafe key
+    // here would be the blocker this front already fixed, rebuilt in the
+    // direction no prefix test can catch.
+    //
+    // Keeping the slot Anthropic-only is what lets `keyEngine` start at Claude
+    // and be right. The cost is a paste per visit on the Jev engine, and the
+    // note under the field says so. A slot per engine is the real answer and it
+    // belongs in `storage.ts`, which is outside this front.
+    if (chosenEngine() === CLAUDE_ENGINE) {
       writeApiKey(services.storage, apiKey.value);
     }
 

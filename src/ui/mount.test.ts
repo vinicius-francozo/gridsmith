@@ -1152,6 +1152,17 @@ describe('choosing which interpreter reads the description', () => {
     expect(app.apiKeyField.hidden).toBe(false);
   });
 
+  it('says what the local engine gives up against the engine that has it', () => {
+    // The note names the thing the local engine cannot do: say what the
+    // description asked for and the map does not have. That used to be worth
+    // measuring against Claude, because Claude was the only other engine.
+    // `unresolved` is permanently empty on both of those — it is the Jev
+    // out-of-vocabulary noul that fills it, and that is this front's headline.
+    // Measured against Claude the sentence is not false, just a year out of
+    // date, and it is the one place the page explains the trade.
+    expect(mountHarness().engineNote.textContent).toContain('Jev');
+  });
+
   it('shows the download warning only on the engine that downloads', () => {
     const app = mountHarness();
     expect(app.engineNote.hidden).toBe(true);
@@ -1191,6 +1202,10 @@ describe('choosing which interpreter reads the description', () => {
     app.pick('jev');
     expect(app.apiKeyNote.textContent).not.toContain('Não passa por servidor nenhum');
     expect(app.apiKeyNote.textContent).toContain('servidor desta página');
+    // And it must not promise storage either. A Jev key is deliberately not
+    // kept — the one slot has to stay attributable — so "fica guardada" would
+    // be the second false promise about a secret in the same two sentences.
+    expect(app.apiKeyNote.textContent).toContain('não fica guardada');
 
     app.pick('claude');
     expect(app.apiKeyNote.textContent).toContain('Não passa por servidor nenhum');
@@ -1273,17 +1288,27 @@ describe('the engine that is picked is the engine that is used', () => {
     expect(jev.jevKeysSeen).toEqual(['ts-primeira', 'ts-segunda']);
   });
 
-  it('remembers the key of a Jev run, and of no local run', async () => {
-    // The field is read on a Jev run, so what is in it is evidence about the
-    // key and is kept. A local run never reads it, so a local run says nothing
-    // about what is in there and writing anyway would let a hidden field
-    // overwrite a key that was working.
+  it('keeps the one slot Anthropic-only, so a prefill can be attributed', async () => {
+    // `storage.ts` has one slot and the box is prefilled from it at mount,
+    // before any engine has been picked — so a slot that can hold either
+    // provider's key is a slot whose contents cannot be attributed, and the
+    // page opens on Claude and hands it over. A Claude run stores; a Jev run
+    // reads the field and does not; a local run never reads it at all and
+    // writing anyway would let a hidden field overwrite a key that was working.
+    const claude = mountHarness();
+    claude.description.value = 'um salão de taverna';
+    claude.apiKey.value = 'sk-ant-api03-nova';
+    claude.generate.click();
+    await settle();
+    expect(claude.store.items.get(API_KEY_ITEM)).toBe('sk-ant-api03-nova');
+
     const jev = mountHarness({ engine: 'jev' });
     jev.description.value = 'um salão de taverna';
     jev.apiKey.value = 'ts-chave-do-usuario';
     jev.generate.click();
     await settle();
-    expect(jev.store.items.get(API_KEY_ITEM)).toBe('ts-chave-do-usuario');
+    expect(jev.jevKeysSeen).toEqual(['ts-chave-do-usuario']);
+    expect(jev.store.items.has(API_KEY_ITEM)).toBe(false);
 
     const local = mountHarness({ engine: 'local', stored: 'sk-ant-api03-guardada' });
     local.description.value = 'um salão de taverna';
@@ -1291,6 +1316,27 @@ describe('the engine that is picked is the engine that is used', () => {
     local.generate.click();
     await settle();
     expect(local.store.items.get(API_KEY_ITEM)).toBe('sk-ant-api03-guardada');
+  });
+
+  it('cannot prefill a Claude visit with the key a Jev run was given', async () => {
+    // The blocker in the direction no prefix test can catch. Two visits: the
+    // first runs Jev, the second is a fresh mount reading whatever the first
+    // left in storage. If a Jev key could be stored, this is the click that
+    // would hand it to Anthropic — with no engine switch, no paste and nothing
+    // on screen suggesting a credential had just been disclosed.
+    const first = mountHarness({ engine: 'jev' });
+    first.description.value = 'uma ferraria com bigorna';
+    first.apiKey.value = 'ts-chave-do-usuario';
+    first.generate.click();
+    await settle();
+
+    const second = mountHarness({ stored: first.store.items.get(API_KEY_ITEM) });
+    second.description.value = 'um salão de taverna';
+    second.generate.click();
+    await settle();
+
+    expect(second.keysSeen).toEqual(['']);
+    expect(second.keysSeen.join('')).not.toContain('ts-chave-do-usuario');
   });
 });
 
@@ -1413,5 +1459,125 @@ describe('what the page says while the local model is arriving', () => {
     report({ kind: 'preparing' });
 
     expect(writes).toEqual(['Interpretando a descrição…', 'Carregando o modelo local na memória…']);
+  });
+});
+
+describe('one provider never gets the other provider’s key', () => {
+  // The whole class, and it is reachable with nobody making a mistake. The box
+  // is prefilled from storage at mount, `refreshEngine` used to rewrite the
+  // caption around whatever was already in it, and nothing anywhere checks the
+  // shape of a key: the proxy relays what it is handed and `JevInterpreter`
+  // only checks it is not empty. So a return visit opened on Claude, switched
+  // to Jev and clicked would put `sk-ant-…` in `x-typesafe-key` and send it to
+  // TypeSafe — and what the person would then read is "confira se ela é uma
+  // chave da TypeSafe", which sends them for another key and never says the
+  // Anthropic one now needs rotating.
+
+  it('empties the box when the engine that reads it changes', async () => {
+    const app = mountHarness({ stored: 'sk-ant-api03-guardada' });
+    expect(app.apiKey.value).toBe('sk-ant-api03-guardada');
+
+    app.pick('jev');
+    expect(app.apiKey.value).toBe('');
+
+    app.apiKey.value = 'ts-chave-do-usuario';
+    app.pick('claude');
+    expect(app.apiKey.value).toBe('');
+  });
+
+  it('leaves the box alone when the engine that does not read it is passed through', () => {
+    // The local engine never reads the field, so going through it is not a
+    // change of key and clearing there would throw away a working one for
+    // nothing.
+    const app = mountHarness({ stored: 'sk-ant-api03-guardada' });
+
+    app.pick('local');
+    expect(app.apiKey.value).toBe('sk-ant-api03-guardada');
+
+    app.pick('claude');
+    expect(app.apiKey.value).toBe('sk-ant-api03-guardada');
+  });
+
+  it('still empties it when the other engine is reached by way of the local one', () => {
+    const app = mountHarness({ stored: 'sk-ant-api03-guardada' });
+
+    app.pick('local');
+    app.pick('jev');
+
+    expect(app.apiKey.value).toBe('');
+  });
+
+  it('hands Jev no key that a Claude visit left in the box', async () => {
+    // End to end, through the real `mountApp`: the value that reaches the Jev
+    // factory is what would have gone into `x-typesafe-key`.
+    const app = mountHarness({ stored: 'sk-ant-api03-guardada' });
+    app.description.value = 'uma ferraria com bigorna e fornalha acesa';
+
+    app.pick('jev');
+    app.generate.click();
+    await settle();
+
+    expect(app.jevKeysSeen.join('')).not.toContain('sk-ant');
+  });
+
+  it('refuses an Anthropic key on a Jev run, and says it was not sent', async () => {
+    // What the clearing cannot cover: a key pasted straight into a Jev session
+    // out of the wrong password-manager entry, with no engine change to react
+    // to. Refused before the request is built, so nothing leaves.
+    const app = mountHarness({ engine: 'jev' });
+    app.description.value = 'uma ferraria com bigorna e fornalha acesa';
+    app.apiKey.value = 'sk-ant-api03-colada-por-engano';
+
+    app.generate.click();
+    await settle();
+
+    expect(app.jevKeysSeen).toEqual([]);
+    expect(app.asked).toEqual([]);
+    expect(app.store.items.has(API_KEY_ITEM)).toBe(false);
+    // "Não foi enviada" is the load-bearing half: a disclosed key has to be
+    // rotated and a refused one does not, so the sentence has to say which
+    // happened rather than sending the person for another key.
+    expect(app.text()).toContain('não foi enviada');
+  });
+
+  it('refuses it before it draws a seed, the way an empty description is refused', async () => {
+    // A refusal that costs nothing should cost nothing: the seed field is left
+    // as it was, so the map the person was about to make is still reachable.
+    const app = mountHarness({ engine: 'jev', entropySeed: 987654 });
+    app.description.value = 'uma ferraria com bigorna';
+    app.apiKey.value = 'sk-ant-api03-colada-por-engano';
+    app.seed.value = '';
+
+    app.generate.click();
+    await settle();
+
+    expect(app.seed.value).toBe('');
+  });
+
+  it('lets a key that is not Anthropic’s through to Jev', async () => {
+    // The other half. A refusal that fired on everything would be a page that
+    // cannot run the engine this front exists to add, and there is no published
+    // shape for a TypeSafe key to test positively against.
+    const app = mountHarness({ engine: 'jev' });
+    app.description.value = 'uma ferraria com bigorna';
+    app.apiKey.value = 'ts-chave-do-usuario';
+
+    app.generate.click();
+    await settle();
+
+    expect(app.jevKeysSeen).toEqual(['ts-chave-do-usuario']);
+    expect(app.asked).toHaveLength(1);
+  });
+
+  it('leaves an Anthropic key alone on a Claude run', async () => {
+    const app = mountHarness();
+    app.description.value = 'um salão de taverna';
+    app.apiKey.value = 'sk-ant-api03-nova';
+
+    app.generate.click();
+    await settle();
+
+    expect(app.keysSeen).toEqual(['sk-ant-api03-nova']);
+    expect(app.asked).toHaveLength(1);
   });
 });
