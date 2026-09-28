@@ -141,8 +141,13 @@ function isFloor(plan: Floorplan, cell: Cell): boolean {
  * The range of cells a rectangle touches, as inclusive first and last indexes.
  *
  * The far edge is `ceil - 1` rather than the cell containing the last pixel:
- * a shadow thrown due east has a right edge that can land exactly on a cell
- * boundary, and `floor` of it would claim the untouched cell beyond.
+ * a shadow thrown due north or south has `dx === 0`, so its left and right
+ * edges stay exactly where the casting prop's own cell boundaries are, and
+ * `floor` of the right edge would claim the untouched cell beyond. Due east
+ * and west do the same to `top` and `bottom`, since there `dy === 0`. An
+ * east–west throw can never put the *right* edge on a boundary: it moves it
+ * by `70 * throwCells`, which is between 8.4 and 31.5 pixels and so never a
+ * whole cell.
  */
 function cellSpan(rect: PixelRect): { left: number; right: number; top: number; bottom: number } {
   return {
@@ -185,7 +190,25 @@ function cutToCells(rect: PixelRect, x0: number, x1: number, y: number): PixelRe
  * Returns an empty array when no part of the shadow is on floor, which is
  * what a prop standing on wall or void would produce.
  *
- * @throws {RangeError} if `floorplan.cells` does not cover its own `size`.
+ * Exported for the sake of the cut itself. Through `sceneShadows` a shadow can
+ * only be reached by placing a prop and a light that happen to throw it where
+ * the test wants it; handed a shadow directly, the cases worth pinning down —
+ * one wholly on floor, one split into runs, one with no floor under it at all
+ * — are each one line.
+ *
+ * @throws {RangeError} if the span of `shadow` reaches a cell that
+ *                      `floorplan.cells` does not carry. The throw is
+ *                      `cellAt`'s, not a precondition check of this
+ *                      function's own: a plan whose rows fall short of its
+ *                      `size` is cut against in silence until some span
+ *                      reaches the missing part. That is deliberate — it is
+ *                      the same invariant `floorCells`
+ *                      (`generator/floorplan.ts`) already enforces with the
+ *                      identical `RangeError`, on every `generate`, from
+ *                      `generator/props.ts`, long before a renderer sees the
+ *                      scene. Throwing here is not new behaviour on a path
+ *                      that never threw; it is the rule the whole pipeline
+ *                      already runs on.
  */
 export function clipToFloor(shadow: Shadow, floorplan: Floorplan): Shadow[] {
   const { left, right, top, bottom } = cellSpan(shadow.rect);
