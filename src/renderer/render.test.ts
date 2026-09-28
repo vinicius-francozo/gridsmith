@@ -5,6 +5,7 @@ import type {
   AssetDef,
   AssetLibrary,
   AssetKind,
+  CellKind,
   Door,
   LightSource,
   PlacedProp,
@@ -175,8 +176,14 @@ function sceneOf(
   const tiles: TileRef[][] = Array.from({ length: size.h }, () =>
     Array.from({ length: size.w }, () => ({ material, variant: 0, rotation: 0 }) as TileRef),
   );
+  // Floor everywhere: this file is about the executor and not about the plan,
+  // but shadows are cut to the floor, and a scene declaring no cells at all
+  // would swallow every shadow there is here to watch being painted.
+  const cells: CellKind[][] = Array.from({ length: size.h }, () =>
+    new Array<CellKind>(size.w).fill('floor'),
+  );
   return {
-    floorplan: { size, cells: [], doors: extras.doors ?? [], walls: [] },
+    floorplan: { size, cells, doors: extras.doors ?? [], walls: [] },
     zones: [],
     tiles,
     props: extras.props ?? [],

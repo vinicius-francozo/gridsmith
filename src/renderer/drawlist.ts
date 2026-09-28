@@ -332,7 +332,7 @@ export function buildDrawList(scene: Scene): DrawList {
   }
 
   // 3. Every shadow, before any prop, so no prop is darkened by a neighbour's.
-  for (const shadow of sceneShadows(scene.props, scene.lights)) {
+  for (const shadow of sceneShadows(scene.props, scene.lights, scene.floorplan)) {
     commands.push({
       kind: 'shade',
       rect: shadow.rect,

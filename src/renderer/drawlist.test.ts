@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { PIXELS_PER_CELL } from '../core/types';
-import type { Door, LightSource, PlacedProp, Scene, Size, TileRef } from '../core/types';
+import type { CellKind, Door, LightSource, PlacedProp, Scene, Size, TileRef } from '../core/types';
 import { materialColor } from '../assets/palette';
 import { cellRect } from './geometry';
 import {
@@ -57,8 +57,14 @@ function sceneFrom(
   doors: Door[] = [],
 ): Scene {
   const { size, tiles } = tilesFrom(rows);
+  // The plan's own cells, read off the same art as the tiles: shadows are cut
+  // to the floor, so a scene that drew a room and declared no cells would
+  // report every shadow as falling outside the map.
+  const cells: CellKind[][] = rows.map((row) =>
+    [...row].map((char) => (char === '.' ? 'floor' : char === ' ' ? 'void' : 'wall')),
+  );
   return {
-    floorplan: { size, cells: [], doors, walls: [] },
+    floorplan: { size, cells, doors, walls: [] },
     zones: [],
     tiles,
     props,
