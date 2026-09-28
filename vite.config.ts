@@ -31,8 +31,11 @@ function jevProxy(): Plugin {
   return {
     name: 'gridsmith:jev-proxy',
     configureServer(server) {
-      // Installed ahead of Vite's own middlewares, so the SPA fallback never
-      // gets a chance to answer this route with the page.
+      // A `configureServer` hook runs after Vite has already installed the
+      // middlewares it builds the server with — `cors` among them, which is
+      // why it is turned off above — and before the ones it installs last.
+      // The SPA fallback is one of those, so it never gets a chance to answer
+      // this route with the page.
       server.middlewares.use('/api/jev', (req: IncomingMessage, res: ServerResponse) => {
         void relay(req, res);
       });
