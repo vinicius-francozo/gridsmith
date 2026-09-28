@@ -246,10 +246,17 @@ describe('loading a real pipeline', () => {
 
   it('goes back to downloading when another file follows the one that finished', async () => {
     // Every file gets its own `done`, so `preparing` is raised more than once
-    // and most of them are wrong the moment they are raised. What makes that
-    // correct is that the next file's `progress` overwrites it: the only `done`
-    // left standing is the last one, which is the one the compile follows. No
-    // list of filenames is needed to know which that is.
+    // and most of them are premature. What this pins is the recovery: the next
+    // file's `progress` puts the line back to downloading, so a premature
+    // `preparing` costs a flicker and not a wrong status for the rest of the
+    // load.
+    //
+    // It does *not* pin that the last `done` is the model's. It is not: the
+    // library awaits the tokenizer and the model in one `Promise.all`, and this
+    // holds on a cold cache only because the 268 MB of weights are the last
+    // thing to arrive. `readRawProgress` says which case that leaves broken —
+    // a partially warm cache — and why neither mechanical fix for it is worth
+    // taking. The sequence below is the guaranteed part.
     const library = fakeLibrary();
     const load = createTransformersLoader({ importModule: library.importModule });
     const seen: ModelProgress[] = [];

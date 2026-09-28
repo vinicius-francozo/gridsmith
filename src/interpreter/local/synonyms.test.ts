@@ -494,28 +494,28 @@ describe('the rules themselves', () => {
     expect(featureRules.flatMap((rule) => rule.variants)).toHaveLength(7);
   });
 
-  it('has the count of dead rules the header states, and names the three', () => {
-    // The guard this file did not have, and the reason the header said "two
-    // whole rules died" for four rounds while four other places said three.
-    // Everything here counted what is alive — five rules, fifteen variants,
-    // four feature rules — and a removal that takes a family to zero changes
-    // none of those numbers by more than one, so nothing broke. The count of
-    // rules that are *gone* had no test at all, which is exactly why it was the
-    // number that stayed wrong.
+  it('names the three canonicals no rule rewrites towards any more', () => {
+    // `synonyms.ts` said "two whole rules died in the process" for four rounds
+    // while four other places said three. It is tempting to write this test up
+    // as the guard that was missing, and that would be false: the test below
+    // already asserted three uncovered feature labels, with the literal 3 in
+    // it, the whole time. A sentence in another file cannot fail an assertion
+    // here, and no assertion anywhere was going to catch prose contradicting
+    // prose — four different readers caught it by checking one against the
+    // other, which is still the only thing that works on that class of defect.
     //
-    // Derived from the data on both sides rather than from the prose: a rule
-    // can only exist for a word some template asks about, so the labels a rule
-    // *could* have are the seven features plus the storeroom noun, and the ones
-    // no rule names are the ones that died. Adding a feature label or removing
-    // another family fails this without anyone having to notice the sentence.
+    // What this adds over the test below is narrower and worth having anyway:
+    // it names the canonicals that are *dead* rather than the ones that are
+    // alive, so swapping which family is empty fails here; and it counts over
+    // all eight words a rule could exist for — the seven features plus the
+    // storeroom noun — rather than the seven, so emptying the `depósito` family
+    // is in scope too. Both sides come off the data; neither reads the prose.
     const possible = [STOREROOM_WORD, ...Object.values(FEATURE_TEMPLATE.labels)];
     const alive = new Set(SYNONYM_RULES.map((rule) => rule.canonical));
     const dead = possible.filter((label) => !alive.has(label));
 
     expect(possible).toHaveLength(8);
     expect(dead).toHaveLength(3);
-    // Named, so that a removal that kills a different family cannot keep the
-    // count at three and leave `hearth`, `pillars` and `alcove` written down.
     expect([...dead].sort()).toEqual(['alcova', 'lareira', 'pilares']);
   });
 

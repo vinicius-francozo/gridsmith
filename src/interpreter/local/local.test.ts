@@ -196,8 +196,12 @@ describe('when the model runs and answers badly', () => {
   });
 
   it('reports the session itself throwing as a classification failure', async () => {
-    // Out of memory part way through, a WebGPU device lost — the library throws
-    // a plain Error from inside a session that had already loaded.
+    // A WebAssembly heap that cannot grow part way through, an operator failing
+    // on a shape — the library throws a plain Error from inside a session that
+    // had already loaded. (This named a lost WebGPU device; nothing asks for
+    // WebGPU any more. The thrown message below is still "device lost", because
+    // the point of the test is that *whatever* the session says survives the
+    // wrapping verbatim.)
     const interpreter = new LocalInterpreter({
       loadPipeline: () => Promise.resolve(() => Promise.reject(new Error('device lost'))),
     });

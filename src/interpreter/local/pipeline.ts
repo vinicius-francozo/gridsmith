@@ -223,10 +223,47 @@ type RawProgress = {
  * have been the opposite lie — "carregando na memória" across the entire
  * download.
  *
- * Raising it on *every* `done` is what makes it right without having to know
- * which file is last: a `done` followed by more downloading is overwritten by
- * the next `progress` event, and the one that is not followed by anything is
- * the one left on screen, across the compile, where it belongs.
+ * ## What raising it on every `done` does and does not guarantee
+ *
+ * It is raised on *every* `done`, and a `done` followed by more downloading is
+ * overwritten by the next `progress` event. In the ordinary case that is enough
+ * and no list of filenames is needed: the last `done` is the one left on screen
+ * across the compile, where it belongs.
+ *
+ * **That is a tendency and not a property, and the difference is written down
+ * here because a sentence in this front claiming more than it has is the defect
+ * this front has paid for most.** The files do not load one after another —
+ * `pipeline()` in `@huggingface/transformers/src/pipelines.js` awaits the
+ * tokenizer and the model in one `Promise.all`, and the graph compile starts
+ * inside the model's branch as soon as *its* `done` has fired, while the
+ * tokenizer's branch may still be emitting `progress`. What makes the ordinary
+ * case work is arithmetic, not ordering: `model_quantized.onnx` is
+ * 268,409,234 B of the 302,821,014 B fetched, so on a cold cache it is
+ * overwhelmingly the one that finishes last.
+ *
+ * The case where it does not hold is a **partially warm cache** — model cached,
+ * tokenizer not, which is what a reload after an interrupted first visit looks
+ * like. The model's `done` fires at once, `preparing` goes up, the compile
+ * starts, and the tokenizer's `progress` events push the line back to
+ * "Baixando… X%" for the duration. That is the defect above, in a narrower
+ * place, and it is not fixed here.
+ *
+ * It is not fixed here because both mechanical fixes for it fail *silently*,
+ * which is worse than the cosmetic wrong it would repair:
+ *
+ * - **Counting files in flight** and raising `preparing` when the count returns
+ *   to zero looks exact and is not. An optional file that 404s takes the
+ *   `handleError` return at `hub.js:350`, which is before the `done` dispatch
+ *   at `hub.js:467` — it emits `initiate` and never `done`. The count would
+ *   never return to zero and `preparing` would never appear at all.
+ * - **Matching the model's filename** ties this to a string the library owns.
+ *   A dtype variant or a path convention moving the file renames it, and
+ *   `preparing` silently stops appearing.
+ *
+ * Both trade a status line that is sometimes wrong for one that is sometimes
+ * absent with nothing to say so. Neither has been measured in a browser, and
+ * nothing in this front has. So the behaviour stays as it is and the limit is
+ * stated instead of asserted away.
  */
 export function readRawProgress(raw: unknown): ModelProgress | undefined {
   if (typeof raw !== 'object' || raw === null) {

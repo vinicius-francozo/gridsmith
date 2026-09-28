@@ -86,8 +86,10 @@ export class LocalInterpreter implements Interpreter {
     } catch (error) {
       // `classify` and `readZeroShotOutput` already say precisely what was
       // wrong; re-wrapping would nest one sentence inside another. Everything
-      // else is the library throwing from inside the session — out of memory,
-      // a lost WebGPU device — and that is what this arm is for.
+      // else is the library throwing from inside the session — a WebAssembly
+      // heap that cannot grow, a runtime error out of an operator — and that is
+      // what this arm is for. It used to name a lost WebGPU device, which is
+      // not a thing that can happen here any more: see `MODEL_DEVICE`.
       throw error instanceof InterpreterError
         ? error
         : new ClassificationFailedError(messageOf(error), { cause: error });

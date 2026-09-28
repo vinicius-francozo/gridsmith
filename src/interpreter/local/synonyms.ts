@@ -262,16 +262,27 @@ export type Normalized = {
  * That "three" said **two** for four rounds of review, and four independent
  * places said otherwise the whole time: the last line of `SYNONYM_RULES`
  * (`// There is no alcove rule.`), the paragraph closing mode 5, the label
- * sentence in `templates.ts`, and that file's own test, which already counted
- * three feature labels with no rule. The arithmetic closes it too — seven
- * feature labels plus `depósito` is eight rules possible, five survive.
+ * sentence in `templates.ts`, and a test in `synonyms.test.ts` — the one
+ * checking the sentence `templates.ts` states — which already counted three
+ * feature labels with no rule, with the literal 3 in it. The arithmetic closes
+ * it too: seven feature labels plus `depósito` is eight rules possible, five
+ * survive.
  *
- * It survived all four because of *what* was guarded, and that is why the guard
- * below was added: every count in the test file was a count of what is
- * **alive**. Nothing counted what is **dead**, so the one number in this
- * paragraph with no data under it was the one that stayed wrong.
- * `synonyms.test.ts` now derives the three from the eight labels a rule could
- * exist for, minus the five that have one, and names them.
+ * **Why it survived is worth being exact about, because the obvious answer is
+ * wrong.** It is not that the data went unguarded. A test asserting three had
+ * been standing the whole time. The drift was **prose against prose**: this
+ * sentence and the test that contradicted it are in different files, and no
+ * assertion can fail because a paragraph somewhere else says "two". Nothing
+ * mechanical was ever going to catch it. What caught it — four times, each time
+ * a different reader — was somebody checking the prose against the data by
+ * hand, and that remains the only thing that will.
+ *
+ * The guard added below is kept for a narrower claim than that. It names the
+ * three dead canonicals rather than the four live ones, and it counts over all
+ * eight labels a rule could exist for rather than the seven features, so a
+ * removal in the `depósito` family is in its scope too. It does not stop the
+ * next false sentence; it makes one more of them a compile-and-run failure
+ * instead of a reading failure.
  *
  * Each mode was found by a *different question*, and the questions are the
  * reusable part — reading the table against the previous mode's question never
@@ -381,8 +392,16 @@ export type Normalized = {
  *   and they were confused for one before being measured apart.
  *
  * A rule that changes no decision is worse than no rule, because it reads as
- * coverage. That is why `hearth`, `pillars` and `alcove` have no family left at
- * all: what survived the first four modes then failed this one.
+ * coverage. That is why **`pillars` and `alcove`** have no family left at all:
+ * what survived the first four modes then failed this one, and "pilar" and
+ * "alcovas" are two of the three variants named just above.
+ *
+ * This sentence named `hearth` too, for four rounds, and that was never true —
+ * no word for a fireplace appears in this mode's three. The `hearth` family
+ * died earlier and entirely: four of its eight variants under mode 1
+ * ("chaminé", "chaminés", "braseiro", "braseiros") and four under mode 2
+ * ("fogo", "fogos", "fogueira", "fogueiras"). Nothing of it ever reached this
+ * test. Three families are gone; they did not all go the same way.
  *
  * The verb reading of "pilar" is a model defect and not a rule defect, and that
  * is measured twice: "A cozinheira começou a pilar o alho no almofariz." scores

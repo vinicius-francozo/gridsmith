@@ -299,7 +299,9 @@ function describeIssue(issue: { path: PropertyKey[]; message: string }): string 
  * hypothesis, and the pipeline judges one hypothesis at a time. They run one
  * after another rather than together because a single model session is one
  * piece of hardware — issuing five at once on the WebAssembly path queues them
- * behind each other anyway, and on WebGPU it contends for the same device.
+ * behind each other anyway. The second half of that reason used to be "and on
+ * WebGPU it contends for the same device"; WebGPU is never asked for now, so
+ * the WebAssembly half is the whole of it. See `MODEL_DEVICE`.
  *
  * ## What the model is shown
  *
