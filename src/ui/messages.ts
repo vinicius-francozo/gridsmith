@@ -47,6 +47,13 @@ import {
   UnusableResponseError,
   UpstreamError,
 } from '../interpreter/errors';
+import {
+  JevRejectedKeyError,
+  JevUnavailableError,
+  JevUnusableAnswerError,
+} from '../interpreter/jev/errors';
+import { ClassificationFailedError, ModelUnavailableError } from '../interpreter/local/errors';
+import type { ModelProgress } from '../interpreter/local/pipeline';
 import type { Feature } from '../interpreter/vocabulary';
 import { isFeature } from '../interpreter/vocabulary';
 
@@ -304,6 +311,62 @@ export function describeFailure(error: unknown): Failure {
       detail: redactKeys(error.message),
     };
   }
+  // --- The Jev engine ------------------------------------------------------
+  //
+  // Three types rather than one because each asks something different, which is
+  // the same reason the four above it are separate. They are matched before the
+  // `InterpreterError` catch-all at the bottom, which is where they used to
+  // land: "a interpretação da descrição falhou" is true of all three and tells
+  // nobody which of them happened.
+  if (error instanceof JevRejectedKeyError) {
+    return {
+      title:
+        'A chave foi recusada pelo Jev. Confira se ela é uma chave da TypeSafe e se ainda está ativa.',
+    };
+  }
+  if (error instanceof JevUnavailableError) {
+    // The proxy is named, because it is the part of this that the person may be
+    // running themselves and the part that can be down on its own. Pointing
+    // them at "a conexão" alone sends somebody to check a connection that is
+    // fine.
+    return {
+      title:
+        'Não foi possível falar com o Jev. O pedido passa por um servidor desta página antes de chegar à TypeSafe, e um dos dois não respondeu. Verifique a conexão e tente de novo.',
+      detail: redactKeys(error.message),
+    };
+  }
+  if (error instanceof JevUnusableAnswerError) {
+    return {
+      title:
+        'O Jev respondeu algo que não dá para ler como um conjunto de restrições. Tente de novo, ou reescreva a descrição.',
+      detail: redactKeys(error.message),
+    };
+  }
+
+  // --- The local engine ----------------------------------------------------
+  //
+  // These two reached the screen through the catch-all as well, and both
+  // `local/errors.ts` and `jev/errors.ts` say so in a comment that names this
+  // file as the place it could not be fixed from. It can be fixed from here
+  // now, so it is.
+  if (error instanceof ModelUnavailableError) {
+    // The other two engines are named because this is the one failure on the
+    // page with a way out that is not "try again": the model may be more than
+    // this browser can load, and no number of retries changes that.
+    return {
+      title:
+        'O modelo local não pôde ser carregado. São cerca de 310 MB e ele precisa de um navegador com memória para rodá-lo — tente de novo, ou escolha o Claude ou o Jev, que não baixam nada.',
+      detail: redactKeys(error.message),
+    };
+  }
+  if (error instanceof ClassificationFailedError) {
+    return {
+      title:
+        'O modelo local respondeu algo que não dá para ler como um conjunto de restrições. Tente de novo, ou reescreva a descrição.',
+      detail: redactKeys(error.message),
+    };
+  }
+
   if (error instanceof SceneValidationError) {
     const reasons = error.issues.map((issue) => SCENE_ISSUES[issue.kind]);
     return {
@@ -311,8 +374,10 @@ export function describeFailure(error: unknown): Failure {
     };
   }
   if (error instanceof InterpreterError) {
-    // Every subclass above is handled; this catches one added later, and says
-    // the true thing rather than blaming the network.
+    // All eleven subclasses in the project are handled above — six in
+    // `errors.ts`, two in `local/errors.ts`, three in `jev/errors.ts` — so this
+    // catches one added later, and says the true thing rather than blaming the
+    // network. `messages.test.ts` holds it to that by naming all eleven.
     return { title: 'A interpretação da descrição falhou.', detail: redactKeys(error.message) };
   }
   return {
@@ -324,6 +389,87 @@ export function describeFailure(error: unknown): Failure {
 /** `values` with repeats removed, order kept. */
 function unique(values: readonly string[]): string[] {
   return [...new Set(values)];
+}
+
+/**
+ * The last segment of `path`, which is the part that names the file.
+ *
+ * The library reports paths like `onnx/model_quantized.onnx`, and the directory
+ * is the same for every file it is attached to, so it carries nothing and costs
+ * width on a line that is already long. The name itself is left in English: it
+ * is a filename rather than prose, the same way the `detail` line of a failure
+ * is left in whatever language the API wrote it.
+ */
+function fileName(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1);
+}
+
+/**
+ * What the status line says while the local model is being made ready.
+ *
+ * ## Why `downloading` names the file
+ *
+ * `ModelProgress.ratio` is a fraction **of one file**, and there are four: two
+ * small JSON configs, `tokenizer.json` at 34,363,287 B and
+ * `model_quantized.onnx` at 268,409,234 B, out of the 302,821,014 B that
+ * `MODEL_ID` in `local/pipeline.ts` reports for the whole load. Rendered as if
+ * it were a fraction of that whole, the percentages actually written to the
+ * screen for those sizes are
+ *
+ * ```
+ * 0 100 0 100 0 1 2 … 99 100 0 1 2 … 99 100
+ * ```
+ *
+ * — three falls back to zero, the first two of them inside the opening
+ * milliseconds, so "Baixando o modelo local… 100%" appears twice before the
+ * download anybody is waiting for has moved at all. A percentage that goes
+ * backwards with nothing to explain it reads as a stall, and the thing a person
+ * does about a stall is reload the page, which throws away the download in
+ * flight. That is the worst available outcome, and the name of the file is the
+ * only signal in `ModelProgress` that separates "a new file started" from
+ * "it froze".
+ *
+ * ## Why not a weighted percentage over the whole download
+ *
+ * Because it cannot be computed here, and the reason is in the type rather than
+ * in the arithmetic: `ModelProgress` carries `ratio` and not `loaded`/`total`,
+ * so the byte counts the weights would have to come from never reach this
+ * layer. Getting them would mean changing `ModelProgress` in
+ * `src/interpreter/local/pipeline.ts`, which is outside this front.
+ *
+ * And it would still not buy a percentage that only ever rises. A file's size
+ * is knowable no earlier than its own first `progress` event, so the
+ * denominator grows as files appear: the model alone at 50% is 50%, and the
+ * moment the tokenizer announces itself the same bytes are
+ * 268,409,234 × 0.5 / 302,821,014 ≈ 44%. The fall the change set out to remove
+ * survives it, smaller. So the cheap fix is the one taken, and what it fixes is
+ * stated rather than the defect being called closed.
+ */
+export function describeModelProgress(progress: ModelProgress): string {
+  switch (progress.kind) {
+    case 'starting':
+      return UI_TEXT.modelStarting;
+    case 'downloading': {
+      // `readRawProgress` puts `''` here when the library sent no filename, and
+      // a sentence with an empty name in it is worse than the plain one.
+      const name = fileName(progress.file);
+      const percent = progress.ratio === undefined ? undefined : Math.round(progress.ratio * 100);
+      if (name === '') {
+        return percent === undefined ? UI_TEXT.modelDownloading : UI_TEXT.modelDownloadingAt(percent);
+      }
+      return percent === undefined
+        ? UI_TEXT.modelDownloadingFile(name)
+        : UI_TEXT.modelDownloadingFileAt(name, percent);
+    }
+    case 'preparing':
+      return UI_TEXT.modelPreparing;
+    case 'ready':
+      return UI_TEXT.modelReady;
+    default: {
+      const unreachable: never = progress;
+      throw new TypeError(`unknown model progress: ${JSON.stringify(unreachable)}`);
+    }
+  }
 }
 
 /**
@@ -363,6 +509,18 @@ export const UI_TEXT = {
   apiKeyPlaceholder: 'sk-ant-...',
   apiKeyNote:
     'A chave fica guardada só neste navegador e vai direto para a API. Não passa por servidor nenhum e não aparece no endereço da página.',
+  // The same field, worded for the other engine that reads it. Both halves have
+  // to change together: the Anthropic label would send somebody to the wrong
+  // dashboard for a key, and the Anthropic note would promise something the Jev
+  // route cannot keep — that request *does* pass through a server, the proxy in
+  // `api/jev.ts`, because TypeSafe answers a browser without the CORS header
+  // and the response is discarded. No placeholder prefix is shown, because this
+  // project has no documented one to show and inventing it would be a guess on
+  // screen.
+  apiKeyLabelJev: 'Chave da API do Jev (TypeSafe)',
+  apiKeyPlaceholderJev: 'a sua chave da TypeSafe',
+  apiKeyNoteJev:
+    'A chave fica guardada só neste navegador e não aparece no endereço da página. Ela passa por um servidor desta página, que só a repassa para a TypeSafe e não guarda nem registra nada.',
   seedLabel: 'Semente',
   seedPlaceholder: 'em branco, sorteia uma',
   seedNote: 'A mesma descrição com a mesma semente devolve o mesmo mapa.',
@@ -377,4 +535,67 @@ export const UI_TEXT = {
   interpreting: 'Interpretando a descrição…',
   drawing: 'Desenhando o mapa…',
   done: 'Mapa pronto.',
+
+  // --- The interpreter picker, and the local model's own progress -----------
+  //
+  // These lived in a `LOCAL_TEXT` of their own in `mount.ts`, with a note
+  // saying they belonged here and that the front which wrote them could not add
+  // to this file. That is no longer true of anyone, so they are here, and
+  // `mount.ts` is back to holding no wording at all.
+  engineLabel: 'Interpretador',
+  engineClaude: 'Claude — na nuvem, com a sua chave',
+  engineJev: 'Jev — na nuvem, com a sua chave da TypeSafe',
+  engineLocal: 'Modelo local — neste navegador, sem chave',
+  /**
+   * The figure here is the whole first visit, not the model on its own.
+   *
+   * The model is 302,821,014 B, which every other file in that front calls 303
+   * MB. It is not all that arrives: `vite build` emits
+   * `ort-wasm-simd-threaded.asyncify` at 26.9 MB (6.8 MB gzipped) and the
+   * `transformers.web` chunk at 574 kB (164 kB gzipped), and both sit behind
+   * the same dynamic import as the model — nothing of it is fetched until
+   * somebody picks this engine, and all of it is fetched when they do. Served
+   * gzipped that is about 310 MB; served uncompressed, about 330. The note
+   * says 310 because that is what a host that compresses its assets sends,
+   * and the weights, which are the bulk of it, are the same either way.
+   *
+   * Said here rather than left to the status line, which is where it would be
+   * discovered by waiting.
+   */
+  engineLocalNote:
+    'O modelo local baixa cerca de 310 MB na primeira vez e fica guardado no navegador. Depois disso funciona sem rede e sem chave, e entende menos do que o Claude: não sabe dizer o que a descrição pediu e o mapa não tem.',
+  modelStarting: 'Preparando o modelo local…',
+  modelDownloading: 'Baixando o modelo local…',
+  /** With a percentage, when the server said how large the file is. */
+  modelDownloadingAt: (percent: number) => `Baixando o modelo local… ${String(percent)}%`,
+  /** With the file, when the library said which one it is. */
+  modelDownloadingFile: (file: string) => `Baixando o modelo local… ${file}`,
+  /**
+   * Both, and the reason the percentage is worth saying twice over.
+   *
+   * The percentage is read as belonging to the file that is named beside it —
+   * which is what it is — instead of to the download as a whole, which it never
+   * was. `describeModelProgress` has the measurement.
+   */
+  modelDownloadingFileAt: (file: string, percent: number) =>
+    `Baixando o modelo local… ${file}, ${String(percent)}%`,
+  modelPreparing: 'Carregando o modelo local na memória…',
+  /**
+   * The only one there is, now that `local/pipeline.ts` fixes `MODEL_DEVICE` to
+   * `wasm`.
+   *
+   * It used to end "rodando sem GPU — vai demorar mais", picked between two
+   * sentences by reading `progress.backend`. The WebGPU path is gone — the q8
+   * weights go through `DequantizeLinear`, whose open bug on that path returns
+   * wrong numbers rather than failing — so "mais" was a comparison against an
+   * option nobody on this page can have, and the reader is left to wonder which
+   * setting of theirs cost them the faster one. There is no setting.
+   *
+   * What replaces it says where the work happens and stops there. No figure is
+   * quoted for how long, because there is none to quote: the ~510 ms recorded
+   * against `MODEL_ID` is Node on twelve cores with `onnxruntime-node`, and
+   * nothing in this project has ever been timed in a browser.
+   */
+  modelReady:
+    'Modelo local pronto, rodando no processador deste navegador. Interpretando a descrição…',
 } as const;

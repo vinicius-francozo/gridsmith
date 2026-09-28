@@ -9,6 +9,7 @@ import {
   NetworkError,
   UpstreamError,
 } from '../interpreter/errors';
+import type { ProgressReport } from '../interpreter/local/pipeline';
 
 import { UI_TEXT } from './messages';
 import { mount, mountApp } from './mount';
@@ -96,7 +97,16 @@ class FakeElement {
 
   /** What the browser does when the person clicks. */
   click(): void {
-    for (const handler of this.listeners.get('click') ?? []) {
+    this.fire('click');
+  }
+
+  /** What the browser does when the person picks another option. */
+  change(): void {
+    this.fire('change');
+  }
+
+  private fire(type: string): void {
+    for (const handler of this.listeners.get(type) ?? []) {
       handler();
     }
   }
@@ -150,6 +160,52 @@ function byClass(root: FakeElement, className: string): FakeElement {
     throw new Error(`no element with class ${className}`);
   }
   return found;
+}
+
+/** The `.gs-field` wrapper the control with `id` sits in. */
+function fieldOf(root: FakeElement, id: string): FakeElement {
+  const found = descendants(root).find(
+    (node) =>
+      node.className === 'gs-field' && descendants(node).some((child) => child.id === id),
+  );
+  if (found === undefined) {
+    throw new Error(`no field around ${id}`);
+  }
+  return found;
+}
+
+/** The `<label>` bound to the control with `id`. */
+function labelFor(root: FakeElement, id: string): FakeElement {
+  const found = descendants(root).find(
+    (node) => node.tagName === 'label' && node.htmlFor === id,
+  );
+  if (found === undefined) {
+    throw new Error(`no label for ${id}`);
+  }
+  return found;
+}
+
+/**
+ * Every assignment to `element.textContent`, in the order they happened.
+ *
+ * The final state cannot tell a region written once from one written four
+ * thousand times with the same string, and the difference between those two is
+ * the whole of what a live region does. `textContent` is a plain field on
+ * `FakeElement`, so the recorder goes on as an accessor over it and reads back
+ * exactly what was last written.
+ */
+function watchText(element: FakeElement): string[] {
+  const writes: string[] = [];
+  let current = element.textContent;
+  Object.defineProperty(element, 'textContent', {
+    configurable: true,
+    get: () => current,
+    set: (value: string) => {
+      current = value;
+      writes.push(value);
+    },
+  });
+  return writes;
 }
 
 function buttonLabelled(root: FakeElement, label: string): FakeElement {
@@ -238,15 +294,26 @@ type Harness = {
   store: KeyStore & { items: Map<string, string> };
   asked: string[];
   keysSeen: string[];
+  /** The keys the Jev factory was built with, kept apart from the Claude ones. */
+  jevKeysSeen: string[];
+  /** The report each `createLocalInterpreter` was handed, one per build. */
+  progressReports: ProgressReport[];
   saved: Saved[];
   description: FakeElement;
+  engine: FakeElement;
   apiKey: FakeElement;
+  apiKeyField: FakeElement;
+  apiKeyLabel: FakeElement;
+  apiKeyNote: FakeElement;
+  engineNote: FakeElement;
   seed: FakeElement;
   generate: FakeElement;
   download: FakeElement;
   status: FakeElement;
   failure: FakeElement;
   text: () => string;
+  /** Picks an engine the way the person does, and lets the page react. */
+  pick: (engine: string) => void;
 };
 
 type HarnessOptions = {
@@ -264,6 +331,8 @@ type HarnessOptions = {
   entropy?: AppServices['entropy'];
   /** The asset library, for watching the page from inside the drawing stage. */
   library?: AppServices['library'];
+  /** Which engine the picker is switched to before anything is clicked. */
+  engine?: string;
 };
 
 function mountHarness(options: HarnessOptions = {}): Harness {
@@ -272,25 +341,40 @@ function mountHarness(options: HarnessOptions = {}): Harness {
   const store = fakeStore(options.stored);
   const asked: string[] = [];
   const keysSeen: string[] = [];
+  const jevKeysSeen: string[] = [];
+  const progressReports: ProgressReport[] = [];
   const saved: Saved[] = [];
+
+  // One body for all three engines: which one a run used is read off
+  // `keysSeen`, `jevKeysSeen` and `progressReports`, and what it answers is the
+  // same either way, so no test has to restate the answer per engine.
+  const interpreter = (): Interpreter => ({
+    interpret: (text) => {
+      asked.push(text);
+      if (options.hang === true) {
+        return new Promise<Constraints>(() => undefined);
+      }
+      if (options.fail !== undefined && asked.length > (options.failAfter ?? 0)) {
+        return Promise.reject(options.fail);
+      }
+      return Promise.resolve(options.answer ?? constraintsFor());
+    },
+  });
 
   const services: Partial<AppServices> = {
     storage: store,
     library: options.library ?? createPlaceholderLibrary(),
     createInterpreter: (key): Interpreter => {
       keysSeen.push(key);
-      return {
-        interpret: (text) => {
-          asked.push(text);
-          if (options.hang === true) {
-            return new Promise<Constraints>(() => undefined);
-          }
-          if (options.fail !== undefined && asked.length > (options.failAfter ?? 0)) {
-            return Promise.reject(options.fail);
-          }
-          return Promise.resolve(options.answer ?? constraintsFor());
-        },
-      };
+      return interpreter();
+    },
+    createJevInterpreter: (key): Interpreter => {
+      jevKeysSeen.push(key);
+      return interpreter();
+    },
+    createLocalInterpreter: (onProgress): Interpreter => {
+      progressReports.push(onProgress);
+      return interpreter();
     },
     // The encoder is the browser's; what this file owns is that its result
     // reaches the saver under the right name.
@@ -303,21 +387,41 @@ function mountHarness(options: HarnessOptions = {}): Harness {
 
   mountApp(root as unknown as HTMLElement, services);
 
+  const engine = byId(root, 'gs-engine');
+  const apiKeyField = fieldOf(root, 'gs-api-key');
+  const pick = (chosen: string): void => {
+    engine.value = chosen;
+    engine.change();
+  };
+  if (options.engine !== undefined) {
+    pick(options.engine);
+  }
+
   return {
     root,
     doc,
     store,
     asked,
     keysSeen,
+    jevKeysSeen,
+    progressReports,
     saved,
     description: byId(root, 'gs-description'),
+    engine,
     apiKey: byId(root, 'gs-api-key'),
+    apiKeyField,
+    apiKeyLabel: labelFor(root, 'gs-api-key'),
+    apiKeyNote: descendants(apiKeyField).filter((node) => node.className === 'gs-note')[0],
+    engineNote: descendants(fieldOf(root, 'gs-engine')).filter(
+      (node) => node.className === 'gs-note',
+    )[0],
     seed: byId(root, 'gs-seed'),
     generate: buttonLabelled(root, 'Gerar mapa'),
     download: buttonLabelled(root, 'Baixar PNG'),
     status: byClass(root, 'gs-status'),
     failure: byClass(root, 'gs-failure'),
     text: () => shownText(root),
+    pick,
   };
 }
 
@@ -335,9 +439,13 @@ describe('the page the map is asked for on', () => {
     const app = mountHarness();
     const labels = descendants(app.root).filter((node) => node.tagName === 'label');
 
+    // Four, not three. The engine picker was captioned with a `<p>` and an
+    // `aria-label` for exactly as long as this list said three, because the
+    // front that added it could not edit this file to say four.
     expect(labels.map((label) => label.htmlFor).sort()).toEqual([
       'gs-api-key',
       'gs-description',
+      'gs-engine',
       'gs-seed',
     ]);
     for (const label of labels) {
@@ -1005,5 +1113,305 @@ describe('saving the map that was encoded', () => {
     expect(app.failure.hidden).toBe(true);
     expect(app.failure.children).toEqual([]);
     expect(app.text()).not.toContain('Algo deu errado ao montar o mapa.');
+  });
+});
+
+describe('choosing which interpreter reads the description', () => {
+  it('offers all three engines, each with something written on it', () => {
+    const app = mountHarness();
+    const options = descendants(app.root).filter((node) => node.tagName === 'option');
+
+    expect(options.map((option) => option.value)).toEqual(['claude', 'jev', 'local']);
+    for (const option of options) {
+      expect(option.textContent).not.toBe('');
+    }
+    expect(new Set(options.map((option) => option.textContent)).size).toBe(3);
+  });
+
+  it('starts on the engine that answers without downloading anything', () => {
+    // Written down rather than left to the browser's "first option wins", so
+    // that somebody generating a map mid-session is not handed a 310 MB wait.
+    expect(mountHarness().engine.value).toBe('claude');
+  });
+
+  it('shows the key field for the two engines that read it and hides it for the one that does not', () => {
+    // The rule stopped being "hide it when local" the moment a third engine
+    // existed that also needs a key — read as a flag, Jev is Claude's opposite
+    // and the field would have gone away on the engine that cannot work
+    // without it.
+    const app = mountHarness();
+    expect(app.apiKeyField.hidden).toBe(false);
+
+    app.pick('local');
+    expect(app.apiKeyField.hidden).toBe(true);
+
+    app.pick('jev');
+    expect(app.apiKeyField.hidden).toBe(false);
+
+    app.pick('claude');
+    expect(app.apiKeyField.hidden).toBe(false);
+  });
+
+  it('shows the download warning only on the engine that downloads', () => {
+    const app = mountHarness();
+    expect(app.engineNote.hidden).toBe(true);
+
+    app.pick('local');
+    expect(app.engineNote.hidden).toBe(false);
+
+    app.pick('jev');
+    expect(app.engineNote.hidden).toBe(true);
+  });
+
+  it('names the company whose key the field is asking for', () => {
+    // One box, two credentials from two companies. A field captioned "Chave da
+    // API da Anthropic" above a Jev run sends somebody to the wrong dashboard
+    // to fetch a key that will then be refused.
+    const app = mountHarness();
+    expect(app.apiKeyLabel.textContent).toContain('Anthropic');
+
+    app.pick('jev');
+    expect(app.apiKeyLabel.textContent).toContain('TypeSafe');
+    expect(app.apiKeyLabel.textContent).not.toContain('Anthropic');
+
+    app.pick('claude');
+    expect(app.apiKeyLabel.textContent).toContain('Anthropic');
+    expect(app.apiKeyLabel.textContent).not.toContain('TypeSafe');
+  });
+
+  it('stops promising a route the Jev request does not take', () => {
+    // The note under the field says the key "não passa por servidor nenhum",
+    // which is true of Claude and false of Jev: that request goes through the
+    // proxy in `api/jev.ts`, because TypeSafe answers a browser without
+    // `access-control-allow-origin` and the response is thrown away. Left
+    // alone, the page would state the opposite of what it does with a secret.
+    const app = mountHarness();
+    expect(app.apiKeyNote.textContent).toContain('Não passa por servidor nenhum');
+
+    app.pick('jev');
+    expect(app.apiKeyNote.textContent).not.toContain('Não passa por servidor nenhum');
+    expect(app.apiKeyNote.textContent).toContain('servidor desta página');
+
+    app.pick('claude');
+    expect(app.apiKeyNote.textContent).toContain('Não passa por servidor nenhum');
+  });
+
+  it('gives no placeholder that a TypeSafe key has to look like', () => {
+    // `sk-ant-...` is right for Anthropic and this project has no documented
+    // shape for the other one, so none is shown rather than guessed at.
+    const app = mountHarness();
+    expect(app.apiKey.placeholder).toBe('sk-ant-...');
+
+    app.pick('jev');
+    expect(app.apiKey.placeholder).not.toContain('sk-ant');
+  });
+});
+
+describe('the engine that is picked is the engine that is used', () => {
+  it('sends the description to Claude, with the key from the field', async () => {
+    const app = mountHarness();
+    app.description.value = 'um salão de taverna';
+    app.apiKey.value = '  sk-ant-api03-nova\n';
+
+    app.generate.click();
+    await settle();
+
+    expect(app.keysSeen).toEqual(['sk-ant-api03-nova']);
+    expect(app.jevKeysSeen).toEqual([]);
+    expect(app.progressReports).toEqual([]);
+    expect(app.asked).toEqual(['um salão de taverna']);
+  });
+
+  it('sends it to Jev instead when Jev is picked, with the key from the same field', async () => {
+    const app = mountHarness({ engine: 'jev' });
+    app.description.value = 'uma ferraria com bigorna e fornalha acesa';
+    app.apiKey.value = '  ts-chave-do-usuario\n';
+
+    app.generate.click();
+    await settle();
+
+    expect(app.jevKeysSeen).toEqual(['ts-chave-do-usuario']);
+    expect(app.keysSeen).toEqual([]);
+    expect(app.progressReports).toEqual([]);
+    expect(app.asked).toEqual(['uma ferraria com bigorna e fornalha acesa']);
+  });
+
+  it('builds the local one, with no key at all, when the local one is picked', async () => {
+    const app = mountHarness({ engine: 'local' });
+    app.description.value = 'um salão de taverna';
+    app.apiKey.value = 'sk-ant-api03-nao-usada';
+
+    app.generate.click();
+    await settle();
+
+    expect(app.progressReports).toHaveLength(1);
+    expect(app.keysSeen).toEqual([]);
+    expect(app.jevKeysSeen).toEqual([]);
+  });
+
+  it('keeps the local interpreter across runs and rebuilds the cloud ones', async () => {
+    // The local one holds the model: a fresh one per click would rebuild the
+    // session on every map. The other two hold a string and a client, and the
+    // key may have been edited between two clicks.
+    const local = mountHarness({ engine: 'local' });
+    local.description.value = 'um salão de taverna';
+    local.generate.click();
+    await settle();
+    local.generate.click();
+    await settle();
+    expect(local.progressReports).toHaveLength(1);
+    expect(local.asked).toHaveLength(2);
+
+    const jev = mountHarness({ engine: 'jev' });
+    jev.description.value = 'um salão de taverna';
+    jev.apiKey.value = 'ts-primeira';
+    jev.generate.click();
+    await settle();
+    jev.apiKey.value = 'ts-segunda';
+    jev.generate.click();
+    await settle();
+    expect(jev.jevKeysSeen).toEqual(['ts-primeira', 'ts-segunda']);
+  });
+
+  it('remembers the key of a Jev run, and of no local run', async () => {
+    // The field is read on a Jev run, so what is in it is evidence about the
+    // key and is kept. A local run never reads it, so a local run says nothing
+    // about what is in there and writing anyway would let a hidden field
+    // overwrite a key that was working.
+    const jev = mountHarness({ engine: 'jev' });
+    jev.description.value = 'um salão de taverna';
+    jev.apiKey.value = 'ts-chave-do-usuario';
+    jev.generate.click();
+    await settle();
+    expect(jev.store.items.get(API_KEY_ITEM)).toBe('ts-chave-do-usuario');
+
+    const local = mountHarness({ engine: 'local', stored: 'sk-ant-api03-guardada' });
+    local.description.value = 'um salão de taverna';
+    local.apiKey.value = '';
+    local.generate.click();
+    await settle();
+    expect(local.store.items.get(API_KEY_ITEM)).toBe('sk-ant-api03-guardada');
+  });
+});
+
+describe('what the page says while the local model is arriving', () => {
+  /**
+   * A run on the local engine, stopped at the point the model would load.
+   *
+   * The interpreter is built while the click handler is still running, so the
+   * report it was handed is in hand by the time `settle` returns; `hang` keeps
+   * the run from finishing and writing over the line under test.
+   */
+  async function localRun(): Promise<{ app: Harness; report: ProgressReport }> {
+    const app = mountHarness({ engine: 'local', hang: true });
+    app.description.value = 'um salão de taverna';
+    app.generate.click();
+    await settle();
+    expect(app.progressReports).toHaveLength(1);
+    return { app, report: app.progressReports[0] };
+  }
+
+  it('puts the loader’s own progress on the status line, stage by stage', async () => {
+    const { app, report } = await localRun();
+
+    report({ kind: 'starting' });
+    expect(app.status.textContent).toBe('Preparando o modelo local…');
+
+    report({ kind: 'downloading', file: 'onnx/model_quantized.onnx', ratio: 0.42 });
+    expect(app.status.textContent).toBe('Baixando o modelo local… model_quantized.onnx, 42%');
+
+    report({ kind: 'preparing' });
+    expect(app.status.textContent).toBe('Carregando o modelo local na memória…');
+
+    report({ kind: 'ready' });
+    expect(app.status.textContent).toContain('Modelo local pronto');
+  });
+
+  it('says which file each percentage belongs to, over the whole sequence', async () => {
+    // Driven through the real page rather than the pure function, because what
+    // a person sees is the sequence of writes and not one call's return value.
+    // Three falls back to zero remain — `ratio` is a fraction of one file —
+    // and each one now happens beside a name that changed.
+    const { app, report } = await localRun();
+    const writes = watchText(app.status);
+
+    for (const [file, ratio] of [
+      ['config.json', 1],
+      ['tokenizer_config.json', 1],
+      ['tokenizer.json', 0],
+      ['tokenizer.json', 1],
+      ['onnx/model_quantized.onnx', 0],
+      ['onnx/model_quantized.onnx', 1],
+    ] as const) {
+      report({ kind: 'downloading', file, ratio });
+    }
+
+    expect(writes).toEqual([
+      'Baixando o modelo local… config.json, 100%',
+      'Baixando o modelo local… tokenizer_config.json, 100%',
+      'Baixando o modelo local… tokenizer.json, 0%',
+      'Baixando o modelo local… tokenizer.json, 100%',
+      'Baixando o modelo local… model_quantized.onnx, 0%',
+      'Baixando o modelo local… model_quantized.onnx, 100%',
+    ]);
+  });
+
+  it('writes the live region only when the sentence would change', async () => {
+    // `status` is `role="status"` / `aria-live="polite"`, and assigning
+    // `textContent` replaces the text node whether or not the string differs —
+    // which is a mutation of a live region, and a queued announcement. Nothing
+    // on the path throttles.
+    //
+    // Measured over one real download: 4,627 progress events, 4,632 writes,
+    // 211 of which changed the string. The hundred events below all round to
+    // the same percentage of the same file, which is the shape of the other
+    // 4,421.
+    const { app, report } = await localRun();
+    const writes = watchText(app.status);
+
+    for (let step = 0; step < 100; step += 1) {
+      report({
+        kind: 'downloading',
+        file: 'onnx/model_quantized.onnx',
+        ratio: 0.42 + step / 100000,
+      });
+    }
+
+    expect(writes).toEqual(['Baixando o modelo local… model_quantized.onnx, 42%']);
+  });
+
+  it('writes again as soon as the sentence does change', async () => {
+    // The other half: a comparison that silenced the region altogether would
+    // pass the test above and show a percentage frozen at its first value.
+    const { app, report } = await localRun();
+    const writes = watchText(app.status);
+
+    report({ kind: 'downloading', file: 'tokenizer.json', ratio: 0.42 });
+    report({ kind: 'downloading', file: 'tokenizer.json', ratio: 0.42 });
+    report({ kind: 'downloading', file: 'tokenizer.json', ratio: 0.43 });
+    report({ kind: 'downloading', file: 'onnx/model_quantized.onnx', ratio: 0.43 });
+    report({ kind: 'preparing' });
+    report({ kind: 'preparing' });
+
+    expect(writes).toEqual([
+      'Baixando o modelo local… tokenizer.json, 42%',
+      'Baixando o modelo local… tokenizer.json, 43%',
+      'Baixando o modelo local… model_quantized.onnx, 43%',
+      'Carregando o modelo local na memória…',
+    ]);
+  });
+
+  it('does not swallow a stage that repeats after something else was said', async () => {
+    // The comparison is against what the line currently says, not against the
+    // last progress event — the stage line and the model line share the region,
+    // so a `preparing` that follows the stage text has to be written.
+    const { app, report } = await localRun();
+    report({ kind: 'preparing' });
+    const writes = watchText(app.status);
+
+    app.status.textContent = 'Interpretando a descrição…';
+    report({ kind: 'preparing' });
+
+    expect(writes).toEqual(['Interpretando a descrição…', 'Carregando o modelo local na memória…']);
   });
 });
