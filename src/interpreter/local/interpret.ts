@@ -304,7 +304,7 @@ function describeIssue(issue: { path: PropertyKey[]; message: string }): string 
  * ## What the model is shown
  *
  * Not `text` itself: `synonyms.ts` rewrites the handful of words this model is
- * known to miss — "porão" for the storeroom, "estantes" for the shelving — into
+ * known to miss — "porão" for the storeroom, "estante" for the shelving — into
  * the words its labels use, and the result of that is the premise of all five
  * entailment pairs. All five get the *same* premise, so the five answers are
  * about one sentence.

@@ -204,19 +204,20 @@ export const SIZE_HINT_TEMPLATE: GatedTemplate<'small' | 'medium' | 'large'> = {
  * ("pilares ou colunas") were both tried and both scored worse. Some of the
  * words a person might use *instead* of these seven are handled a layer
  * earlier, in `synonyms.ts`, where they cannot blur a label — but they are not
- * free there either, and that file has had to take eighteen variants back out,
- * two whole families with them. **Four of these seven labels have no synonym
- * rule at all**: `hearth`, `pillars` and `alcove` lost theirs to measurement,
- * and `stairs`, `shelving`, `bunks` and `bar` are the only ones left with one.
+ * free there either, and that file has had to take nineteen variants back out,
+ * two whole families with them. **Three of these seven labels have no synonym
+ * rule at all** — `hearth`, `pillars` and `alcove` lost theirs to measurement —
+ * and the other four, `stairs`, `shelving`, `bunks` and `bar`, still have one.
  * A word only goes there if every ordinary reading of it means the label *and*
  * the swap has been measured for what else it moves; the rest are left for the
  * classifier to miss.
  *
  * One of these seven labels is known to be contaminated and is not fixed:
  * "alcova" pulls `bunks` up with it. "Duas alcovas escuras se abrem no fundo."
- * scores `beliches` at 0.554 with no rewriting anywhere, and across eight
- * sentences containing "alcovas" the raw premise puts `beliches` over the gate
- * in seven. That is a property of this pair of labels, so it is written here
+ * scores `beliches` at 0.554 with no rewriting anywhere, and it is the first of
+ * eight such sentences in which the raw premise puts `beliches` over the gate
+ * **8 of 8**. (This said "seven", from a set nobody wrote down; the eight that
+ * are written down give eight.) That is a property of this pair of labels, so it is written here
  * rather than in the layer that was wrongly blamed for it.
  *
  * The `Record<Feature, string>` is tied to `FEATURES` in `../vocabulary.ts`:
