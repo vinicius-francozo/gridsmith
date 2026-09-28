@@ -1581,3 +1581,41 @@ describe('one provider never gets the other provider’s key', () => {
     expect(app.asked).toHaveLength(1);
   });
 });
+
+describe('the refusal of a wrong-provider key, on the page', () => {
+  it('turns away an Anthropic key whatever case it arrives in', async () => {
+    // Narrow — a real Anthropic key is lower case — but the refusal is here for
+    // the paste out of the wrong password-manager entry, which is where odd
+    // case comes from in the first place.
+    for (const key of ['SK-ANT-api03-colada-por-engano', 'Sk-Ant-api03-colada']) {
+      const app = mountHarness({ engine: 'jev' });
+      app.description.value = 'uma ferraria com bigorna';
+      app.apiKey.value = key;
+
+      app.generate.click();
+      await settle();
+
+      expect(app.jevKeysSeen).toEqual([]);
+      expect(app.asked).toEqual([]);
+    }
+  });
+
+  it('tells the person the field is about to be emptied, rather than not', async () => {
+    // The advice and the behaviour have to agree. Switching engine to reach the
+    // other one clears the box, so a message that says "escolha o Claude" and
+    // stops there sends somebody to an empty field with no idea why.
+    const app = mountHarness({ engine: 'jev' });
+    app.description.value = 'uma ferraria com bigorna';
+    app.apiKey.value = 'sk-ant-api03-colada-por-engano';
+
+    app.generate.click();
+    await settle();
+
+    expect(app.text()).toContain('não foi enviada');
+    expect(app.text()).toContain('trocar de motor limpa o campo');
+
+    // And it is true: following the advice does empty it.
+    app.pick('claude');
+    expect(app.apiKey.value).toBe('');
+  });
+});

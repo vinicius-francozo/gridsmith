@@ -403,9 +403,19 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   /**
    * Which engine the key now in the box was put there for.
    *
-   * Claude at mount, because the slot the box is prefilled from can only hold
-   * an Anthropic key — see the refusal to store a Jev key in `run` below, which
-   * is what makes that true rather than assumed.
+   * Claude at mount, and that is a claim about what this page *files*, not
+   * about what is in the slot. A Jev run does not store, so nothing the page
+   * does puts a TypeSafe key there. What the slot actually holds is whatever
+   * was in the box on the last *Claude* run — and a person who pasted the wrong
+   * key into that run had it sent to Anthropic and kept, and every visit after
+   * prefills it and sends it again on one click. The first paste is theirs; the
+   * repeat is this page's.
+   *
+   * That one is not closable from here, and by this front's own argument: there
+   * is no published shape for a TypeSafe key, so there is nothing to refuse it
+   * by — the same asymmetry `looksLikeAnthropicKey` is built around, which is
+   * why the guard that direction gets is the clearing rather than a test on the
+   * value. A slot per engine in `storage.ts` is what closes it.
    */
   let keyEngine: Engine = chosenEngine();
 

@@ -43,6 +43,7 @@ import {
   describeResult,
   looksLikeAnthropicKey,
   redactKeys,
+  UI_TEXT,
 } from './messages';
 
 /** Every code any layer of the interpreter can put in front of a person. */
@@ -643,5 +644,81 @@ describe('telling one provider’s key from the other', () => {
 
   it('is not fooled by the prefix turning up later in the string', () => {
     expect(looksLikeAnthropicKey('ts-sk-ant-disfarcada')).toBe(false);
+  });
+
+  it('is not walked around by case, and neither is the redaction', () => {
+    // A real Anthropic key is lower case, so on its own this is pedantry. But
+    // the refusal exists for the paste out of the wrong password-manager entry,
+    // and a manager that upper-cases, or somebody retyping by hand, is exactly
+    // where odd case comes from — the accident the guard is for is the accident
+    // that brings it. The two move together because they encode one fact.
+    for (const key of ['SK-ANT-api03-qualquer', 'Sk-Ant-api03-qualquer']) {
+      expect(looksLikeAnthropicKey(key)).toBe(true);
+      expect(redactKeys(key)).toBe('sk-ant-***');
+    }
+  });
+});
+
+describe('what the page promises about where the key goes', () => {
+  // Every sentence here is a promise about the handling of somebody's
+  // credential, and a promise about a secret that no test holds is a promise
+  // that can be reversed by an edit nobody notices. Two of these were already
+  // found false in this front and fixed — the Anthropic note left standing over
+  // a Jev run, and a storage promise for a key that is deliberately not stored.
+  // These three are true, and pinned so that they stay that way or fail loudly.
+
+  it('promises the Claude key is kept, because it is', () => {
+    // The mutation that matters runs the *other* way from the two already
+    // fixed: promising less persistence than there is. A person told the key is
+    // not kept has no reason to clear it off a machine they share, and it is
+    // sitting in `localStorage`.
+    expect(UI_TEXT.apiKeyNote).toMatch(/A chave fica guardada só neste navegador/);
+    expect(UI_TEXT.apiKeyNote).not.toMatch(/não fica guardada/);
+  });
+
+  it('promises the Jev key is not kept, because it is not', () => {
+    expect(UI_TEXT.apiKeyNoteJev).toMatch(/não fica guardada no navegador/);
+    expect(UI_TEXT.apiKeyNoteJev).not.toMatch(/fica guardada só neste navegador/);
+  });
+
+  it('says the Claude request reaches the API without a server in between', () => {
+    expect(UI_TEXT.apiKeyNote).toMatch(/vai direto para a API/);
+    expect(UI_TEXT.apiKeyNote).toMatch(/Não passa por servidor nenhum/);
+  });
+
+  it('says the Jev request does pass through one, and that it keeps nothing', () => {
+    // The one sentence in this file that promises another file's behaviour.
+    // What makes it true is `api/jev.test.ts` — "writes nothing to the console
+    // at all, on any path", which spies every console method over every path,
+    // and a second test asking separately whether the key rode along with any
+    // log added on purpose. This pins the words; that pair pins the fact. If
+    // the proxy ever gains a log line, that pair is what fails, and this
+    // sentence has to come out with it.
+    expect(UI_TEXT.apiKeyNoteJev).toMatch(/passa por um servidor desta página/);
+    expect(UI_TEXT.apiKeyNoteJev).toMatch(/não guarda nem registra nada/);
+    expect(UI_TEXT.apiKeyNoteJev).not.toMatch(/mantém um registro/);
+  });
+
+  it('promises neither key reaches the address bar', () => {
+    // True by construction — no form is built and nothing writes to `location`,
+    // which `mount.test.ts` holds — but the sentence is what the person acts
+    // on, so the sentence is pinned too.
+    // The negative needs the lookbehind: "não aparece no endereço da página"
+    // contains "aparece no endereço da página", so a plain `not.toContain`
+    // fails on the correct sentence — which is the same substring trap these
+    // tests exist to catch, and it caught this one first.
+    for (const note of [UI_TEXT.apiKeyNote, UI_TEXT.apiKeyNoteJev]) {
+      expect(note).toMatch(/não aparece no endereço da página/);
+      expect(note).not.toMatch(/(?<!não )aparece no endereço da página/);
+    }
+  });
+
+  it('never tells somebody to do a thing that destroys what the thing needs', () => {
+    // The refusal used to end "ou escolha o Claude". Following that advice
+    // fires `refreshEngine`, which empties the box — throwing away the key the
+    // advice was about. Safe, and self-defeating. It now says the field will be
+    // cleared, which is also the only place the page explains that at all.
+    expect(UI_TEXT.anthropicKeyOnJev).toMatch(/não foi enviada/);
+    expect(UI_TEXT.anthropicKeyOnJev).toMatch(/trocar de motor limpa o campo/);
   });
 });

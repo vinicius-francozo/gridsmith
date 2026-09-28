@@ -244,7 +244,7 @@ const SCENE_ISSUES: Readonly<Record<SceneIssueKind, string>> = {
  * Anthropic key costs one regular expression and closes the whole class.
  */
 export function redactKeys(text: string): string {
-  return text.replace(/sk-ant-[A-Za-z0-9_-]+/g, 'sk-ant-***');
+  return text.replace(/sk-ant-[A-Za-z0-9_-]+/gi, 'sk-ant-***');
 }
 
 /**
@@ -261,9 +261,15 @@ export function redactKeys(text: string): string {
  * that work. That asymmetry is why the field is also emptied when the engine
  * changes: the clearing covers both directions and this covers only the one
  * where a shape is actually known.
+ *
+ * Case-insensitive, as `redactKeys` is. A real Anthropic key is lower case, so
+ * on its own that would be pedantry — but this refusal exists for the paste out
+ * of the wrong password-manager entry, and a manager that upper-cases or a
+ * person retyping by hand is exactly where odd case comes from. A guard that
+ * the accident walks around is not a guard.
  */
 export function looksLikeAnthropicKey(key: string): boolean {
-  return /^sk-ant-/.test(key.trim());
+  return /^sk-ant-/i.test(key.trim());
 }
 
 /** A failure, as a headline and an optional technical line under it. */
@@ -550,6 +556,15 @@ export const UI_TEXT = {
   // and the response is discarded. No placeholder prefix is shown, because this
   // project has no documented one to show and inventing it would be a guess on
   // screen.
+  //
+  // **"não guarda nem registra nada" is this file promising another file's
+  // behaviour**, and the only sentence here that does. What holds it up is
+  // `api/jev.test.ts`, "writes nothing to the console at all, on any path",
+  // which spies every console method across every path rather than grepping the
+  // source — plus a second test that asks separately whether the key went with
+  // any log somebody adds deliberately. If that pair ever goes, this sentence
+  // goes with it. The tests below pin the words; that pair is what makes the
+  // words true.
   apiKeyLabelJev: 'Chave da API do Jev (TypeSafe)',
   apiKeyPlaceholderJev: 'a sua chave da TypeSafe',
   apiKeyNoteJev:
@@ -575,7 +590,7 @@ export const UI_TEXT = {
    * two happened is the whole message.
    */
   anthropicKeyOnJev:
-    'A chave no campo é uma chave da Anthropic e o motor escolhido é o Jev, então ela não foi enviada. Cole a sua chave da TypeSafe, ou escolha o Claude.',
+    'A chave no campo é uma chave da Anthropic e o motor escolhido é o Jev, então ela não foi enviada. Cole a sua chave da TypeSafe. Para gerar com o Claude, troque o motor e cole a chave dele de novo: trocar de motor limpa o campo, de propósito.',
   seedNotAnInteger: 'A semente precisa ser um número inteiro. Deixe em branco para sortear uma.',
   seedOutOfRange: 'A semente precisa estar entre 0 e 4294967295. Deixe em branco para sortear uma.',
   interpreting: 'Interpretando a descrição…',
