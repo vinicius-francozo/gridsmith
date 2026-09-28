@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import jevEntry, { handleJevRequest, KEY_HEADER, TYPESAFE_ENDPOINT, UPSTREAM_TIMEOUT_MS, worker } from './jev';
+import jevEntry, {
+  handleJevRequest,
+  KEY_HEADER,
+  relayUnavailable,
+  TYPESAFE_ENDPOINT,
+  UPSTREAM_TIMEOUT_MS,
+  worker,
+} from './jev';
 
 /**
  * No test here reaches the network. Every call goes through a `fetchImpl` the
@@ -64,11 +71,14 @@ function truncatedUpstream(): typeof fetch {
  * guarded against. `fetch` has no such limit and hands these straight through,
  * which is how a `999` from a CDN in front of the API arrives.
  */
-function impossibleStatus(status: number): Response {
+function impossibleStatus(status: number, onBodyRead: () => void = () => {}): Response {
   return {
     status,
     headers: new Headers({ 'content-type': 'text/html' }),
-    text: () => Promise.resolve('<html>Attention Required</html>'),
+    text: () => {
+      onBodyRead();
+      return Promise.resolve('<html>Attention Required</html>');
+    },
   } as unknown as Response;
 }
 
@@ -235,6 +245,38 @@ describe('relaying a call to the System One endpoint', () => {
 
       expect(response.status).toBe(502);
       expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    }
+  });
+
+  it('checks the status before it spends the body', async () => {
+    // The refusal is right wherever the check sits, but only one place also
+    // declines to pull a body it is about to throw away. Pinned, so that
+    // moving the check below the read is a test failure rather than a quiet
+    // regression nobody sees.
+    let bodyReads = 0;
+    const { fetchImpl } = stubFetch(() =>
+      impossibleStatus(999, () => {
+        bodyReads += 1;
+      }),
+    );
+
+    const response = await handleJevRequest(pageRequest(), { fetchImpl });
+
+    expect(response.status).toBe(502);
+    expect(bodyReads).toBe(0);
+  });
+
+  it('survives the other answers defined to have no body', async () => {
+    // `204` is the one that turns up in practice and is covered above. `205`
+    // and `304` are on the same list in the spec and throw the same way, so
+    // they are asserted rather than carried on trust.
+    for (const status of [205, 304]) {
+      const { fetchImpl } = stubFetch(() => new Response(null, { status }));
+
+      const response = await handleJevRequest(pageRequest(), { fetchImpl });
+
+      expect(response.status).toBe(status);
+      expect(await response.text()).toBe('');
     }
   });
 
@@ -543,5 +585,20 @@ describe('the entry a host calls', () => {
     await handleJevRequest(pageRequest(), { fetchImpl, upstream: 'https://elsewhere.example/v1' });
 
     expect(calls[0].url).toBe('https://elsewhere.example/v1');
+  });
+});
+
+describe('the answer for a request that never reached the handler', () => {
+  it('refuses the way every other answer on this route refuses', async () => {
+    // `vite.config.ts` is the only caller, so without this the CORS headers
+    // and the body could both be dropped and the suite would not notice — and
+    // dropping them is the exact defect this was written to fix. A browser
+    // reports a bare status code as a network error, never as a 502.
+    const response = relayUnavailable();
+
+    expect(response.status).toBe(502);
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    expect(response.headers.get('content-type')).toBe('application/json');
+    expect(JSON.parse(await response.text())).toEqual({ error: expect.any(String) });
   });
 });
