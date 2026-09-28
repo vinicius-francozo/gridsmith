@@ -406,7 +406,10 @@ describe('clipToFloor', () => {
 });
 
 describe('sceneShadows', () => {
-  it('keeps one shadow per casting prop, in the order the props were given', () => {
+  it('names the casting prop on every piece, in the order the props were given', () => {
+    // One piece each only because `openFloor(12)` cuts nothing: the contract
+    // is the order and the attribution, not a count. A prop over a floor with
+    // holes in it yields several pieces, or none.
     const props = [
       prop({ assetId: 'anchor/hearth' }),
       prop({ assetId: 'scatter/straw', cell: { x: 6, y: 5 }, layer: 'scatter' }),
