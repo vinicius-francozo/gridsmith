@@ -474,18 +474,49 @@ describe('the rules themselves', () => {
   });
 
   it('has the shape the header states in prose', () => {
-    // `synonyms.ts` says "one rule out of five", "the other four", "eight
+    // `synonyms.ts` says "one rule out of five", "the other four", "seven
     // variants between them" and "four nouns". Those counts have gone stale
-    // twice now, both times left behind by a commit that removed rules and did
-    // not recount the sentences around them — a file stating a false invariant
-    // about itself is the defect this front has paid for more than any other.
-    // Written out as literals so the prose and the data fail together.
+    // three times now, each time left behind by a commit that removed rules and
+    // did not recount the sentences around them — a file stating a false
+    // invariant about itself is the defect this front has paid for more than
+    // any other. Written out as literals so the prose and the data fail
+    // together.
+    //
+    // The third round is the one this comment has to answer for: the last
+    // expectation below already said seven while the comment above it said
+    // eight, and so did the paragraph in `synonyms.ts` it was written to pin.
+    // A guard whose own comment carries the drift is not a guard.
     const featureRules = SYNONYM_RULES.filter((rule) => rule.canonical !== STOREROOM_WORD);
 
     expect(SYNONYM_RULES).toHaveLength(5);
     expect(SYNONYM_RULES.flatMap((rule) => rule.variants)).toHaveLength(15);
     expect(featureRules).toHaveLength(4);
     expect(featureRules.flatMap((rule) => rule.variants)).toHaveLength(7);
+  });
+
+  it('has the count of dead rules the header states, and names the three', () => {
+    // The guard this file did not have, and the reason the header said "two
+    // whole rules died" for four rounds while four other places said three.
+    // Everything here counted what is alive — five rules, fifteen variants,
+    // four feature rules — and a removal that takes a family to zero changes
+    // none of those numbers by more than one, so nothing broke. The count of
+    // rules that are *gone* had no test at all, which is exactly why it was the
+    // number that stayed wrong.
+    //
+    // Derived from the data on both sides rather than from the prose: a rule
+    // can only exist for a word some template asks about, so the labels a rule
+    // *could* have are the seven features plus the storeroom noun, and the ones
+    // no rule names are the ones that died. Adding a feature label or removing
+    // another family fails this without anyone having to notice the sentence.
+    const possible = [STOREROOM_WORD, ...Object.values(FEATURE_TEMPLATE.labels)];
+    const alive = new Set(SYNONYM_RULES.map((rule) => rule.canonical));
+    const dead = possible.filter((label) => !alive.has(label));
+
+    expect(possible).toHaveLength(8);
+    expect(dead).toHaveLength(3);
+    // Named, so that a removal that kills a different family cannot keep the
+    // count at three and leave `hearth`, `pillars` and `alcove` written down.
+    expect([...dead].sort()).toEqual(['alcova', 'lareira', 'pilares']);
   });
 
   it('holds the count of feature labels with no rule, which `templates.ts` states', () => {

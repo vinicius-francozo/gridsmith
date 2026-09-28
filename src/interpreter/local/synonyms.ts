@@ -110,7 +110,7 @@
  * room families would balance it; none has been measured, so none is here.
  *
  * **That is a fact about one rule out of five, and not about the layer.** The
- * other four rewrite features, eight variants between them, and `placeType` is
+ * other four rewrite features, seven variants between them, and `placeType` is
  * asked about the same rewritten premise — so they move it too, in whatever
  * direction the new word happens to pull. Measured: "Um quarto de hóspedes com
  * uma estante ao lado da cama." becomes "...com uma prateleiras...", and
@@ -119,9 +119,13 @@
  * paragraph above as a claim about the whole table and it says that cannot
  * happen; it is a claim about four nouns.
  *
- * (These counts have been wrong in this file once already, left behind by a
- * commit that removed rules without recounting the prose around them. They are
- * five, four, eight and four, and `synonyms.test.ts` holds each of them.)
+ * (These counts have gone stale three times now, each time left behind by a
+ * commit that removed rules without recounting the prose around them. The third
+ * time is worth the extra sentence: the shape test in `synonyms.test.ts` was
+ * already asserting the right **seven**, while this paragraph and that test's
+ * own comment both went on saying eight. A guard the prose beside it
+ * contradicts is a guard nobody reads. They are five, four, seven and four, and
+ * `synonyms.test.ts` holds each of them.)
  *
  * **False positives on `features` are the failure mode this layer reintroduces
  * most easily.** The risk above is about `placeType`, and it does not cover
@@ -147,7 +151,7 @@
  *   (g15's `stairs`) and invents one (f10's `alcove`).
  *
  * **So the measured value of this whole file is one `placeType` answer, and the
- * `depósito` family carries all of it.** The three feature rules that remain buy
+ * `depósito` family carries all of it.** The four feature rules that remain buy
  * nothing on this corpus that they do not also give back.
  *
  * **Do not quote the F1 here as the score.** It moves 0.746 → 0.754, and it
@@ -251,9 +255,23 @@ export type Normalized = {
  *
  * **Nineteen variants have been admitted and measured back out**, in three
  * rounds, and the five failure modes are different enough that the next person
- * needs all five names. Two whole rules died in the process: there is no
- * `hearth` family and no `pillars` family left, and the count of what survives
- * is five rules and fifteen variants.
+ * needs all five names. Three whole rules died in the process: there is no
+ * `hearth` family, no `pillars` family and no `alcove` family left, and the
+ * count of what survives is five rules and fifteen variants.
+ *
+ * That "three" said **two** for four rounds of review, and four independent
+ * places said otherwise the whole time: the last line of `SYNONYM_RULES`
+ * (`// There is no alcove rule.`), the paragraph closing mode 5, the label
+ * sentence in `templates.ts`, and that file's own test, which already counted
+ * three feature labels with no rule. The arithmetic closes it too — seven
+ * feature labels plus `depósito` is eight rules possible, five survive.
+ *
+ * It survived all four because of *what* was guarded, and that is why the guard
+ * below was added: every count in the test file was a count of what is
+ * **alive**. Nothing counted what is **dead**, so the one number in this
+ * paragraph with no data under it was the one that stayed wrong.
+ * `synonyms.test.ts` now derives the three from the eight labels a rule could
+ * exist for, minus the five that have one, and names them.
  *
  * Each mode was found by a *different question*, and the questions are the
  * reusable part — reading the table against the previous mode's question never
@@ -320,7 +338,10 @@ export type Normalized = {
  * **four moved a label that was not the firing rule's** — "adega" → depósito
  * lighting `alcove`, "fogueira" → lareira lighting `bar`, "estantes" →
  * prateleiras lighting `alcove`, "pilastras" → pilares lighting `shelving`.
- * Three of those four rules have since been removed for it.
+ * Three of those four **variants** have since been removed. Variants, not
+ * rules: only two rules died of this mode, and read as a claim about rules the
+ * sentence is false. "adega" is the one of the four that stayed, and it is the
+ * one still firing on f10 in the paragraph below.
  *
  * On the table as it stands, two descriptions move their set and **one of the
  * two is still collateral drag**: f10, where "adega" → depósito lights
