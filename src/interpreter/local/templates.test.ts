@@ -1,0 +1,251 @@
+import { describe, expect, it } from 'vitest';
+
+import type { Condition, Light, PlaceType } from '../../core/types';
+import { FEATURES } from '../vocabulary';
+
+import {
+  CLUTTER_BY_CONDITION,
+  CONDITION_TEMPLATE,
+  FEATURE_TEMPLATE,
+  LABEL_PLACEHOLDER,
+  LIGHT_TEMPLATE,
+  PLACE_TYPE_TEMPLATE,
+  SIZE_HINT_TEMPLATE,
+  STOREROOM_WORD,
+} from './templates';
+import type { ChoiceTemplate } from './templates';
+
+/**
+ * The vocabularies, written out by hand.
+ *
+ * The `Record` types in `templates.ts` already make the compiler refuse a
+ * missing key, so these lists are not a second copy of that check — they are
+ * the independent one. `PlaceType` could gain a fourth kind and both the type
+ * and the template would move together without anybody noticing; these lines
+ * are what makes that a failing test instead.
+ */
+const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
+const LIGHTS: Light[] = ['dark', 'dim', 'bright'];
+const CONDITIONS: Condition[] = ['tidy', 'lived_in', 'disordered', 'ruined'];
+const SIZE_HINTS = ['small', 'medium', 'large'];
+
+const ALL_TEMPLATES: Array<{ name: string; template: ChoiceTemplate<string> }> = [
+  { name: 'place type', template: PLACE_TYPE_TEMPLATE },
+  { name: 'light', template: LIGHT_TEMPLATE },
+  { name: 'condition', template: CONDITION_TEMPLATE },
+  { name: 'size hint', template: SIZE_HINT_TEMPLATE },
+  { name: 'feature', template: FEATURE_TEMPLATE },
+];
+
+describe('every template is askable', () => {
+  it('leaves exactly one hole for the label in each hypothesis', () => {
+    for (const { name, template } of ALL_TEMPLATES) {
+      const holes = template.hypothesis.split(LABEL_PLACEHOLDER).length - 1;
+      expect(`${name}: ${String(holes)}`).toBe(`${name}: 1`);
+    }
+  });
+
+  it('gives every value a label with something in it', () => {
+    for (const { name, template } of ALL_TEMPLATES) {
+      for (const [value, label] of Object.entries(template.labels)) {
+        expect(`${name}.${value}: ${label.trim()}`).not.toBe(`${name}.${value}: `);
+      }
+    }
+  });
+
+  it('never gives two values the same label', () => {
+    // Two values sharing a phrase would make the classifier's score for it
+    // ambiguous, and `scoresByValue` would see the same label twice and refuse
+    // the whole answer.
+    for (const { name, template } of ALL_TEMPLATES) {
+      const labels = Object.values(template.labels);
+      expect(`${name}: ${String(new Set(labels).size)}`).toBe(`${name}: ${String(labels.length)}`);
+    }
+  });
+});
+
+describe('every template covers its closed vocabulary', () => {
+  it('asks about all three kinds of place', () => {
+    expect(Object.keys(PLACE_TYPE_TEMPLATE.labels).sort()).toEqual([...PLACE_TYPES].sort());
+  });
+
+  it('asks about all three lights', () => {
+    expect(Object.keys(LIGHT_TEMPLATE.labels).sort()).toEqual([...LIGHTS].sort());
+  });
+
+  it('asks about all four conditions', () => {
+    expect(Object.keys(CONDITION_TEMPLATE.labels).sort()).toEqual([...CONDITIONS].sort());
+  });
+
+  it('asks about all three size hints', () => {
+    expect(Object.keys(SIZE_HINT_TEMPLATE.labels).sort()).toEqual([...SIZE_HINTS].sort());
+  });
+
+  it('asks about every feature in the vocabulary, and nothing else', () => {
+    expect(Object.keys(FEATURE_TEMPLATE.labels).sort()).toEqual([...FEATURES].sort());
+  });
+});
+
+describe('what the bench measured about the wording', () => {
+  it('asks each of the five questions in the words they were measured in', () => {
+    // The frame every label is judged inside. Changing one of these changes all
+    // of that question's answers at once and leaves no other trace, so the five
+    // are written out here by hand — a measured sentence that somebody reworded
+    // on the way past should be a red test, not a quieter map.
+    expect(PLACE_TYPE_TEMPLATE.hypothesis).toBe('Este texto é sobre {}.');
+    expect(LIGHT_TEMPLATE.hypothesis).toBe('A iluminação do lugar é assim: {}.');
+    expect(CONDITION_TEMPLATE.hypothesis).toBe('O lugar está {}.');
+    expect(SIZE_HINT_TEMPLATE.hypothesis).toBe('O lugar é {}.');
+    expect(FEATURE_TEMPLATE.hypothesis).toBe('O lugar tem {}.');
+  });
+
+  it('never offers the model a choice inside one label', () => {
+    // Measured: `'pilares ou colunas'` took the feature F1 from 0.94 to 0.79
+    // and invented false positives. The alternatives belong in `synonyms.ts`,
+    // where they are resolved before the model is asked anything.
+    for (const { name, template } of ALL_TEMPLATES) {
+      for (const [value, label] of Object.entries(template.labels)) {
+        expect(`${name}.${value}: ${String(/\bou\b/.test(label))}`).toBe(`${name}.${value}: false`);
+      }
+    }
+  });
+
+  it('keeps every feature label a bare noun', () => {
+    // Measured: enriching these labels took the feature F1 from 0.94 to 0.57.
+    for (const [feature, label] of Object.entries(FEATURE_TEMPLATE.labels)) {
+      expect(`${feature}: ${String(label.split(/\s+/).length)}`).toBe(`${feature}: 1`);
+    }
+  });
+
+  it('keeps every kind of place to a short label', () => {
+    // Measured: phrasing these as descriptive sentences — the worst of them
+    // eleven words long — scored 45% against 90% for the short ones.
+    for (const [place, label] of Object.entries(PLACE_TYPE_TEMPLATE.labels)) {
+      expect(`${place}: ${String(label.split(/\s+/).length <= 4)}`).toBe(`${place}: true`);
+    }
+  });
+
+  it('offers every label in the exact words the bench scored', () => {
+    // ## Why the wording is written out here, and what it costs to change
+    //
+    // These strings are not a design choice, they are the *result of a
+    // measurement*. A bench scored two models over twenty Portuguese
+    // descriptions, and the accuracy figures this front is built on — 90% on
+    // `placeType`, F1 0.94 on `features`, the AUC behind `minConfidence` —
+    // describe these exact phrasings and no others.
+    //
+    // So this test does not claim the labels below are the *right* words. It
+    // claims they are the *measured* words. Without it, somebody tidies
+    // `'usado, mas em ordem'` down to `'usado'` in passing, every number in
+    // `templates.ts` quietly stops describing the code that is running, and
+    // nothing anywhere says so. The shape checks above would not notice: a
+    // one-word condition label is still non-empty, still unique, still free of
+    // "ou".
+    //
+    // The cost is deliberate. A later bench is expected to replace these, and
+    // it has to replace them *here and in `templates.ts` together*, in one
+    // change, on purpose. If you are editing this list, you are invalidating a
+    // measurement — re-run the bench, or the comments in `templates.ts` are
+    // now false.
+    expect(PLACE_TYPE_TEMPLATE.labels).toEqual({
+      tavern_hall: 'salão de taverna',
+      tavern_room: 'quarto de taverna',
+      tavern_storeroom: 'depósito de taverna',
+    });
+    expect(LIGHT_TEMPLATE.labels).toEqual({
+      dark: 'escuridão total, não há luz nenhuma',
+      dim: 'luz fraca, penumbra, meia-luz',
+      bright: 'muita luz, o lugar é claro e bem iluminado',
+    });
+    expect(CONDITION_TEMPLATE.labels).toEqual({
+      tidy: 'limpo e arrumado',
+      lived_in: 'usado, mas em ordem',
+      disordered: 'bagunçado e desarrumado',
+      ruined: 'destruído e em ruínas',
+    });
+    expect(SIZE_HINT_TEMPLATE.labels).toEqual({
+      small: 'pequeno',
+      medium: 'de tamanho médio',
+      large: 'grande',
+    });
+    // These seven are also the words `synonyms.ts` rewrites descriptions
+    // *towards*, which it reads from here rather than restating. Changing one
+    // silently re-points that whole layer.
+    expect(FEATURE_TEMPLATE.labels).toEqual({
+      bar: 'balcão',
+      hearth: 'lareira',
+      stairs: 'escada',
+      pillars: 'pilares',
+      alcove: 'alcova',
+      shelving: 'prateleiras',
+      bunks: 'beliches',
+    });
+  });
+
+  it('builds the storeroom label on the word the synonym layer rewrites towards', () => {
+    // `synonyms.ts` reads `STOREROOM_WORD`, not this label. If the two ever
+    // stopped being the same word, every "porão" would be rewritten into a word
+    // no hypothesis mentions.
+    expect(PLACE_TYPE_TEMPLATE.labels.tavern_storeroom.split(' ')[0]).toBe(STOREROOM_WORD);
+  });
+});
+
+describe('the thresholds and the clutter table', () => {
+  it('keeps every threshold inside a probability', () => {
+    for (const template of [PLACE_TYPE_TEMPLATE, SIZE_HINT_TEMPLATE, FEATURE_TEMPLATE]) {
+      expect(template.minConfidence).toBeGreaterThan(0);
+      expect(template.minConfidence).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('puts the place-type gate above an even split of the three', () => {
+    // Below a third the gate would accept everything, including the answers the
+    // bench measured it holding back.
+    expect(PLACE_TYPE_TEMPLATE.minConfidence).toBeGreaterThan(1 / 3);
+  });
+
+  it('holds each threshold to the figure it was measured at', () => {
+    // Written out rather than read back, so that moving one of these is a
+    // decision somebody makes twice rather than a number that drifts. Each of
+    // the three is a measurement and each names its own, because the reason a
+    // threshold sits where it does is the only thing that says what a later
+    // bench would have to beat to move it.
+
+    // AUC 0.922 of confidence against correctness; at 0.55 the bench accepted
+    // 13 of 20 descriptions and all 13 were right.
+    expect(PLACE_TYPE_TEMPLATE.minConfidence).toBe(0.55);
+    // Swept from 0.40 to 0.70 against these labels: 40%, 70%, 80%, then 95% at
+    // 0.55 and 95% at every step above it. 0.55 is the bottom of that plateau,
+    // 19 of 20, the single error a `small` the gate read as no size at all.
+    // Lower is measurably worse; higher buys nothing and only refuses more.
+    expect(SIZE_HINT_TEMPLATE.minConfidence).toBe(0.55);
+    // Swept from 0.2 to 0.999 against these seven labels: F1 tops out at 0.94
+    // across 0.5 and 0.6, with no false positive at either and two features
+    // missed. At 0.4 it is 0.92 and a feature is invented. So 0.5 is the bottom
+    // of that plateau too — and it happens to be the half-way mark, which is
+    // what independent yes/no questions would suggest anyway.
+    expect(FEATURE_TEMPLATE.minConfidence).toBe(0.5);
+  });
+
+  it('puts the size threshold above an even split of the three', () => {
+    // Below a third, a description that never mentioned a size would come back
+    // with one anyway, and `sizeHint` would stop meaning "they asked for this".
+    expect(SIZE_HINT_TEMPLATE.minConfidence).toBeGreaterThan(1 / 3);
+  });
+
+  it('gives every condition a clutter figure inside 0..1', () => {
+    for (const condition of CONDITIONS) {
+      expect(CLUTTER_BY_CONDITION[condition]).toBeGreaterThanOrEqual(0);
+      expect(CLUTTER_BY_CONDITION[condition]).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('orders the clutter figures the way the conditions are ordered', () => {
+    // A tidier place is not messier than a more ruined one. Without this the
+    // weighted average in `deriveClutter` would still produce a number, and it
+    // would be the wrong way round.
+    const figures = CONDITIONS.map((condition) => CLUTTER_BY_CONDITION[condition]);
+
+    expect(figures).toEqual([...figures].sort((left, right) => left - right));
+  });
+});
