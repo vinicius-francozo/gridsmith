@@ -31,8 +31,8 @@
  * The signature is the Web standard `Request` in, `Response` out, because that
  * is the shape both candidate hosts speak. Neither of them is handed
  * `handleJevRequest` itself, though: its second parameter is a test seam, and
- * a host fills that slot with something of its own. The entry points at the
- * bottom of this file take a request and nothing else, and they are what a
+ * a host is free to put something of its own in that slot. The entry points at
+ * the bottom of this file take a request and nothing else, and they are what a
  * host calls. Nothing here touches a platform-specific request or response
  * object, and nothing here is imported from a dependency: the runtime's own
  * `fetch` does the work.
@@ -231,7 +231,8 @@ export async function handleJevRequest(request: Request, options: JevProxyOption
  *
  * The dev adapter in `vite.config.ts` has to build a `Request` out of Node's
  * own objects, and that construction can throw before this file is called at
- * all: `new Request()` refuses `TRACE`, `CONNECT` and `TRACK` outright. A bare
+ * all: `new Request()` refuses a `TRACE`, which reaches a Node server intact
+ * and is what makes this measurably reachable rather than theoretical. A bare
  * status code there would answer without the CORS headers every answer here
  * carries and without a body, and a browser reports that as a network error
  * rather than as the gateway failure it is — which is the exact defect the
@@ -246,13 +247,17 @@ export function relayUnavailable(): Response {
 /**
  * What a host actually calls.
  *
- * `handleJevRequest` takes a second argument and a host supplies one: a
- * Worker's entry is `fetch(request, env, ctx)`, so a binding or a var named
- * `upstream` would quietly become the address this relay sends the user's key
- * to as a bearer token, and `fetchImpl` and `timeoutMs` collide the same way.
- * A Vercel invocation puts its own context in that slot. So the seam is not
- * reachable from outside the module: this takes the request and drops
- * everything after it on the floor.
+ * `handleJevRequest` takes a second argument, and the one host whose calling
+ * convention is documented here supplies one: a Worker's entry is
+ * `fetch(request, env, ctx)`, so a binding or a var named `upstream` would
+ * quietly become the address this relay sends the user's key to as a bearer
+ * token, and `fetchImpl` and `timeoutMs` collide the same way.
+ *
+ * What closes that is arity, not a list of hosts. This declares one parameter
+ * and passes one argument, and JavaScript drops every argument after it in
+ * silence. So the seam is unreachable from outside the module on Cloudflare,
+ * on Vercel, and on whatever host nobody here has thought of — without anyone
+ * first having to find out what that host puts in the second slot.
  */
 export function fetchJev(request: Request): Promise<Response> {
   return handleJevRequest(request);
