@@ -57,9 +57,13 @@ function sceneFrom(
   doors: Door[] = [],
 ): Scene {
   const { size, tiles } = tilesFrom(rows);
-  // The plan's own cells, read off the same art as the tiles: shadows are cut
-  // to the floor, so a scene that drew a room and declared no cells would
-  // report every shadow as falling outside the map.
+  // The plan's own cells, read off the same art as the tiles, because shadows
+  // are cut to the floor and the cut reads them. A scene that drew a room and
+  // left `cells` empty does not quietly lose its shadows: it throws
+  // `RangeError` out of `cellAt` at the first span that reaches a missing
+  // row, which is four of the tests in this file. That is the same invariant
+  // `floorCells` (`generator/floorplan.ts`) already enforces on every
+  // generated plan.
   const cells: CellKind[][] = rows.map((row) =>
     [...row].map((char) => (char === '.' ? 'floor' : char === ' ' ? 'void' : 'wall')),
   );

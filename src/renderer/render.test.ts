@@ -178,7 +178,10 @@ function sceneOf(
   );
   // Floor everywhere: this file is about the executor and not about the plan,
   // but shadows are cut to the floor, and a scene declaring no cells at all
-  // would swallow every shadow there is here to watch being painted.
+  // would not quietly swallow the shadows this file watches being painted —
+  // it throws `RangeError` out of `cellAt` at the first one, the way
+  // `floorCells` (`generator/floorplan.ts`) already does for any plan whose
+  // cells fall short of its size.
   const cells: CellKind[][] = Array.from({ length: size.h }, () =>
     new Array<CellKind>(size.w).fill('floor'),
   );
