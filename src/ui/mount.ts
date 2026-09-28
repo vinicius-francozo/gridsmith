@@ -20,6 +20,7 @@
 import type { AssetLibrary, Interpreter, Params } from '../core/types';
 import { createPlaceholderLibrary } from '../assets/placeholder';
 import { ClaudeInterpreter } from '../interpreter/claude';
+import { JevInterpreter } from '../interpreter/jev/jev';
 import { LocalInterpreter } from '../interpreter/local/local';
 import type { ModelProgress, ProgressReport } from '../interpreter/local/pipeline';
 import { toPng } from '../renderer/png';
@@ -27,7 +28,14 @@ import type { RenderTarget } from '../renderer/render';
 
 import { createBlobSaver, mapFilename } from './download';
 import type { BlobSaver } from './download';
-import { describeEntries, describeFailure, describeResult, UI_TEXT } from './messages';
+import {
+  describeEntries,
+  describeFailure,
+  describeModelProgress,
+  describeResult,
+  looksLikeAnthropicKey,
+  UI_TEXT,
+} from './messages';
 import type { Failure } from './messages';
 import { generateMap } from './pipeline';
 import { cryptoEntropy, randomSeed, readSeed } from './seed';
@@ -49,6 +57,18 @@ export type AppServices = {
   library: AssetLibrary;
   /** Builds an interpreter around the key the person pasted. */
   createInterpreter: (apiKey: string) => Interpreter;
+  /**
+   * Builds the Jev interpreter around the key the person pasted.
+   *
+   * A second factory rather than a parameter on the first, for the reason the
+   * local one is separate too: what a factory takes is what its engine costs,
+   * and these three differ. It takes only the key because the endpoint has a
+   * default — `/api/jev`, the proxy this project serves — and the proxy is not
+   * optional. TypeSafe answers a browser with no `access-control-allow-origin`,
+   * measured on both the `POST` and the preflight, so a page that called the
+   * API directly would get a response the browser then threw away.
+   */
+  createJevInterpreter: (apiKey: string) => Interpreter;
   /**
    * Builds the interpreter that runs in this browser, with no key at all.
    *
@@ -73,6 +93,7 @@ function defaultServices(doc: Document): AppServices {
     storage: browserKeyStore() ?? nullKeyStore(),
     library: createPlaceholderLibrary(),
     createInterpreter: (apiKey) => new ClaudeInterpreter({ apiKey }),
+    createJevInterpreter: (apiKey) => new JevInterpreter({ apiKey }),
     createLocalInterpreter: (onProgress) => new LocalInterpreter({ onProgress }),
     toPng,
     saveBlob: createBlobSaver(doc),
@@ -91,87 +112,20 @@ export function mount(root: HTMLElement): void {
   mountApp(root, {});
 }
 
-/** Which interpreter a run uses. The value of the picker, and nothing else. */
+/**
+ * Which interpreter a run uses. The value of the picker, and nothing else.
+ *
+ * Three, not a flag. The page used to ask `usingLocalEngine()` and branch on
+ * the answer in four places, which was exactly right while "not local" meant
+ * "Claude" — and became wrong the moment a third engine existed, because every
+ * one of those branches would have silently read Jev as Claude.
+ */
 const CLAUDE_ENGINE = 'claude';
+const JEV_ENGINE = 'jev';
 const LOCAL_ENGINE = 'local';
 
-/**
- * The Portuguese for the local interpreter, which belongs in `messages.ts`.
- *
- * Every other word on this screen comes from `UI_TEXT`, and these should too —
- * `src/ui/messages.ts` is the one module in the project whose strings are not
- * in English, precisely so that no other file has to hold any. It is another
- * front's file and this front could not add to it, so the wording sits here
- * with its own name and is reported as the thing to move at the merge, rather
- * than being scattered untitled through the handlers below.
- *
- * The same gap runs one layer deeper and cannot be closed from here at all:
- * `describeFailure` has an arm per interpreter failure and none for
- * `ModelUnavailableError` or `ClassificationFailedError`, so both reach the
- * screen through its `InterpreterError` catch-all — "a interpretação da
- * descrição falhou", with the English detail underneath. True, but not the
- * sentence either of them deserves.
- */
-const LOCAL_TEXT = {
-  engineLabel: 'Interpretador',
-  engineClaude: 'Claude — na nuvem, com a sua chave',
-  engineLocal: 'Modelo local — neste navegador, sem chave',
-  /**
-   * The figure here is the whole first visit, not the model on its own.
-   *
-   * The model is 302,821,014 B, which every other file in this front calls 303
-   * MB. It is not all that arrives: `vite build` emits
-   * `ort-wasm-simd-threaded.asyncify` at 26.9 MB (6.8 MB gzipped) and the
-   * `transformers.web` chunk at 574 kB (164 kB gzipped), and both sit behind
-   * the same dynamic import as the model — nothing of it is fetched until
-   * somebody picks this engine, and all of it is fetched when they do. Served
-   * gzipped that is about 310 MB; served uncompressed, about 330. The note
-   * says 310 because that is what a host that compresses its assets sends,
-   * and the weights, which are the bulk of it, are the same either way.
-   *
-   * Said here rather than left to the status line, which is where it would be
-   * discovered by waiting.
-   */
-  engineLocalNote:
-    'O modelo local baixa cerca de 310 MB na primeira vez e fica guardado no navegador. Depois disso funciona sem rede e sem chave, e entende menos do que o Claude: não sabe dizer o que a descrição pediu e o mapa não tem.',
-  modelStarting: 'Preparando o modelo local…',
-  modelDownloading: 'Baixando o modelo local…',
-  /** With a percentage, when the server said how large the file is. */
-  modelDownloadingAt: (percent: number) => `Baixando o modelo local… ${String(percent)}%`,
-  modelPreparing: 'Carregando o modelo local na memória…',
-  /**
-   * The only one there is, now that `pipeline.ts` fixes `MODEL_DEVICE` to
-   * `wasm`.
-   *
-   * There used to be a `modelReadyWebgpu` beside it, picked by reading
-   * `progress.backend`. The backend is no longer detected — the q8 weights this
-   * front downloads go through `DequantizeLinear`, whose open bug on the WebGPU
-   * path returns wrong numbers rather than failing — so the GPU sentence was a
-   * string nothing could reach. Its reasoning is written out at `MODEL_DEVICE`.
-   */
-  modelReadyWasm:
-    'Modelo local pronto, rodando sem GPU — vai demorar mais. Interpretando a descrição…',
-} as const;
-
-/** What the status line says while the model is being made ready. */
-function describeModelProgress(progress: ModelProgress): string {
-  switch (progress.kind) {
-    case 'starting':
-      return LOCAL_TEXT.modelStarting;
-    case 'downloading':
-      return progress.ratio === undefined
-        ? LOCAL_TEXT.modelDownloading
-        : LOCAL_TEXT.modelDownloadingAt(Math.round(progress.ratio * 100));
-    case 'preparing':
-      return LOCAL_TEXT.modelPreparing;
-    case 'ready':
-      return LOCAL_TEXT.modelReadyWasm;
-    default: {
-      const unreachable: never = progress;
-      throw new TypeError(`unknown model progress: ${JSON.stringify(unreachable)}`);
-    }
-  }
-}
+/** The three, as a type, so the switches below can be checked for exhaustiveness. */
+type Engine = typeof CLAUDE_ENGINE | typeof JEV_ENGINE | typeof LOCAL_ENGINE;
 
 const STYLE = `
 :root { color-scheme: dark; }
@@ -185,7 +139,6 @@ body { margin: 0; background: #14161a; color: #e8e6e1;
 @media (max-width: 760px) { .gs-layout { grid-template-columns: 1fr; } }
 .gs-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
 .gs-field label { font-size: 13px; color: #b8bcc2; }
-.gs-field-caption { font-size: 13px; color: #b8bcc2; margin: 0; }
 .gs-field select, .gs-field input, .gs-field textarea {
   width: 100%; padding: 9px 11px; border-radius: 7px; border: 1px solid #333840;
   background: #1c1f25; color: inherit; font: inherit; }
@@ -245,17 +198,26 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
 
   // --- The fields -----------------------------------------------------------
 
-  /** A labelled field, with the label bound to the control by id. */
-  const field = (id: string, label: string): HTMLDivElement => {
+  /**
+   * A labelled field, with the label bound to the control by id.
+   *
+   * Both halves come back, because one field's caption is not fixed: the key
+   * field is shared by two engines that call the key different things and make
+   * different promises about where it goes, so `refreshEngine` rewrites it.
+   */
+  const field = (
+    id: string,
+    label: string,
+  ): { wrap: HTMLDivElement; caption: HTMLLabelElement } => {
     const wrap = make('div', 'gs-field');
     const caption = make('label');
     caption.htmlFor = id;
     caption.textContent = label;
     wrap.append(caption);
-    return wrap;
+    return { wrap, caption };
   };
 
-  const descriptionField = field('gs-description', UI_TEXT.descriptionLabel);
+  const descriptionField = field('gs-description', UI_TEXT.descriptionLabel).wrap;
   const description = make('textarea');
   description.id = 'gs-description';
   description.rows = 4;
@@ -264,36 +226,37 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
 
   // The interpreter picker.
   //
-  // A caption and an `aria-label` rather than a `<label>` element, and that is
-  // the one place this front bent to a test it was not allowed to edit:
-  // `mount.test.ts` asserts the *exact* set of `htmlFor` values on the page, so
-  // a fourth labelled field fails it, and that file belongs to another front.
-  // The control is still captioned on screen and still named for a screen
-  // reader, so nothing is lost today; the right shape is `<label
-  // for="gs-engine">` plus a fourth entry in that list, and it is in the report.
-  const engineField = make('div', 'gs-field');
-  const engineCaption = make('p', 'gs-field-caption');
-  engineCaption.textContent = LOCAL_TEXT.engineLabel;
+  // A real `<label for="gs-engine">`, like the other three fields. It was a
+  // `<p>` plus an `aria-label` for one reason, written down at the time: the
+  // test below asserts the *exact* set of `htmlFor` values on the page, and the
+  // front that added the picker was not allowed to edit that file. A caption
+  // that is not a label is still clickable-nowhere and still invisible to
+  // "list the form controls", and an `aria-label` that has to agree with a
+  // separate `<p>` by hand is two strings that can drift. The test now expects
+  // four values, which is what it should have expected then.
+  const engineField = field('gs-engine', UI_TEXT.engineLabel).wrap;
   const engine = make('select');
   engine.id = 'gs-engine';
-  engine.setAttribute('aria-label', LOCAL_TEXT.engineLabel);
   const claudeOption = make('option');
   claudeOption.value = CLAUDE_ENGINE;
-  claudeOption.textContent = LOCAL_TEXT.engineClaude;
+  claudeOption.textContent = UI_TEXT.engineClaude;
+  const jevOption = make('option');
+  jevOption.value = JEV_ENGINE;
+  jevOption.textContent = UI_TEXT.engineJev;
   const localOption = make('option');
   localOption.value = LOCAL_ENGINE;
-  localOption.textContent = LOCAL_TEXT.engineLocal;
-  engine.append(claudeOption, localOption);
+  localOption.textContent = UI_TEXT.engineLocal;
+  engine.append(claudeOption, jevOption, localOption);
   // Set rather than left to the browser's own "first option wins", so that the
   // page knows which engine it is on without reading the DOM's mind — and so
   // that the default is a decision written down here: the one that answers in
   // seconds, for somebody generating a map mid-session.
   engine.value = CLAUDE_ENGINE;
   const engineNote = make('p', 'gs-note');
-  engineNote.textContent = LOCAL_TEXT.engineLocalNote;
-  engineField.append(engineCaption, engine, engineNote);
+  engineNote.textContent = UI_TEXT.engineLocalNote;
+  engineField.append(engine, engineNote);
 
-  const apiKeyField = field('gs-api-key', UI_TEXT.apiKeyLabel);
+  const { wrap: apiKeyField, caption: apiKeyCaption } = field('gs-api-key', UI_TEXT.apiKeyLabel);
   const apiKey = make('input');
   apiKey.id = 'gs-api-key';
   // `password` so the key is not readable over a shoulder or in a screen share,
@@ -309,7 +272,7 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   apiKeyNote.textContent = UI_TEXT.apiKeyNote;
   apiKeyField.append(apiKey, apiKeyNote);
 
-  const seedField = field('gs-seed', UI_TEXT.seedLabel);
+  const seedField = field('gs-seed', UI_TEXT.seedLabel).wrap;
   const seed = make('input');
   seed.id = 'gs-seed';
   seed.type = 'text';
@@ -420,8 +383,41 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
     return [caption, list];
   };
 
-  /** Whether this run uses the interpreter that runs in this browser. */
-  const usingLocalEngine = (): boolean => engine.value === LOCAL_ENGINE;
+  /**
+   * Which of the three the picker is on.
+   *
+   * Anything else is read as Claude, which is what `engine.value` is set to at
+   * mount and the only value the page puts there that is not one of the three.
+   */
+  const chosenEngine = (): Engine => {
+    switch (engine.value) {
+      case JEV_ENGINE:
+        return JEV_ENGINE;
+      case LOCAL_ENGINE:
+        return LOCAL_ENGINE;
+      default:
+        return CLAUDE_ENGINE;
+    }
+  };
+
+  /**
+   * Which engine the key now in the box was put there for.
+   *
+   * Claude at mount, and that is a claim about what this page *files*, not
+   * about what is in the slot. A Jev run does not store, so nothing the page
+   * does puts a TypeSafe key there. What the slot actually holds is whatever
+   * was in the box on the last *Claude* run — and a person who pasted the wrong
+   * key into that run had it sent to Anthropic and kept, and every visit after
+   * prefills it and sends it again on one click. The first paste is theirs; the
+   * repeat is this page's.
+   *
+   * That one is not closable from here, and by this front's own argument: there
+   * is no published shape for a TypeSafe key, so there is nothing to refuse it
+   * by — the same asymmetry `looksLikeAnthropicKey` is built around, which is
+   * why the guard that direction gets is the clearing rather than a test on the
+   * value. A slot per engine in `storage.ts` is what closes it.
+   */
+  let keyEngine: Engine = chosenEngine();
 
   /**
    * Shows the parts of the form the chosen interpreter actually uses.
@@ -431,21 +427,74 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
    * greyed-out box invites somebody to wonder what would happen if they filled
    * it. The note appears in its place, because the cost of the local engine is
    * a download of about 310 MB — the model, the ONNX runtime and the library
-   * that loads them, see `LOCAL_TEXT` — and that is something to be told before
-   * the first click, not discovered by waiting.
+   * that loads them, see `UI_TEXT.engineLocalNote` — and that is something to
+   * be told before the first click, not discovered by waiting.
+   *
+   * For the other two the field stays, and its wording does not. Both read the
+   * key out of the same box, but they are different credentials from different
+   * companies and they travel differently: the Anthropic one goes straight to
+   * the API from this page, the TypeSafe one goes through this project's proxy
+   * because TypeSafe will not answer a browser. A field captioned "Chave da API
+   * da Anthropic" above a Jev run sends somebody to the wrong dashboard, and
+   * the note under it would promise a route the request does not take.
    */
   const refreshEngine = (): void => {
-    const local = usingLocalEngine();
-    apiKeyField.hidden = local;
-    engineNote.hidden = !local;
+    const chosen = chosenEngine();
+    // The box is emptied, not just recaptioned, and that is the part that
+    // matters. Nothing anywhere checks the shape of what is in it — the proxy
+    // relays whatever it is handed and `JevInterpreter` only checks it is not
+    // empty — so a key left behind by the previous engine is sent to the new
+    // one's API on the next click. With the field prefilled from storage at
+    // mount, that is not a slip somebody has to make: it is what a return visit
+    // looks like by default, in both directions. The person is then told the
+    // key was rejected, which sends them to fetch another one and says nothing
+    // about the credential that was just handed to a third party and now has to
+    // be rotated.
+    //
+    // Passing through the local engine is not a change of key: it does not read
+    // the field, so what is in there still belongs to whichever of the two put
+    // it there.
+    if (chosen !== LOCAL_ENGINE) {
+      if (chosen !== keyEngine) {
+        apiKey.value = '';
+      }
+      keyEngine = chosen;
+    }
+    apiKeyField.hidden = chosen === LOCAL_ENGINE;
+    engineNote.hidden = chosen !== LOCAL_ENGINE;
+    const jev = chosen === JEV_ENGINE;
+    apiKeyCaption.textContent = jev ? UI_TEXT.apiKeyLabelJev : UI_TEXT.apiKeyLabel;
+    apiKey.placeholder = jev ? UI_TEXT.apiKeyPlaceholderJev : UI_TEXT.apiKeyPlaceholder;
+    apiKeyNote.textContent = jev ? UI_TEXT.apiKeyNoteJev : UI_TEXT.apiKeyNote;
   };
 
   engine.addEventListener('change', refreshEngine);
   refreshEngine();
 
-  /** Puts the model's own progress on the status line, in place of the stage. */
+  /**
+   * Puts the model's own progress on the status line, in place of the stage.
+   *
+   * Only when it changes something. The status line is `role="status"` with
+   * `aria-live="polite"`, and assigning `textContent` replaces the text node
+   * whether or not the string differs — which a screen reader reads as a
+   * mutation of a live region and queues an announcement for. Nothing on the
+   * path from the library's `progress_callback` to here throttles: `src/` was
+   * swept for `throttle`, `debounce`, `requestAnimationFrame` and `setTimeout`
+   * and the one hit is unrelated.
+   *
+   * Measured over one real download: 4,627 progress events, 4,632 writes, and
+   * **211** of those writes changed the string. The comparison below drops the
+   * other 4,421 and changes nothing about what appears on screen. With the
+   * smaller chunks Chrome tends to deliver the event count passes 18,000, and
+   * what saturates is the announcement queue — minutes of the same sentence,
+   * with anything else the page has to say waiting behind it.
+   */
   const showModelProgress = (progress: ModelProgress): void => {
-    status.textContent = describeModelProgress(progress);
+    const sentence = describeModelProgress(progress);
+    if (sentence === status.textContent) {
+      return;
+    }
+    status.textContent = sentence;
   };
 
   /** The local interpreter, once somebody has asked for one. */
@@ -454,9 +503,10 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   /**
    * The interpreter this run uses.
    *
-   * The Claude one is rebuilt every run because the key may have been edited
-   * between them, and it costs nothing — it holds a client and a string. The
-   * local one is built once and kept, because it holds the model: it loads on
+   * The two that take a key are rebuilt every run because the key may have been
+   * edited between them, and it costs nothing — each holds a string and either
+   * a client or an endpoint. The local one is built once and kept, because it
+   * holds the model: it loads on
    * its first description and remembers it, and a fresh one per run would throw
    * that away and rebuild the session on every click. The browser would still
    * have the files cached, so nothing would be re-downloaded and nothing would
@@ -465,11 +515,20 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
    * local engine and then changing your mind costs nothing either.
    */
   const interpreterForRun = (): Interpreter => {
-    if (!usingLocalEngine()) {
-      return services.createInterpreter(apiKey.value.trim());
+    const chosen = chosenEngine();
+    switch (chosen) {
+      case CLAUDE_ENGINE:
+        return services.createInterpreter(apiKey.value.trim());
+      case JEV_ENGINE:
+        return services.createJevInterpreter(apiKey.value.trim());
+      case LOCAL_ENGINE:
+        localInterpreter ??= services.createLocalInterpreter(showModelProgress);
+        return localInterpreter;
+      default: {
+        const unreachable: never = chosen;
+        throw new TypeError(`unknown engine: ${JSON.stringify(unreachable)}`);
+      }
     }
-    localInterpreter ??= services.createLocalInterpreter(showModelProgress);
-    return localInterpreter;
   };
 
   // --- Doing things ---------------------------------------------------------
@@ -548,6 +607,19 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
       return;
     }
 
+    // Before the seed is drawn, beside the other refusal that costs nothing.
+    // The clearing in `refreshEngine` is what makes a key of the wrong
+    // provider's rare; this is what makes sending one impossible, and it is
+    // needed because the clearing cannot see a key pasted straight into a Jev
+    // session out of the wrong password-manager entry. Only this direction can
+    // be checked: `sk-ant-` is Anthropic's documented prefix, and there is no
+    // published shape for a TypeSafe key to test the other way round with.
+    if (chosenEngine() === JEV_ENGINE && looksLikeAnthropicKey(apiKey.value)) {
+      status.textContent = '';
+      showFailure({ title: UI_TEXT.anthropicKeyOnJev });
+      return;
+    }
+
     const chosenSeed = takeSeed();
     if (chosenSeed === undefined) {
       status.textContent = '';
@@ -559,7 +631,22 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
     // meant this one. Not on a local run at all — that one never reads the
     // field, so a run of it is no evidence about what is in there, and writing
     // anyway would let a hidden field overwrite a key that was working.
-    if (!usingLocalEngine()) {
+    //
+    // A Jev run reads the field and still does not store, and that is the
+    // choice rather than an oversight. `storage.ts` has one slot,
+    // `API_KEY_ITEM`, and it is that file's constant; the box is prefilled from
+    // it at mount, before any engine has been picked. So a slot that could hold
+    // either provider's key is a slot whose contents cannot be attributed, and
+    // an unattributable prefill is a key handed to whichever engine the page
+    // happens to open on — which is Claude, every time. Storing a TypeSafe key
+    // here would be the blocker this front already fixed, rebuilt in the
+    // direction no prefix test can catch.
+    //
+    // Keeping the slot Anthropic-only is what lets `keyEngine` start at Claude
+    // and be right. The cost is a paste per visit on the Jev engine, and the
+    // note under the field says so. A slot per engine is the real answer and it
+    // belongs in `storage.ts`, which is outside this front.
+    if (chosenEngine() === CLAUDE_ENGINE) {
       writeApiKey(services.storage, apiKey.value);
     }
 

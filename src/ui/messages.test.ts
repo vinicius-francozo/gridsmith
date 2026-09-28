@@ -17,12 +17,20 @@ import {
 import type { Code } from '../interpreter/codes';
 import {
   CorsError,
+  InterpreterError,
   InvalidApiKeyError,
   MissingApiKeyError,
   NetworkError,
   UnusableResponseError,
   UpstreamError,
 } from '../interpreter/errors';
+import {
+  JevRejectedKeyError,
+  JevUnavailableError,
+  JevUnusableAnswerError,
+} from '../interpreter/jev/errors';
+import { ClassificationFailedError, ModelUnavailableError } from '../interpreter/local/errors';
+import type { ModelProgress } from '../interpreter/local/pipeline';
 import { FEATURES } from '../interpreter/vocabulary';
 import type { Feature } from '../interpreter/vocabulary';
 
@@ -31,8 +39,11 @@ import {
   describeEntries,
   describeEntry,
   describeFailure,
+  describeModelProgress,
   describeResult,
+  looksLikeAnthropicKey,
   redactKeys,
+  UI_TEXT,
 } from './messages';
 
 /** Every code any layer of the interpreter can put in front of a person. */
@@ -319,6 +330,22 @@ describe('a key never reaches the screen', () => {
     expect(describeFailure(new Error(`falhou com ${KEY}`)).detail).not.toContain(KEY);
   });
 
+  it('blanks a key out of the local and Jev details as well', () => {
+    // Four more arms carry a `detail` through to the screen, and a detail is
+    // built from something this code never saw. Whether a key can reach one of
+    // them today is not the question the redaction answers — it closes the
+    // class, and a new arm that forgot it would be the one that printed.
+    for (const failure of [
+      new ModelUnavailableError(`falhou com ${KEY}`),
+      new ClassificationFailedError(`falhou com ${KEY}`),
+      new JevUnavailableError(`falhou com ${KEY}`),
+      new JevUnusableAnswerError(`falhou com ${KEY}`),
+    ]) {
+      expect(describeFailure(failure).detail).not.toContain(KEY);
+      expect(describeFailure(failure).detail).toContain('sk-ant-***');
+    }
+  });
+
   it('blanks a key out of an advisory, not only out of a failure', () => {
     // Reachable with nothing going wrong at all. The description field is the
     // first on the page and the key field is the second and shows dots, so a
@@ -387,5 +414,311 @@ describe('the line under a finished map', () => {
     const names = PLACE_TYPES.map((placeType) => describeResult({ ...params, placeType }));
 
     expect(new Set(names).size).toBe(3);
+  });
+});
+
+describe('every interpreter failure has a sentence of its own', () => {
+  /**
+   * All eleven, so that the count in `describeFailure`'s last comment is held
+   * by something other than the comment.
+   *
+   * Six from `errors.ts`, two from `local/errors.ts`, three from
+   * `jev/errors.ts`. Five of them reached the screen through the
+   * `InterpreterError` catch-all until this front, and both error files say so
+   * in a comment naming `messages.ts` as the place it could not be fixed from.
+   */
+  const EVERY_FAILURE: readonly InterpreterError[] = [
+    new MissingApiKeyError(),
+    new InvalidApiKeyError(),
+    new NetworkError(),
+    new CorsError(),
+    new UnusableResponseError('detalhe'),
+    new UpstreamError(500, 'detalhe'),
+    new ModelUnavailableError('detalhe'),
+    new ClassificationFailedError('detalhe'),
+    new JevUnavailableError('detalhe'),
+    new JevRejectedKeyError('detalhe'),
+    new JevUnusableAnswerError('detalhe'),
+  ];
+
+  /** What a subclass nobody has written yet would be told. */
+  const generic = describeFailure(
+    new (class extends InterpreterError {
+      constructor() {
+        super('um tipo que ainda não existe');
+      }
+    })(),
+  ).title;
+
+  it('says something different for every one of the eleven', () => {
+    expect(new Set(EVERY_FAILURE.map((failure) => describeFailure(failure).title)).size).toBe(11);
+  });
+
+  it('leaves none of them on the catch-all', () => {
+    // The catch-all is right for a type added later and wrong for one that
+    // exists: "a interpretação da descrição falhou" is true of all eleven and
+    // tells nobody which of them happened, or what to do about it.
+    for (const failure of EVERY_FAILURE) {
+      expect(describeFailure(failure).title).not.toBe(generic);
+    }
+    expect(generic).toBe('A interpretação da descrição falhou.');
+  });
+
+  it('names the engine in each of the three unreadable-answer sentences', () => {
+    // Three engines can answer with something the schema rejects, and the three
+    // sentences are otherwise the same words. Which engine is named is the only
+    // thing that separates them, so it is the part that gets pinned.
+    expect(describeFailure(new UnusableResponseError('x')).title).toContain('O modelo respondeu');
+    expect(describeFailure(new ClassificationFailedError('x')).title).toContain(
+      'O modelo local respondeu',
+    );
+    expect(describeFailure(new JevUnusableAnswerError('x')).title).toContain('O Jev respondeu');
+  });
+
+  it('tells a Jev key that was refused from a Jev that never answered', () => {
+    // The whole reason `jev/errors.ts` made these separate types: one is fixed
+    // by pasting another key and the other by waiting, and a single sentence
+    // sends half the people to do the wrong thing.
+    expect(describeFailure(new JevRejectedKeyError('HTTP 401')).title).toContain(
+      'recusada pelo Jev',
+    );
+    expect(describeFailure(new JevRejectedKeyError('HTTP 401')).title).toContain('TypeSafe');
+    expect(describeFailure(new JevUnavailableError('502')).title).toContain(
+      'servidor desta página',
+    );
+  });
+
+  it('points the Jev key at TypeSafe and the Claude key at Anthropic', () => {
+    // Two keys from two companies in one field. A sentence that names the wrong
+    // one sends somebody to the wrong dashboard to check a key that is fine.
+    expect(describeFailure(new JevRejectedKeyError('x')).title).not.toContain('Anthropic');
+    expect(describeFailure(new InvalidApiKeyError()).title).toContain('Anthropic');
+  });
+
+  it('offers a way out of a model this browser cannot load', () => {
+    // The one failure on the page whose answer is not "try again": the download
+    // may simply be more than this browser can hold, and no number of retries
+    // changes that. So the two engines that download nothing are named.
+    const title = describeFailure(new ModelUnavailableError('out of memory')).title;
+
+    expect(title).toContain('Claude');
+    expect(title).toContain('Jev');
+  });
+
+  it('keeps the upstream wording under the four that carry one', () => {
+    for (const failure of [
+      new ModelUnavailableError('DETALHE'),
+      new ClassificationFailedError('DETALHE'),
+      new JevUnavailableError('DETALHE'),
+      new JevUnusableAnswerError('DETALHE'),
+    ]) {
+      expect(describeFailure(failure).detail).toContain('DETALHE');
+    }
+  });
+});
+
+describe('what the status line says while the local model is arriving', () => {
+  /** The sentence for a download of `file`, `ratio` of the way through it. */
+  function downloading(file: string, ratio: number | undefined): string {
+    return describeModelProgress({ kind: 'downloading', file, ratio });
+  }
+
+  it('says a different thing at each of the four stages, in Portuguese', () => {
+    // Pinned as literals rather than against `UI_TEXT`, the way the feature and
+    // place tables above are. The type checks that the field exists; only this
+    // checks that the right one was chosen — swapping `ready` for
+    // `modelPreparing` satisfies `tsc` and every other test in the project.
+    expect(describeModelProgress({ kind: 'starting' })).toBe('Preparando o modelo local…');
+    expect(downloading('', undefined)).toBe('Baixando o modelo local…');
+    expect(describeModelProgress({ kind: 'preparing' })).toBe(
+      'Carregando o modelo local na memória…',
+    );
+    expect(describeModelProgress({ kind: 'ready' })).toBe(
+      'Modelo local pronto, rodando no processador deste navegador. Interpretando a descrição…',
+    );
+  });
+
+  it('does not measure the wait against an option nobody on this page can have', () => {
+    // The sentence used to end "rodando sem GPU — vai demorar mais". The WebGPU
+    // path was removed with the q8 weights — `MODEL_DEVICE` is fixed to `wasm`
+    // and the reasoning is written out there — so "mais" compared the only
+    // thing anybody gets against something nobody can get, and left the reader
+    // hunting for the setting that cost them the faster one. There is none.
+    //
+    // No figure either: the ~510 ms recorded against `MODEL_ID` is Node on
+    // twelve cores, and nothing in this project has been timed in a browser.
+    const ready = describeModelProgress({ kind: 'ready' });
+
+    expect(ready).not.toContain('GPU');
+    // A whole word: a substring test would fall over the next sentence that
+    // happens to contain "demais" or "jamais".
+    expect(ready).not.toMatch(/\bmais\b/);
+    expect(ready).not.toMatch(/\d/);
+  });
+
+  it('names the file the percentage is a fraction of', () => {
+    // The defect this replaces, with the real sizes: `ratio` is per file, and
+    // four files arrive. Rendered as a fraction of the whole download it reads
+    // 0 100 0 100 0 1 … 99 100 0 1 … 99 100 — the two small configs finish
+    // inside the opening milliseconds, so "Baixando o modelo local… 100%" is on
+    // screen twice before the wait anybody is having has begun.
+    //
+    // The number still falls back to zero three times, because it is still a
+    // fraction of one file and the byte counts a weighted figure would need
+    // never reach this layer. What the file name buys is that each fall is
+    // beside a name that just changed, which is the difference between "another
+    // file started" and "it has frozen" — and somebody who reads a freeze
+    // reloads, which throws the download away.
+    const written = [
+      downloading('config.json', 1),
+      downloading('tokenizer_config.json', 1),
+      downloading('tokenizer.json', 0.5),
+      downloading('tokenizer.json', 1),
+      downloading('onnx/model_quantized.onnx', 0.5),
+      downloading('onnx/model_quantized.onnx', 1),
+    ];
+
+    expect(written).toEqual([
+      'Baixando o modelo local… config.json, 100%',
+      'Baixando o modelo local… tokenizer_config.json, 100%',
+      'Baixando o modelo local… tokenizer.json, 50%',
+      'Baixando o modelo local… tokenizer.json, 100%',
+      'Baixando o modelo local… model_quantized.onnx, 50%',
+      'Baixando o modelo local… model_quantized.onnx, 100%',
+    ]);
+  });
+
+  it('keeps the file name and drops the directory it sat in', () => {
+    // Every file the library reports shares the same prefix, so the directory
+    // separates nothing and costs width on a line that is already long.
+    expect(downloading('onnx/model_quantized.onnx', 0.5)).toContain('model_quantized.onnx');
+    expect(downloading('onnx/model_quantized.onnx', 0.5)).not.toContain('onnx/');
+  });
+
+  it('rounds the percentage rather than printing the fraction', () => {
+    expect(downloading('a.bin', 0.426)).toBe('Baixando o modelo local… a.bin, 43%');
+    expect(downloading('a.bin', 0)).toBe('Baixando o modelo local… a.bin, 0%');
+    expect(downloading('a.bin', 1)).toBe('Baixando o modelo local… a.bin, 100%');
+  });
+
+  it('says it is downloading with no percentage when the server sent no length', () => {
+    // `readRawProgress` gives `undefined` rather than inventing a fraction, and
+    // this is the other half of that decision.
+    expect(downloading('a.bin', undefined)).toBe('Baixando o modelo local… a.bin');
+    expect(downloading('a.bin', undefined)).not.toContain('%');
+  });
+
+  it('falls back to the plain sentence when no file name came with the event', () => {
+    // `readRawProgress` puts `''` here when the library sent no `file`, and a
+    // sentence with an empty name in the middle of it reads worse than one
+    // without a name at all.
+    expect(downloading('', undefined)).toBe('Baixando o modelo local…');
+    expect(downloading('', 0.42)).toBe('Baixando o modelo local… 42%');
+  });
+
+  it('refuses a stage it has never heard of instead of showing nothing', () => {
+    expect(() => describeModelProgress({ kind: 'finished' } as unknown as ModelProgress)).toThrow(
+      TypeError,
+    );
+  });
+});
+
+describe('telling one provider’s key from the other', () => {
+  it('knows an Anthropic key by the prefix the rest of this file already assumes', () => {
+    // The same fact `redactKeys` is built on. If the two ever disagree, one of
+    // them is a redaction that misses or a refusal that fires on nothing.
+    expect(looksLikeAnthropicKey('sk-ant-api03-qualquer')).toBe(true);
+    expect(looksLikeAnthropicKey('  sk-ant-api03-qualquer\n')).toBe(true);
+    expect(redactKeys('sk-ant-api03-qualquer')).toBe('sk-ant-***');
+  });
+
+  it('claims nothing about a key that is not wearing that prefix', () => {
+    // Deliberately one-directional. This project has no documented shape for a
+    // TypeSafe key, so "not Anthropic's" cannot be turned into "is TypeSafe's"
+    // — and a page that refused everything it did not recognise would refuse
+    // keys that work.
+    for (const key of ['ts-chave-do-usuario', 'qualquer-coisa', '', '   ']) {
+      expect(looksLikeAnthropicKey(key)).toBe(false);
+    }
+  });
+
+  it('is not fooled by the prefix turning up later in the string', () => {
+    expect(looksLikeAnthropicKey('ts-sk-ant-disfarcada')).toBe(false);
+  });
+
+  it('is not walked around by case, and neither is the redaction', () => {
+    // A real Anthropic key is lower case, so on its own this is pedantry. But
+    // the refusal exists for the paste out of the wrong password-manager entry,
+    // and a manager that upper-cases, or somebody retyping by hand, is exactly
+    // where odd case comes from — the accident the guard is for is the accident
+    // that brings it. The two move together because they encode one fact.
+    for (const key of ['SK-ANT-api03-qualquer', 'Sk-Ant-api03-qualquer']) {
+      expect(looksLikeAnthropicKey(key)).toBe(true);
+      expect(redactKeys(key)).toBe('sk-ant-***');
+    }
+  });
+});
+
+describe('what the page promises about where the key goes', () => {
+  // Every sentence here is a promise about the handling of somebody's
+  // credential, and a promise about a secret that no test holds is a promise
+  // that can be reversed by an edit nobody notices. Two of these were already
+  // found false in this front and fixed — the Anthropic note left standing over
+  // a Jev run, and a storage promise for a key that is deliberately not stored.
+  // These three are true, and pinned so that they stay that way or fail loudly.
+
+  it('promises the Claude key is kept, because it is', () => {
+    // The mutation that matters runs the *other* way from the two already
+    // fixed: promising less persistence than there is. A person told the key is
+    // not kept has no reason to clear it off a machine they share, and it is
+    // sitting in `localStorage`.
+    expect(UI_TEXT.apiKeyNote).toMatch(/A chave fica guardada só neste navegador/);
+    expect(UI_TEXT.apiKeyNote).not.toMatch(/não fica guardada/);
+  });
+
+  it('promises the Jev key is not kept, because it is not', () => {
+    expect(UI_TEXT.apiKeyNoteJev).toMatch(/não fica guardada no navegador/);
+    expect(UI_TEXT.apiKeyNoteJev).not.toMatch(/fica guardada só neste navegador/);
+  });
+
+  it('says the Claude request reaches the API without a server in between', () => {
+    expect(UI_TEXT.apiKeyNote).toMatch(/vai direto para a API/);
+    expect(UI_TEXT.apiKeyNote).toMatch(/Não passa por servidor nenhum/);
+  });
+
+  it('says the Jev request does pass through one, and that it keeps nothing', () => {
+    // The one sentence in this file that promises another file's behaviour.
+    // What makes it true is `api/jev.test.ts` — "writes nothing to the console
+    // at all, on any path", which spies every console method over every path,
+    // and a second test asking separately whether the key rode along with any
+    // log added on purpose. This pins the words; that pair pins the fact. If
+    // the proxy ever gains a log line, that pair is what fails, and this
+    // sentence has to come out with it.
+    expect(UI_TEXT.apiKeyNoteJev).toMatch(/passa por um servidor desta página/);
+    expect(UI_TEXT.apiKeyNoteJev).toMatch(/não guarda nem registra nada/);
+    expect(UI_TEXT.apiKeyNoteJev).not.toMatch(/mantém um registro/);
+  });
+
+  it('promises neither key reaches the address bar', () => {
+    // True by construction — no form is built and nothing writes to `location`,
+    // which `mount.test.ts` holds — but the sentence is what the person acts
+    // on, so the sentence is pinned too.
+    // The negative needs the lookbehind: "não aparece no endereço da página"
+    // contains "aparece no endereço da página", so a plain `not.toContain`
+    // fails on the correct sentence — which is the same substring trap these
+    // tests exist to catch, and it caught this one first.
+    for (const note of [UI_TEXT.apiKeyNote, UI_TEXT.apiKeyNoteJev]) {
+      expect(note).toMatch(/não aparece no endereço da página/);
+      expect(note).not.toMatch(/(?<!não )aparece no endereço da página/);
+    }
+  });
+
+  it('never tells somebody to do a thing that destroys what the thing needs', () => {
+    // The refusal used to end "ou escolha o Claude". Following that advice
+    // fires `refreshEngine`, which empties the box — throwing away the key the
+    // advice was about. Safe, and self-defeating. It now says the field will be
+    // cleared, which is also the only place the page explains that at all.
+    expect(UI_TEXT.anthropicKeyOnJev).toMatch(/não foi enviada/);
+    expect(UI_TEXT.anthropicKeyOnJev).toMatch(/trocar de motor limpa o campo/);
   });
 });
