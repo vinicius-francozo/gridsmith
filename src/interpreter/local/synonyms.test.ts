@@ -136,6 +136,14 @@ describe('the words this layer was told to stop rewriting', () => {
     );
   });
 
+  it('leaves the plural "estantes", which bought a true label and a false one', () => {
+    // Mode 5, the one-for-one case: on `g05` it bought the gold `shelving` and
+    // a false `alcove` in the same breath. The singular is still a variant.
+    expect(normalizeForClassifier('Estantes empoeiradas guardam potes e garrafas.').text).toBe(
+      'Estantes empoeiradas guardam potes e garrafas.',
+    );
+  });
+
   it('has no alcove rule left to reach, so "alcovas" stays as typed', () => {
     // "alcovas" was the last variant standing and bought no gate crossing in
     // eight sentences -- the model already reads it against the singular label.
@@ -185,11 +193,15 @@ describe('each family reaches the word the model was asked about', () => {
     expect(normalizeForClassifier('um único degrau').text).toBe('um único degrau');
   });
 
-  it('sends the shelf words to the shelving word', () => {
+  it('sends the shelf words to the shelving word, the singular only', () => {
+    // "estantes", the plural, was measured out: on `g05` it bought the true
+    // `shelving` and a false `alcove` in the same sentence. The singular buys a
+    // real gate crossing on its own, 0.332 -> 0.974, and moves nothing on the
+    // corpus, so the two were split rather than removed together.
     expect(normalizeForClassifier('uma estante e uma prateleira').text).toBe(
       'uma prateleiras e uma prateleiras',
     );
-    expect(normalizeForClassifier('estantes até o teto').text).toBe('prateleiras até o teto');
+    expect(normalizeForClassifier('estantes até o teto').text).toBe('estantes até o teto');
   });
 
   it('sends the bed words to the bunks word', () => {
@@ -225,7 +237,7 @@ describe('negation survives the rewrite', () => {
   });
 
   it('adds nothing to the end of a sentence it rewrote', () => {
-    const normalized = normalizeForClassifier('sem estantes e sem escadas');
+    const normalized = normalizeForClassifier('sem estante e sem escadas');
 
     expect(normalized.text).toBe('sem prateleiras e sem escada');
     expect(normalized.text.split(/\s+/)).toHaveLength(5);
@@ -241,14 +253,14 @@ describe('negation survives the rewrite', () => {
 
 describe('what it refuses to touch', () => {
   it('does not fire inside a longer word', () => {
-    // "comporão" carries "porão", "restantes" carries "estantes" and
-    // "restante" carries "estante" — and every one of those inner words is a
-    // variant in `SYNONYM_RULES` *today*, which is the only reason any of the
-    // three proves anything. An example built on a word the table no longer
-    // contains would pass with no word boundary at all, which is exactly the
-    // trap the note below describes. This test used to carry two of those.
-    expect(normalizeForClassifier('os músicos comporão o restante do restantes').text).toBe(
-      'os músicos comporão o restante do restantes',
+    // "comporão" carries "porão" and "restante" carries "estante", and both
+    // inner words are variants in `SYNONYM_RULES` *today* — which is the only
+    // reason either proves anything. An example built on a word the table no
+    // longer contains would pass with no word boundary at all, which is exactly
+    // the trap the note below describes. This test has already had to drop
+    // three such examples: "colunata", "desafogo" and "restantes".
+    expect(normalizeForClassifier('os músicos comporão o restante').text).toBe(
+      'os músicos comporão o restante',
     );
   });
 
@@ -262,7 +274,7 @@ describe('what it refuses to touch', () => {
   });
 
   it('keeps every character that is not a letter', () => {
-    expect(normalizeForClassifier('  (estantes!)  ...  porão?  ').text).toBe(
+    expect(normalizeForClassifier('  (estante!)  ...  porão?  ').text).toBe(
       '  (prateleiras!)  ...  depósito?  ',
     );
   });
@@ -300,15 +312,15 @@ describe('what the person typed', () => {
   });
 
   it('finds a word typed without its accent', () => {
-    expect(normalizeForClassifier('um porao com estantes').text).toBe(
+    expect(normalizeForClassifier('um porao com estante').text).toBe(
       'um depósito com prateleiras',
     );
   });
 
   it('records every swap, in the order they appear', () => {
-    expect(normalizeForClassifier('Porão com estantes e escadas').applied).toEqual([
+    expect(normalizeForClassifier('Porão com estante e escadas').applied).toEqual([
       { found: 'Porão', canonical: 'depósito' },
-      { found: 'estantes', canonical: 'prateleiras' },
+      { found: 'estante', canonical: 'prateleiras' },
       { found: 'escadas', canonical: 'escada' },
     ]);
   });
@@ -320,7 +332,7 @@ describe('what the person typed', () => {
   it('changes nothing the second time round', () => {
     // Every canonical word has to be a word no rule rewrites, or a description
     // would mean one thing on its way in and another on its way through again.
-    const once = normalizeForClassifier('porão com estantes, escadas e um beliche').text;
+    const once = normalizeForClassifier('porão com estante, escadas e um beliche').text;
 
     expect(normalizeForClassifier(once).text).toBe(once);
   });
@@ -471,9 +483,25 @@ describe('the rules themselves', () => {
     const featureRules = SYNONYM_RULES.filter((rule) => rule.canonical !== STOREROOM_WORD);
 
     expect(SYNONYM_RULES).toHaveLength(5);
-    expect(SYNONYM_RULES.flatMap((rule) => rule.variants)).toHaveLength(16);
+    expect(SYNONYM_RULES.flatMap((rule) => rule.variants)).toHaveLength(15);
     expect(featureRules).toHaveLength(4);
-    expect(featureRules.flatMap((rule) => rule.variants)).toHaveLength(8);
+    expect(featureRules.flatMap((rule) => rule.variants)).toHaveLength(7);
+  });
+
+  it('holds the count of feature labels with no rule, which `templates.ts` states', () => {
+    // `templates.ts` says three of the seven feature labels have no synonym
+    // rule and the other four do. That sentence is derived from this table and
+    // lives in another file, so the shape check above could not see it — and it
+    // shipped saying "four" while listing three. Derived here, from both.
+    const covered = new Set(SYNONYM_RULES.map((rule) => rule.canonical));
+    const labels = Object.values(FEATURE_TEMPLATE.labels);
+    const withRule = labels.filter((label) => covered.has(label));
+
+    expect(labels).toHaveLength(7);
+    expect(withRule).toHaveLength(4);
+    expect(labels.filter((label) => !covered.has(label))).toHaveLength(3);
+    // Named, so that swapping which three are uncovered fails too.
+    expect([...withRule].sort()).toEqual(['balcão', 'beliches', 'escada', 'prateleiras']);
   });
 
   it('never gives two families the same canonical word', () => {
