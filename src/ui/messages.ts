@@ -118,7 +118,15 @@ function featureWord(detail: string): string {
  * answer a prototype member for `constructor` or `toString`.
  */
 function placeWord(detail: string): string {
-  return Object.hasOwn(PLACE_NAMES, detail) ? PLACE_NAMES[detail as `${Building}_${RoomKind}`] : detail;
+  // `Object.hasOwn` first and the `??` second, not the `??` alone. The table is
+  // `Partial` since `crypt` made the matrix sparse, so a plain lookup now types
+  // as `string | undefined` and `?? detail` looks like the whole answer — but
+  // `PLACE_NAMES['toString']` is a function rather than `undefined`, walks past
+  // the `??`, and is concatenated into the notice.
+  const name = Object.hasOwn(PLACE_NAMES, detail)
+    ? PLACE_NAMES[detail as `${Building}_${RoomKind}`]
+    : undefined;
+  return name ?? detail;
 }
 
 /**
@@ -540,19 +548,30 @@ export function describeModelProgress(progress: ModelProgress): string {
 }
 
 /**
- * The six supported building and room pairs, in Portuguese.
+ * The seven supported building and room pairs, in Portuguese.
  *
- * Exact `Record` for the same reason as the two tables above: a fourth kind of
- * place stops this file compiling rather than reaching the screen as
- * `tavern_cellar`.
+ * **It used to be an exact `Record` over every building crossed with every
+ * room, and `crypt` is what ended that.** The cross-product was only ever a
+ * correct description of this table while every building had every room; a
+ * dungeon has a crypt and a tavern does not, so keeping it exact would have
+ * meant writing `tavern_crypt: 'Cripta de taverna'` — a name for a place
+ * nothing can produce, sitting in the one table a person reads from.
+ *
+ * What the exactness bought was that a place added upstream stopped this file
+ * compiling rather than reaching the screen as `tavern_cellar`. That guarantee
+ * moves into `describeResult`, which throws, and `placeWord` already showed an
+ * unrecognised detail as it came. `messages.test.ts` holds the table against
+ * every pair `roomsFor` declares, which is the check the type can no longer
+ * make and is the stronger one: it knows which pairs exist.
  */
-const PLACE_NAMES: Readonly<Record<`${Building}_${RoomKind}`, string>> = {
+const PLACE_NAMES: Readonly<Partial<Record<`${Building}_${RoomKind}`, string>>> = {
   tavern_hall: 'Salão de taverna',
   tavern_room: 'Quarto de taverna',
   tavern_storeroom: 'Depósito de taverna',
   dungeon_hall: 'Salão da masmorra',
   dungeon_room: 'Cela da masmorra',
   dungeon_storeroom: 'Arsenal da masmorra',
+  dungeon_crypt: 'Cripta da masmorra',
 };
 
 /**
@@ -561,12 +580,21 @@ const PLACE_NAMES: Readonly<Record<`${Building}_${RoomKind}`, string>> = {
  * The seed is in it because the seed is the only way back to this map, and the
  * size is in cells because cells are the unit the map is played in — the pixel
  * dimensions are the renderer's business and mean nothing at a table.
+ *
+ * @throws {TypeError} if `PLACE_NAMES` has no name for the pair. This is the
+ *                     guard that took over from the exact `Record` — see
+ *                     `PLACE_NAMES`. Without it the line reads "undefined,
+ *                     17×15 casas", which is a place name a person cannot tell
+ *                     from a rendering bug, under a map that is otherwise
+ *                     correct.
  */
 export function describeResult(params: Params): string {
-  return (
-    `${PLACE_NAMES[`${params.place.building}_${params.place.room}`]}, ${String(params.size.w)}×${String(params.size.h)} casas, ` +
-    `semente ${String(params.seed)}.`
-  );
+  const id = `${params.place.building}_${params.place.room}` as const;
+  const name = PLACE_NAMES[id];
+  if (name === undefined) {
+    throw new TypeError(`no name for the place '${id}'`);
+  }
+  return `${name}, ${String(params.size.w)}×${String(params.size.h)} casas, semente ${String(params.seed)}.`;
 }
 
 /** The fixed labels and headings of the interface. */

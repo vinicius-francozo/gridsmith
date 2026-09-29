@@ -187,11 +187,27 @@ export function readRoom(building: Building, output: ZeroShotOutput): RoomKind {
   return bestOf(roomTemplateFor(building), output).value;
 }
 
+/**
+ * The room choice for `building`, narrowed to the rooms it actually has.
+ *
+ * @throws {Error} if `building` declares a room with no label in
+ *                 `ROOM_TEMPLATES`. The labels are sparse — a dungeon has a
+ *                 crypt and a tavern does not — so the pairing is checked here
+ *                 rather than by the type. Left unchecked, the hypothesis for
+ *                 the missing room would be built by substituting `undefined`
+ *                 into the template, the classifier would score the string
+ *                 `"O cômodo é undefined."` like any other, and it can win:
+ *                 `bestOf` returns a room, never a refusal.
+ */
 export function roomTemplateFor(building: Building): ChoiceTemplate<RoomKind> {
   const source = ROOM_TEMPLATES[building];
   const labels = {} as Record<RoomKind, string>;
   for (const room of roomsFor(building)) {
-    labels[room] = source.labels[room];
+    const label = source.labels[room];
+    if (label === undefined) {
+      throw new Error(`no room label for '${building}_${room}'`);
+    }
+    labels[room] = label;
   }
   return { hypothesis: source.hypothesis, labels };
 }

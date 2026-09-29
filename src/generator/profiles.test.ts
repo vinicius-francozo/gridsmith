@@ -26,14 +26,20 @@ const PLACE_TYPES: Place[] = [
   { building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' },
   { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' },
   { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'storeroom' },
+  { building: 'dungeon', room: 'crypt' },
 ];
 
+/** The rooms both buildings have, and so the ones whose geometry is shared. */
+const SHARED_ROOMS = ['hall', 'room', 'storeroom'] as const;
+
 describe('building and room composition', () => {
-  it('declares all six pairs and shares geometry for the same room', () => {
-    for (const building of ['tavern', 'dungeon'] as const) {
-      expect(roomsFor(building)).toEqual(['hall', 'room', 'storeroom']);
-    }
-    for (const room of ['hall', 'room', 'storeroom'] as const) {
+  it('declares all seven pairs and shares geometry for the rooms both buildings have', () => {
+    expect(roomsFor('tavern')).toEqual([...SHARED_ROOMS]);
+    // The crypt is the dungeon's alone, which is what makes the matrix sparse
+    // and is the reason every table keyed on a building and a room is read
+    // through `roomsFor` rather than over `RoomKind`.
+    expect(roomsFor('dungeon')).toEqual([...SHARED_ROOMS, 'crypt']);
+    for (const room of SHARED_ROOMS) {
       const tavern = profileFor({ building: 'tavern', room });
       const dungeon = profileFor({ building: 'dungeon', room });
       expect(tavern.minSize).toEqual(dungeon.minSize);
@@ -80,7 +86,16 @@ describe('profileFor', () => {
     // `Params` can arrive from a language model through JSON, where the type
     // system guarantees nothing. Without the guard the caller would get
     // `undefined` and fail several layers away, reading a property of it.
-    expect(() => profileFor({ building: 'dungeon', room: 'crypt' } as unknown as Place)).toThrow("unknown place");
+    expect(() => profileFor({ building: 'dungeon', room: 'oubliette' } as unknown as Place)).toThrow("unknown place");
+  });
+
+  it('rejects a room one building has when it is asked for in the other', () => {
+    // The half of the vocabulary that opened when the matrix went sparse. Both
+    // halves of `dungeon_crypt` are words this project knows — `tavern` is a
+    // building and `crypt` is a room with a geometry in `ROOM_KINDS` — so a
+    // guard that only asked whether each word is declared would let the pair
+    // through and hand back a profile with no slot filling behind it.
+    expect(() => profileFor({ building: 'tavern', room: 'crypt' })).toThrow("unknown place 'tavern_crypt'");
   });
 
   it('rejects a place type that is only a key of Object.prototype', () => {

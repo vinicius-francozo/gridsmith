@@ -11,7 +11,22 @@ export type Size = { w: number; h: number };        // in cells
 export type Facing = 'n' | 'e' | 's' | 'w';
 
 export type Building = 'tavern' | 'dungeon';
-export type RoomKind = 'hall' | 'room' | 'storeroom';
+/**
+ * The kinds of room the generator can build.
+ *
+ * Not every building has every one of them, and `crypt` is the first that is
+ * not shared: it exists in a dungeon and nowhere else. `BUILDINGS` in
+ * `src/generator/profiles.ts` is the matrix, `roomsFor` reads it, and every
+ * table keyed on a building and a room is sparse for the same reason.
+ *
+ * `crypt` is here because a description of a catacomb used to land in `hall`,
+ * which in a dungeon is the guard room — the person asked for a burial chamber
+ * and was handed a war table and four guard stools. Nothing warned him: the
+ * out-of-vocabulary notice asks about the *building*, and a catacomb genuinely
+ * is a dungeon, so the loss happened one level down, where the nearest of three
+ * rooms simply won.
+ */
+export type RoomKind = 'hall' | 'room' | 'storeroom' | 'crypt';
 export type Place = { building: Building; room: RoomKind };
 export type Light = 'dark' | 'dim' | 'bright';
 export type Condition = 'tidy' | 'lived_in' | 'disordered' | 'ruined';

@@ -58,8 +58,23 @@ function outputFor<T extends string>(
   return { labels: rows.map((row) => row.label), scores: rows.map((row) => row.score) };
 }
 
+/**
+ * The room choice each building really offers, narrowed the way the engine
+ * narrows it.
+ *
+ * `ROOM_TEMPLATES` is the declaration and is sparse — a dungeon has a crypt and
+ * a tavern does not — so it is not a `ChoiceTemplate<RoomKind>` and was never
+ * what the classifier is asked. `roomTemplateFor` is, and asking it here is
+ * also what keeps these tests measuring the four labels a dungeon now has
+ * rather than the three the table used to guarantee.
+ */
+const TAVERN_ROOMS = roomTemplateFor('tavern');
+const DUNGEON_ROOMS = roomTemplateFor('dungeon');
+
 const CERTAIN_BUILDING: Record<Building, number> = { tavern: 0.9, dungeon: 0.1 };
-const CERTAIN_HALL: Record<RoomKind, number> = { hall: 0.9, room: 0.07, storeroom: 0.03 };
+// Scored over every room there is; `outputFor` only reads the ones the template
+// it is given declares, so this one answer serves both buildings.
+const CERTAIN_HALL: Record<RoomKind, number> = { hall: 0.9, room: 0.07, storeroom: 0.03, crypt: 0.01 };
 const CERTAIN_DIM: Record<Light, number> = { dark: 0.2, dim: 0.7, bright: 0.1 };
 const CERTAIN_DISORDER: Record<Condition, number> = {
   tidy: 0.02,
@@ -88,31 +103,31 @@ describe('reading scores back by label', () => {
   it('finds each value however the pipeline ordered its answer', () => {
     // The answer comes back sorted by score, so `tavern_hall` is first in the
     // arrays and third in the template. Reading by position would swap them.
-    expect(scoresByValue(ROOM_TEMPLATES.tavern, outputFor(ROOM_TEMPLATES.tavern, CERTAIN_HALL))).toEqual(
-      CERTAIN_HALL,
-    );
+    expect(scoresByValue(TAVERN_ROOMS, outputFor(TAVERN_ROOMS, CERTAIN_HALL))).toEqual({
+      hall: 0.9, room: 0.07, storeroom: 0.03,
+    });
   });
 
   it('refuses a label nobody asked about', () => {
     const output: ZeroShotOutput = { labels: ['um trono de obsidiana'], scores: [0.99] };
 
-    expect(() => scoresByValue(ROOM_TEMPLATES.tavern, output)).toThrow(ClassificationFailedError);
+    expect(() => scoresByValue(TAVERN_ROOMS, output)).toThrow(ClassificationFailedError);
   });
 
   it('refuses the same label scored twice', () => {
-    const label = ROOM_TEMPLATES.tavern.labels.hall;
+    const label = TAVERN_ROOMS.labels.hall;
     const output: ZeroShotOutput = { labels: [label, label], scores: [0.9, 0.1] };
 
-    expect(() => scoresByValue(ROOM_TEMPLATES.tavern, output)).toThrow(/twice/);
+    expect(() => scoresByValue(TAVERN_ROOMS, output)).toThrow(/twice/);
   });
 
   it('refuses an answer that left one of the values unscored', () => {
     const output: ZeroShotOutput = {
-      labels: [ROOM_TEMPLATES.tavern.labels.hall, ROOM_TEMPLATES.tavern.labels.room],
+      labels: [TAVERN_ROOMS.labels.hall, TAVERN_ROOMS.labels.room],
       scores: [0.6, 0.4],
     };
 
-    expect(() => scoresByValue(ROOM_TEMPLATES.tavern, output)).toThrow(/storeroom/);
+    expect(() => scoresByValue(TAVERN_ROOMS, output)).toThrow(/storeroom/);
   });
 });
 
@@ -137,7 +152,7 @@ describe('choosing the best-scoring value', () => {
 describe('reading the closed fields', () => {
   it('reads the kind of place', () => {
     expect(readBuilding(outputFor(BUILDING_TEMPLATE, CERTAIN_BUILDING))).toBe('tavern');
-    expect(readRoom('tavern', outputFor(ROOM_TEMPLATES.tavern, CERTAIN_HALL))).toBe('hall');
+    expect(readRoom('tavern', outputFor(TAVERN_ROOMS, CERTAIN_HALL))).toBe('hall');
   });
 
   it('reads the light', () => {
@@ -147,16 +162,21 @@ describe('reading the closed fields', () => {
 
 describe('the two place choices', () => {
   it('uses the chosen building when reading its room', () => {
-    expect(readRoom('dungeon', outputFor(ROOM_TEMPLATES.dungeon, CERTAIN_HALL))).toBe('hall');
+    expect(readRoom('dungeon', outputFor(DUNGEON_ROOMS, CERTAIN_HALL))).toBe('hall');
   });
 
   it('limits local room labels to the selected building matrix', () => {
-    const filling = BUILDINGS.dungeon.rooms.storeroom;
-    delete BUILDINGS.dungeon.rooms.storeroom;
+    // The whole table is swapped and put back, rather than one key deleted and
+    // written again. Deleting and reassigning restores the *contents* but not
+    // the *order* — `storeroom` would come back after `crypt` — and the labels
+    // this front hands the classifier are `Object.values` of that order, so the
+    // next test in the file would compare two correct lists that disagree.
+    const rooms = BUILDINGS.dungeon.rooms;
+    BUILDINGS.dungeon.rooms = { hall: rooms.hall, room: rooms.room, crypt: rooms.crypt };
     try {
-      expect(Object.keys(roomTemplateFor('dungeon').labels)).toEqual(['hall', 'room']);
+      expect(Object.keys(roomTemplateFor('dungeon').labels)).toEqual(['hall', 'room', 'crypt']);
     } finally {
-      BUILDINGS.dungeon.rooms.storeroom = filling;
+      BUILDINGS.dungeon.rooms = rooms;
     }
   });
 });
@@ -360,7 +380,7 @@ function stubPipeline(answers: Answers = {}): { pipeline: ZeroShotPipeline; asks
         return Promise.resolve(outputFor(BUILDING_TEMPLATE, answers.building ?? CERTAIN_BUILDING));
       case ROOM_TEMPLATES.tavern.hypothesis:
         return Promise.resolve(outputFor(
-          labels.includes('cela da masmorra') ? ROOM_TEMPLATES.dungeon : ROOM_TEMPLATES.tavern,
+          labels.includes('cela da masmorra') ? DUNGEON_ROOMS : TAVERN_ROOMS,
           answers.room ?? CERTAIN_HALL,
         ));
       case LIGHT_TEMPLATE.hypothesis:
@@ -384,11 +404,11 @@ describe('classifying a whole description', () => {
   it('chooses dungeon before asking for a room and validates the pair', async () => {
     const { pipeline, asks } = stubPipeline({
       building: { tavern: 0.1, dungeon: 0.9 },
-      room: { hall: 0.1, room: 0.8, storeroom: 0.1 },
+      room: { hall: 0.1, room: 0.8, storeroom: 0.1, crypt: 0 },
     });
     const result = await classify('uma cela de pedra com um catre', pipeline);
     expect(result.place).toEqual({ building: 'dungeon', room: 'room' });
-    expect(asks[1].labels).toEqual(Object.values(ROOM_TEMPLATES.dungeon.labels));
+    expect(asks[1].labels).toEqual(Object.values(DUNGEON_ROOMS.labels));
     expect(result.unresolved).toEqual([]);
   });
   it('produces the constraints the scores describe', async () => {
@@ -433,7 +453,7 @@ describe('classifying a whole description', () => {
     await classify('um quarto de taverna', pipeline);
 
     expect(asks[0].labels).toEqual(labelsOf(BUILDING_TEMPLATE));
-    expect(asks[1].labels).toEqual(labelsOf(ROOM_TEMPLATES.tavern));
+    expect(asks[1].labels).toEqual(labelsOf(TAVERN_ROOMS));
     expect(asks[4].labels).toEqual(labelsOf(FURNISHING_TEMPLATE));
     expect(asks[6].labels).toEqual(labelsOf(FEATURE_TEMPLATE));
     expect(asks[6].labels).toHaveLength(FEATURES.length);

@@ -131,6 +131,7 @@ describe('the request the proxy is handed', () => {
     expect(Object.keys((second.questions as { room: { criteria: object } }).room.criteria)).toEqual([
       'hall', 'room', 'storeroom',
     ]);
+    expect(JSON.stringify(second.questions)).not.toContain('Cripta');
   });
 
   it('uses dungeon criteria for the second request when the first answer chooses dungeon', async () => {
@@ -154,6 +155,7 @@ describe('the request the proxy is handed', () => {
           hall: 'Sala comum ou da guarda da masmorra',
           room: 'Cela ou quarto da masmorra, com catre',
           storeroom: 'Arsenal ou depósito da masmorra, com armas e caixotes',
+          crypt: 'Cripta, catacumba ou tumba: câmara funerária com sarcófagos, ossadas e nichos',
         },
       },
     });

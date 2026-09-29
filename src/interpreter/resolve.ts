@@ -105,6 +105,21 @@ const PROFILES: Readonly<Record<RoomKind, PlaceProfile>> = {
     // A room the public uses has a front door and a way into the back.
     doors: { min: 2, max: 3 },
   },
+  crypt: {
+    // Against the crypt's own 11x11 floor and 18x16 ceiling, not the hall's.
+    // The bands are separated on width by three cells each, which `jitterSize`
+    // — a cell either way — cannot close, so the three hints stay three
+    // different requests after the generator has clamped them.
+    //
+    // The small band starts at 12x12 rather than at the floor because the
+    // floor is where pillars become possible at all: `growPillars` wants an
+    // interior of 9x9, so nothing under 11x11 is ever columned. A band whose
+    // bottom sat on that line would put a jittered crypt under it, and the
+    // description that put this room in the vocabulary asked for pillars.
+    sizes: { small: { w: 12, h: 12 }, medium: { w: 15, h: 14 }, large: { w: 18, h: 16 } },
+    // Sealed. One way in, and at most a second one broken open later.
+    doors: { min: 1, max: 2 },
+  },
 };
 
 /** What a place is when the description said nothing about size. */
