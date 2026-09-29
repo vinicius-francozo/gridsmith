@@ -131,6 +131,33 @@ describe('the request the proxy is handed', () => {
     ]);
   });
 
+  it('uses dungeon criteria for the second request when the first answer chooses dungeon', async () => {
+    const dungeonAnswer = ANSWER.replace('"choice": "tavern"', '"choice": "dungeon"');
+    const { fetchImpl, calls } = stubFetch(answering(dungeonAnswer));
+    const description = 'um arsenal da masmorra, com armas e caixotes';
+
+    const constraints = await new JevInterpreter({ apiKey: KEY, fetchImpl }).interpret(description);
+
+    expect(constraints.place).toEqual({ building: 'dungeon', room: 'storeroom' });
+    expect(calls).toHaveLength(2);
+    const first = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
+    const second = JSON.parse(String(calls[1].init?.body)) as Record<string, unknown>;
+    expect(first.state).toBe(description);
+    expect(second.state).toBe(description);
+    expect(second.questions).toEqual({
+      room: {
+        type: 'choice',
+        instructions: 'Qual cômodo desta construção o texto descreve?',
+        criteria: {
+          hall: 'Sala comum ou da guarda da masmorra',
+          room: 'Cela ou quarto da masmorra, com catre',
+          storeroom: 'Arsenal ou depósito da masmorra, com armas e caixotes',
+        },
+      },
+    });
+    expect(JSON.stringify(second.questions)).not.toContain('taverna');
+  });
+
   it('asks each question as the primitive it was designed for', async () => {
     // The mapping is the measured part of this front: an ordered scale asked
     // as a choice is exactly the information the zero-shot path had to discard.
@@ -154,13 +181,16 @@ describe('the request the proxy is handed', () => {
 
     await new JevInterpreter({ apiKey: KEY, fetchImpl }).interpret('uma adega fria');
 
-    const headers = calls[0].init?.headers as Record<string, string>;
-    expect(headers[JEV_KEY_HEADER]).toBe(KEY);
+    expect(calls).toHaveLength(2);
     expect(JEV_KEY_HEADER).toBe('x-typesafe-key');
-    expect(headers['content-type']).toBe('application/json');
-    // The URL is logged by every server between here and the proxy.
-    expect(String(calls[0].input)).not.toContain(KEY);
-    expect(String(calls[0].init?.body)).not.toContain(KEY);
+    for (const call of calls) {
+      const headers = call.init?.headers as Record<string, string>;
+      expect(headers[JEV_KEY_HEADER]).toBe(KEY);
+      expect(headers['content-type']).toBe('application/json');
+      // The URL is logged by every server between here and the proxy.
+      expect(String(call.input)).not.toContain(KEY);
+      expect(String(call.init?.body)).not.toContain(KEY);
+    }
   });
 
   it('goes where it is told to, when it is told', async () => {

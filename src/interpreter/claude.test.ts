@@ -192,6 +192,15 @@ describe('interpreting a description', () => {
       expect(calls[0].system).toContain(feature);
     }
   });
+
+  it('frames the place vocabulary as both tavern and dungeon', async () => {
+    const { client, calls } = stubClient(respondsWith(answer));
+
+    await interpreterWith(client).interpret('uma cela de masmorra');
+
+    expect(calls[0].system).toContain('tavern or dungeon room');
+    expect(calls[0].system).not.toContain('description of a tavern space');
+  });
 });
 
 describe('taking language out of what could not be expressed', () => {
