@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Condition, Light, PlaceType } from '../../core/types';
+import type { Building, Condition, Light, RoomKind } from '../../core/types';
+import { BUILDINGS } from '../../generator/profiles';
 import { FEATURES } from '../vocabulary';
 import type { Feature } from '../vocabulary';
 
@@ -13,7 +14,9 @@ import {
   labelsOf,
   readFeatures,
   readLight,
-  readPlaceType,
+  readBuilding,
+  readRoom,
+  roomTemplateFor,
   readSizeHint,
   scoresByValue,
 } from './interpret';
@@ -23,7 +26,8 @@ import {
   CONDITION_TEMPLATE,
   FEATURE_TEMPLATE,
   LIGHT_TEMPLATE,
-  PLACE_TYPE_TEMPLATE,
+  BUILDING_TEMPLATE,
+  ROOM_TEMPLATES,
   SIZE_HINT_TEMPLATE,
 } from './templates';
 import type { ChoiceTemplate } from './templates';
@@ -52,11 +56,8 @@ function outputFor<T extends string>(
   return { labels: rows.map((row) => row.label), scores: rows.map((row) => row.score) };
 }
 
-const CERTAIN_HALL: Record<PlaceType, number> = {
-  tavern_hall: 0.9,
-  tavern_room: 0.07,
-  tavern_storeroom: 0.03,
-};
+const CERTAIN_BUILDING: Record<Building, number> = { tavern: 0.9, dungeon: 0.1 };
+const CERTAIN_HALL: Record<RoomKind, number> = { hall: 0.9, room: 0.07, storeroom: 0.03 };
 const CERTAIN_DIM: Record<Light, number> = { dark: 0.2, dim: 0.7, bright: 0.1 };
 const CERTAIN_DISORDER: Record<Condition, number> = {
   tidy: 0.02,
@@ -79,7 +80,7 @@ describe('reading scores back by label', () => {
   it('finds each value however the pipeline ordered its answer', () => {
     // The answer comes back sorted by score, so `tavern_hall` is first in the
     // arrays and third in the template. Reading by position would swap them.
-    expect(scoresByValue(PLACE_TYPE_TEMPLATE, outputFor(PLACE_TYPE_TEMPLATE, CERTAIN_HALL))).toEqual(
+    expect(scoresByValue(ROOM_TEMPLATES.tavern, outputFor(ROOM_TEMPLATES.tavern, CERTAIN_HALL))).toEqual(
       CERTAIN_HALL,
     );
   });
@@ -87,23 +88,23 @@ describe('reading scores back by label', () => {
   it('refuses a label nobody asked about', () => {
     const output: ZeroShotOutput = { labels: ['um trono de obsidiana'], scores: [0.99] };
 
-    expect(() => scoresByValue(PLACE_TYPE_TEMPLATE, output)).toThrow(ClassificationFailedError);
+    expect(() => scoresByValue(ROOM_TEMPLATES.tavern, output)).toThrow(ClassificationFailedError);
   });
 
   it('refuses the same label scored twice', () => {
-    const label = PLACE_TYPE_TEMPLATE.labels.tavern_hall;
+    const label = ROOM_TEMPLATES.tavern.labels.hall;
     const output: ZeroShotOutput = { labels: [label, label], scores: [0.9, 0.1] };
 
-    expect(() => scoresByValue(PLACE_TYPE_TEMPLATE, output)).toThrow(/twice/);
+    expect(() => scoresByValue(ROOM_TEMPLATES.tavern, output)).toThrow(/twice/);
   });
 
   it('refuses an answer that left one of the values unscored', () => {
     const output: ZeroShotOutput = {
-      labels: [PLACE_TYPE_TEMPLATE.labels.tavern_hall, PLACE_TYPE_TEMPLATE.labels.tavern_room],
+      labels: [ROOM_TEMPLATES.tavern.labels.hall, ROOM_TEMPLATES.tavern.labels.room],
       scores: [0.6, 0.4],
     };
 
-    expect(() => scoresByValue(PLACE_TYPE_TEMPLATE, output)).toThrow(/tavern_storeroom/);
+    expect(() => scoresByValue(ROOM_TEMPLATES.tavern, output)).toThrow(/storeroom/);
   });
 });
 
@@ -127,7 +128,8 @@ describe('choosing the best-scoring value', () => {
 
 describe('reading the closed fields', () => {
   it('reads the kind of place', () => {
-    expect(readPlaceType(outputFor(PLACE_TYPE_TEMPLATE, CERTAIN_HALL)).value).toBe('tavern_hall');
+    expect(readBuilding(outputFor(BUILDING_TEMPLATE, CERTAIN_BUILDING))).toBe('tavern');
+    expect(readRoom('tavern', outputFor(ROOM_TEMPLATES.tavern, CERTAIN_HALL))).toBe('hall');
   });
 
   it('reads the light', () => {
@@ -135,49 +137,19 @@ describe('reading the closed fields', () => {
   });
 });
 
-describe('the confidence gate on the kind of place', () => {
-  it('trusts an answer the classifier was sure of', () => {
-    const reading = readPlaceType(outputFor(PLACE_TYPE_TEMPLATE, CERTAIN_HALL));
-
-    expect(reading).toEqual({ value: 'tavern_hall', confidence: CERTAIN_HALL.tavern_hall, trusted: true });
+describe('the two place choices', () => {
+  it('uses the chosen building when reading its room', () => {
+    expect(readRoom('dungeon', outputFor(ROOM_TEMPLATES.dungeon, CERTAIN_HALL))).toBe('hall');
   });
 
-  it('does not trust an answer below the threshold', () => {
-    // What the bench saw on "porão de taverna" before the synonym layer: the
-    // wrong kind of place, at a confidence that does not look uncertain.
-    const just = PLACE_TYPE_TEMPLATE.minConfidence - 0.01;
-    const rest = (1 - just) / 2;
-    const reading = readPlaceType(
-      outputFor(PLACE_TYPE_TEMPLATE, { tavern_hall: just, tavern_room: rest, tavern_storeroom: rest }),
-    );
-
-    expect(reading.value).toBe('tavern_hall');
-    expect(reading.trusted).toBe(false);
-  });
-
-  it('trusts an answer exactly on the threshold', () => {
-    const at = PLACE_TYPE_TEMPLATE.minConfidence;
-    const rest = (1 - at) / 2;
-
-    expect(
-      readPlaceType(
-        outputFor(PLACE_TYPE_TEMPLATE, { tavern_hall: at, tavern_room: rest, tavern_storeroom: rest }),
-      ).trusted,
-    ).toBe(true);
-  });
-
-  it('gives the winning value whether it is trusted or not', () => {
-    // Nothing falls back yet, so an untrusted answer is still the answer.
-    const untrusted: Record<PlaceType, number> = {
-      tavern_hall: 0.2,
-      tavern_room: 0.3,
-      tavern_storeroom: 0.5,
-    };
-
-    expect(readPlaceType(outputFor(PLACE_TYPE_TEMPLATE, untrusted))).toMatchObject({
-      value: 'tavern_storeroom',
-      trusted: false,
-    });
+  it('limits local room labels to the selected building matrix', () => {
+    const filling = BUILDINGS.dungeon.rooms.storeroom;
+    delete BUILDINGS.dungeon.rooms.storeroom;
+    try {
+      expect(Object.keys(roomTemplateFor('dungeon').labels)).toEqual(['hall', 'room']);
+    } finally {
+      BUILDINGS.dungeon.rooms.storeroom = filling;
+    }
   });
 });
 
@@ -304,7 +276,7 @@ describe('deriving clutter from the condition distribution', () => {
 
 describe('assembling the constraints', () => {
   const parts = {
-    placeType: 'tavern_hall',
+    place: { building: 'tavern', room: 'hall' },
     sizeHint: undefined,
     light: 'dim',
     condition: 'disordered',
@@ -337,9 +309,9 @@ describe('assembling the constraints', () => {
   });
 
   it('refuses a kind of place outside the vocabulary', () => {
-    const broken = { ...parts, placeType: 'throne_room' as PlaceType };
+    const broken = { ...parts, place: { building: 'tavern' as Building, room: 'throne_room' as RoomKind } };
 
-    expect(() => constraintsFrom(broken)).toThrow(/placeType/);
+    expect(() => constraintsFrom(broken)).toThrow(/place/);
   });
 });
 
@@ -348,7 +320,8 @@ describe('assembling the constraints', () => {
 type Ask = { text: string; labels: readonly string[]; options: ZeroShotOptions };
 
 type Answers = {
-  placeType?: Record<PlaceType, number>;
+  building?: Record<Building, number>;
+  room?: Record<RoomKind, number>;
   light?: Record<Light, number>;
   condition?: Record<Condition, number>;
   size?: Record<'small' | 'medium' | 'large', number>;
@@ -361,8 +334,13 @@ function stubPipeline(answers: Answers = {}): { pipeline: ZeroShotPipeline; asks
   const pipeline: ZeroShotPipeline = (text, labels, options) => {
     asks.push({ text, labels, options });
     switch (options.hypothesisTemplate) {
-      case PLACE_TYPE_TEMPLATE.hypothesis:
-        return Promise.resolve(outputFor(PLACE_TYPE_TEMPLATE, answers.placeType ?? CERTAIN_HALL));
+      case BUILDING_TEMPLATE.hypothesis:
+        return Promise.resolve(outputFor(BUILDING_TEMPLATE, answers.building ?? CERTAIN_BUILDING));
+      case ROOM_TEMPLATES.tavern.hypothesis:
+        return Promise.resolve(outputFor(
+          labels.includes('cela da masmorra') ? ROOM_TEMPLATES.dungeon : ROOM_TEMPLATES.tavern,
+          answers.room ?? CERTAIN_HALL,
+        ));
       case LIGHT_TEMPLATE.hypothesis:
         return Promise.resolve(outputFor(LIGHT_TEMPLATE, answers.light ?? CERTAIN_DIM));
       case CONDITION_TEMPLATE.hypothesis:
@@ -379,13 +357,23 @@ function stubPipeline(answers: Answers = {}): { pipeline: ZeroShotPipeline; asks
 }
 
 describe('classifying a whole description', () => {
+  it('chooses dungeon before asking for a room and validates the pair', async () => {
+    const { pipeline, asks } = stubPipeline({
+      building: { tavern: 0.1, dungeon: 0.9 },
+      room: { hall: 0.1, room: 0.8, storeroom: 0.1 },
+    });
+    const result = await classify('uma cela de pedra com um catre', pipeline);
+    expect(result.place).toEqual({ building: 'dungeon', room: 'room' });
+    expect(asks[1].labels).toEqual(Object.values(ROOM_TEMPLATES.dungeon.labels));
+    expect(result.unresolved).toEqual([]);
+  });
   it('produces the constraints the scores describe', async () => {
     const { pipeline } = stubPipeline({
       features: { ...NO_FEATURES, bar: 0.91, hearth: 0.77 },
     });
 
     await expect(classify('um salão de taverna, luz baixa, móveis derrubados', pipeline)).resolves.toEqual({
-      placeType: 'tavern_hall',
+      place: { building: 'tavern', room: 'hall' },
       light: 'dim',
       condition: 'disordered',
       clutter: deriveClutter(CERTAIN_DISORDER),
@@ -400,13 +388,14 @@ describe('classifying a whole description', () => {
     await classify('um depósito de taverna', pipeline);
 
     expect(asks.map((ask) => ask.options.hypothesisTemplate)).toEqual([
-      PLACE_TYPE_TEMPLATE.hypothesis,
+      BUILDING_TEMPLATE.hypothesis,
+      ROOM_TEMPLATES.tavern.hypothesis,
       LIGHT_TEMPLATE.hypothesis,
       CONDITION_TEMPLATE.hypothesis,
       SIZE_HINT_TEMPLATE.hypothesis,
       FEATURE_TEMPLATE.hypothesis,
     ]);
-    expect(asks.map((ask) => ask.options.multiLabel)).toEqual([false, false, false, false, true]);
+    expect(asks.map((ask) => ask.options.multiLabel)).toEqual([false, false, false, false, false, true]);
   });
 
   it('asks about every label of the template it is asking for', async () => {
@@ -414,9 +403,10 @@ describe('classifying a whole description', () => {
 
     await classify('um quarto de taverna', pipeline);
 
-    expect(asks[0].labels).toEqual(labelsOf(PLACE_TYPE_TEMPLATE));
-    expect(asks[4].labels).toEqual(labelsOf(FEATURE_TEMPLATE));
-    expect(asks[4].labels).toHaveLength(FEATURES.length);
+    expect(asks[0].labels).toEqual(labelsOf(BUILDING_TEMPLATE));
+    expect(asks[1].labels).toEqual(labelsOf(ROOM_TEMPLATES.tavern));
+    expect(asks[5].labels).toEqual(labelsOf(FEATURE_TEMPLATE));
+    expect(asks[5].labels).toHaveLength(FEATURES.length);
   });
 
   it('passes a description with no synonym in it through exactly as typed', async () => {
@@ -453,7 +443,7 @@ describe('classifying a whole description', () => {
 
     await classify('adega com prateleira e escadas', pipeline);
 
-    expect(asks).toHaveLength(5);
+    expect(asks).toHaveLength(6);
     expect(new Set(asks.map((ask) => ask.text)).size).toBe(1);
     expect(asks[0].text).toBe('depósito com prateleiras e escada');
   });

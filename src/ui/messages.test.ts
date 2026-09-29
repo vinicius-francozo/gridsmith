@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Params, PlaceType } from '../core/types';
+import type { Params, Place } from '../core/types';
 import { SceneValidationError } from '../generator/validate';
 import {
   CLUTTER_NOT_A_NUMBER,
@@ -50,7 +50,11 @@ import {
 const EVERY_CODE: readonly Code[] = [...CONFLICT_CODES, ...UNRESOLVED_CODES];
 
 /** The three kinds of place the generator can build. */
-const PLACE_TYPES: readonly PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
+const PLACE_TYPES: readonly Place[] = [
+  { building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' },
+  { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' },
+  { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'storeroom' },
+];
 
 describe('the table covers the codes, and only the codes', () => {
   // This is the test the whole design of `codes.ts` rests on. The interpreter
@@ -154,22 +158,26 @@ describe('an entry becomes a sentence', () => {
 
   it('says the right Portuguese word for every one of the three kinds of place', () => {
     // Pinned one at a time for the same reason the seven features above are.
-    // `Record<PlaceType, string>` refuses a missing name and "is not the
+    // `Record<Place, string>` refuses a missing name and "is not the
     // identifier" refuses an untranslated one, but between them
     // `tavern_room: 'Depósito de taverna'` passes both: every kind named,
     // nothing in English, and the person told the generator built a storeroom
     // when it built a bedroom.
-    const names: Readonly<Record<PlaceType, string>> = {
+    const names: Readonly<Record<string, string>> = {
       tavern_hall: 'Salão de taverna',
       tavern_room: 'Quarto de taverna',
       tavern_storeroom: 'Depósito de taverna',
+      dungeon_hall: 'Salão da masmorra',
+      dungeon_room: 'Cela da masmorra',
+      dungeon_storeroom: 'Arsenal da masmorra',
     };
 
-    for (const placeType of PLACE_TYPES) {
-      const sentence = describeEntry(entry(PLACE_NOT_IN_VOCABULARY, placeType));
+    for (const place of PLACE_TYPES) {
+      const id = `${place.building}_${place.room}`;
+      const sentence = describeEntry(entry(PLACE_NOT_IN_VOCABULARY, id));
 
-      expect(sentence).toContain(`“${names[placeType]}”`);
-      expect(sentence).not.toContain(placeType);
+      expect(sentence).toContain(`“${names[id]}”`);
+      expect(sentence).not.toContain(id);
     }
   });
 
@@ -390,7 +398,7 @@ describe('a key never reaches the screen', () => {
 
 describe('the line under a finished map', () => {
   const params: Params = {
-    placeType: 'tavern_storeroom',
+    place: { building: 'tavern', room: 'storeroom' },
     size: { w: 12, h: 8 },
     light: 'dark',
     condition: 'lived_in',
@@ -411,9 +419,9 @@ describe('the line under a finished map', () => {
   });
 
   it('has a different name for each kind of place', () => {
-    const names = PLACE_TYPES.map((placeType) => describeResult({ ...params, placeType }));
+    const names = PLACE_TYPES.map((place) => describeResult({ ...params, place }));
 
-    expect(new Set(names).size).toBe(3);
+    expect(new Set(names).size).toBe(6);
   });
 });
 

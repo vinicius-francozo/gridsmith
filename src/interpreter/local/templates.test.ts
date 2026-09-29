@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Condition, Light, PlaceType } from '../../core/types';
+import type { Building, Condition, Light, RoomKind } from '../../core/types';
 import { FEATURES } from '../vocabulary';
 
 import {
@@ -9,7 +9,8 @@ import {
   FEATURE_TEMPLATE,
   LABEL_PLACEHOLDER,
   LIGHT_TEMPLATE,
-  PLACE_TYPE_TEMPLATE,
+  BUILDING_TEMPLATE,
+  ROOM_TEMPLATES,
   SIZE_HINT_TEMPLATE,
   STOREROOM_WORD,
 } from './templates';
@@ -20,17 +21,20 @@ import type { ChoiceTemplate } from './templates';
  *
  * The `Record` types in `templates.ts` already make the compiler refuse a
  * missing key, so these lists are not a second copy of that check — they are
- * the independent one. `PlaceType` could gain a fourth kind and both the type
+ * the independent one. `Place` could gain a fourth kind and both the type
  * and the template would move together without anybody noticing; these lines
  * are what makes that a failing test instead.
  */
-const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
+const BUILDINGS: Building[] = ['tavern', 'dungeon'];
+const ROOMS: RoomKind[] = ['hall', 'room', 'storeroom'];
 const LIGHTS: Light[] = ['dark', 'dim', 'bright'];
 const CONDITIONS: Condition[] = ['tidy', 'lived_in', 'disordered', 'ruined'];
 const SIZE_HINTS = ['small', 'medium', 'large'];
 
 const ALL_TEMPLATES: Array<{ name: string; template: ChoiceTemplate<string> }> = [
-  { name: 'place type', template: PLACE_TYPE_TEMPLATE },
+  { name: 'building', template: BUILDING_TEMPLATE },
+  { name: 'tavern room', template: ROOM_TEMPLATES.tavern },
+  { name: 'dungeon room', template: ROOM_TEMPLATES.dungeon },
   { name: 'light', template: LIGHT_TEMPLATE },
   { name: 'condition', template: CONDITION_TEMPLATE },
   { name: 'size hint', template: SIZE_HINT_TEMPLATE },
@@ -65,8 +69,10 @@ describe('every template is askable', () => {
 });
 
 describe('every template covers its closed vocabulary', () => {
-  it('asks about all three kinds of place', () => {
-    expect(Object.keys(PLACE_TYPE_TEMPLATE.labels).sort()).toEqual([...PLACE_TYPES].sort());
+  it('asks about each building and its three rooms', () => {
+    expect(Object.keys(BUILDING_TEMPLATE.labels).sort()).toEqual([...BUILDINGS].sort());
+    expect(Object.keys(ROOM_TEMPLATES.tavern.labels).sort()).toEqual([...ROOMS].sort());
+    expect(Object.keys(ROOM_TEMPLATES.dungeon.labels).sort()).toEqual([...ROOMS].sort());
   });
 
   it('asks about all three lights', () => {
@@ -92,7 +98,8 @@ describe('what the bench measured about the wording', () => {
     // of that question's answers at once and leaves no other trace, so the five
     // are written out here by hand — a measured sentence that somebody reworded
     // on the way past should be a red test, not a quieter map.
-    expect(PLACE_TYPE_TEMPLATE.hypothesis).toBe('Este texto é sobre {}.');
+    expect(BUILDING_TEMPLATE.hypothesis).toBe('A construção é {}.');
+    expect(ROOM_TEMPLATES.tavern.hypothesis).toBe('O cômodo é {}.');
     expect(LIGHT_TEMPLATE.hypothesis).toBe('A iluminação do lugar é assim: {}.');
     expect(CONDITION_TEMPLATE.hypothesis).toBe('O lugar está {}.');
     expect(SIZE_HINT_TEMPLATE.hypothesis).toBe('O lugar é {}.');
@@ -120,7 +127,7 @@ describe('what the bench measured about the wording', () => {
   it('keeps every kind of place to a short label', () => {
     // Measured: phrasing these as descriptive sentences — the worst of them
     // eleven words long — scored 45% against 90% for the short ones.
-    for (const [place, label] of Object.entries(PLACE_TYPE_TEMPLATE.labels)) {
+    for (const [place, label] of Object.entries(ROOM_TEMPLATES.tavern.labels)) {
       expect(`${place}: ${String(label.split(/\s+/).length <= 4)}`).toBe(`${place}: true`);
     }
   });
@@ -131,7 +138,7 @@ describe('what the bench measured about the wording', () => {
     // These strings are not a design choice, they are the *result of a
     // measurement*. A bench scored two models over twenty Portuguese
     // descriptions, and the accuracy figures this front is built on — 90% on
-    // `placeType`, F1 0.94 on `features`, the AUC behind `minConfidence` —
+    // `place`, F1 0.94 on `features`, the AUC behind `minConfidence` —
     // describe these exact phrasings and no others.
     //
     // So this test does not claim the labels below are the *right* words. It
@@ -147,10 +154,10 @@ describe('what the bench measured about the wording', () => {
     // change, on purpose. If you are editing this list, you are invalidating a
     // measurement — re-run the bench, or the comments in `templates.ts` are
     // now false.
-    expect(PLACE_TYPE_TEMPLATE.labels).toEqual({
-      tavern_hall: 'salão de taverna',
-      tavern_room: 'quarto de taverna',
-      tavern_storeroom: 'depósito de taverna',
+    expect(ROOM_TEMPLATES.tavern.labels).toEqual({
+      hall: 'salão de taverna',
+      room: 'quarto de taverna',
+      storeroom: 'depósito de taverna',
     });
     expect(LIGHT_TEMPLATE.labels).toEqual({
       dark: 'escuridão total, não há luz nenhuma',
@@ -186,22 +193,16 @@ describe('what the bench measured about the wording', () => {
     // `synonyms.ts` reads `STOREROOM_WORD`, not this label. If the two ever
     // stopped being the same word, every "porão" would be rewritten into a word
     // no hypothesis mentions.
-    expect(PLACE_TYPE_TEMPLATE.labels.tavern_storeroom.split(' ')[0]).toBe(STOREROOM_WORD);
+    expect(ROOM_TEMPLATES.tavern.labels.storeroom.split(' ')[0]).toBe(STOREROOM_WORD);
   });
 });
 
 describe('the thresholds and the clutter table', () => {
   it('keeps every threshold inside a probability', () => {
-    for (const template of [PLACE_TYPE_TEMPLATE, SIZE_HINT_TEMPLATE, FEATURE_TEMPLATE]) {
+    for (const template of [SIZE_HINT_TEMPLATE, FEATURE_TEMPLATE]) {
       expect(template.minConfidence).toBeGreaterThan(0);
       expect(template.minConfidence).toBeLessThanOrEqual(1);
     }
-  });
-
-  it('puts the place-type gate above an even split of the three', () => {
-    // Below a third the gate would accept everything, including the answers the
-    // bench measured it holding back.
-    expect(PLACE_TYPE_TEMPLATE.minConfidence).toBeGreaterThan(1 / 3);
   });
 
   it('holds each threshold to the figure it was measured at', () => {
@@ -211,9 +212,6 @@ describe('the thresholds and the clutter table', () => {
     // threshold sits where it does is the only thing that says what a later
     // bench would have to beat to move it.
 
-    // AUC 0.922 of confidence against correctness; at 0.55 the bench accepted
-    // 13 of 20 descriptions and all 13 were right.
-    expect(PLACE_TYPE_TEMPLATE.minConfidence).toBe(0.55);
     // Swept from 0.40 to 0.70 against these labels: 40%, 70%, 80%, then 95% at
     // 0.55 and 95% at every step above it. 0.55 is the bottom of that plateau,
     // 19 of 20, the single error a `small` the gate read as no size at all.

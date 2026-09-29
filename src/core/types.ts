@@ -10,13 +10,15 @@ export type Cell = { x: number; y: number };        // integers, grid cells
 export type Size = { w: number; h: number };        // in cells
 export type Facing = 'n' | 'e' | 's' | 'w';
 
-export type PlaceType = 'tavern_hall' | 'tavern_room' | 'tavern_storeroom';
+export type Building = 'tavern' | 'dungeon';
+export type RoomKind = 'hall' | 'room' | 'storeroom';
+export type Place = { building: Building; room: RoomKind };
 export type Light = 'dark' | 'dim' | 'bright';
 export type Condition = 'tidy' | 'lived_in' | 'disordered' | 'ruined';
 
 /** Interpreter output. Closed vocabulary — the generator's ceiling. */
 export type Constraints = {
-  placeType: PlaceType;
+  place: Place;
   sizeHint?: 'small' | 'medium' | 'large';
   light: Light;
   condition: Condition;
@@ -27,8 +29,8 @@ export type Constraints = {
 
 /** Resolver output: every value concrete, conflicts already settled. */
 export type Params = {
-  placeType: PlaceType;
-  size: Size;                   // derived from placeType, max 20x20
+  place: Place;
+  size: Size;                   // derived from place, max 20x20
   light: Light;
   condition: Condition;
   clutter: number;

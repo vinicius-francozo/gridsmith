@@ -14,7 +14,7 @@
  * becomes `PLACE_NOT_IN_VOCABULARY` with the kind of place that was built as
  * the detail.
  *
- * The map is still generated, as the nearest of the three. That is the
+ * The map is still generated, as the nearest supported pair. That is the
  * precedent in `resolve.ts:221-237`, where a feature that does not fit the
  * place is left out and recorded rather than rejected: a person who asked for a
  * forge gets a room and a line telling them it is not a forge, which is more
@@ -22,7 +22,8 @@
  *
  * ## Confidence is not truth
  *
- * Nothing here treats a high number as a fact. Measured: `"Amanhã eles porão os
+ * Nothing here treats a high number as a fact. With the old three-place tavern
+ * question, `"Amanhã eles porão os
  * barris no lugar certo"` comes back `tavern_storeroom` at confidence **1.000**
  * — the future of *pôr* colliding with *porão*, the cellar. "Never
  * hallucinates" means Jev does not invent a value outside the schema; it does
@@ -32,7 +33,7 @@
 
 import { z } from 'zod';
 
-import type { Constraints } from '../../core/types';
+import type { Building, Constraints } from '../../core/types';
 import { entry, PLACE_NOT_IN_VOCABULARY } from '../codes';
 import { constraintsSchema } from '../schema';
 import { FEATURES } from '../vocabulary';
@@ -45,6 +46,7 @@ import {
   LIGHT_LEVELS,
   OUT_OF_VOCABULARY_THRESHOLD,
   QUESTIONS,
+  roomQuestionFor,
   SIZE_LEVELS,
   SIZE_MIN_CONFIDENCE,
 } from './questions';
@@ -99,10 +101,16 @@ export function clutterFromScore(score: number): number {
  *                                  assembles into does not satisfy
  *                                  `constraintsSchema`.
  */
-export function readAnswers(body: unknown): Constraints {
-  const answers = answersOf(body);
+export type BuildingReading = Omit<Constraints, 'place'> & { building: Building; outOfVocabulary: number };
 
-  const place = read(answers, 'place_type', choiceSchema);
+export function readBuildingAnswers(body: unknown): BuildingReading {
+  const answers = answersOf(body, Object.keys(QUESTIONS));
+
+  const building = read(answers, 'building', choiceSchema);
+  const parsedBuilding = z.enum(['tavern', 'dungeon']).safeParse(building.choice);
+  if (!parsedBuilding.success) {
+    throw new JevUnusableAnswerError(`building: ${describeIssues(parsedBuilding.error)}`, { cause: parsedBuilding.error });
+  }
   const light = levelOf('light', read(answers, 'light', scoreSchema).score, LIGHT_LEVELS);
   const conditionScore = read(answers, 'condition', scoreSchema).score;
   const size = read(answers, 'size', scoreSchema);
@@ -122,8 +130,8 @@ export function readAnswers(body: unknown): Constraints {
   const sizeHint =
     size.confidence >= SIZE_MIN_CONFIDENCE ? levelOf('size', size.score, SIZE_LEVELS) : undefined;
 
-  const candidate = {
-    placeType: place.choice,
+  return {
+    building: parsedBuilding.data,
     // Left off rather than set to `undefined`, so that a `Constraints` from
     // this engine and one from either of the others are the same object for
     // the same map. `constraintsFrom` in `local/interpret.ts` does the same.
@@ -135,10 +143,25 @@ export function readAnswers(body: unknown): Constraints {
     // The detail is the kind of place that was built, so the interface can say
     // what the person got rather than only that they did not get what they
     // asked for. Written through `entry`, never as a sentence: `codes.ts:1-17`.
-    unresolved:
-      outOfVocabulary >= OUT_OF_VOCABULARY_THRESHOLD
-        ? [entry(PLACE_NOT_IN_VOCABULARY, place.choice)]
-        : [],
+    unresolved: [],
+    outOfVocabulary,
+  };
+}
+
+export function readRoomAnswers(body: unknown, first: BuildingReading): Constraints {
+  const answers = answersOf(body, ['room']);
+  const room = read(answers, 'room', choiceSchema);
+  const allowed = roomQuestionFor(first.building).room.criteria;
+  if (!Object.hasOwn(allowed, room.choice)) {
+    throw new JevUnusableAnswerError(`room: unknown choice '${room.choice}' for ${first.building}`);
+  }
+  const { building, outOfVocabulary, ...rest } = first;
+  const place = { building, room: room.choice };
+  const candidate = {
+    ...rest,
+    place,
+    unresolved: outOfVocabulary >= OUT_OF_VOCABULARY_THRESHOLD
+      ? [entry(PLACE_NOT_IN_VOCABULARY, `${building}_${room.choice}`)] : [],
   };
 
   // The same gate the other two engines pass through, for the reason
@@ -165,13 +188,13 @@ export function readAnswers(body: unknown): Constraints {
  * catch. `scoresByValue` in `local/interpret.ts` refuses the same two shapes,
  * for the same reason.
  */
-function answersOf(body: unknown): Record<string, unknown> {
+function answersOf(body: unknown, expected: string[]): Record<string, unknown> {
   const envelope = envelopeSchema.safeParse(body);
   if (!envelope.success) {
     throw new JevUnusableAnswerError(describeIssues(envelope.error), { cause: envelope.error });
   }
 
-  const asked = Object.keys(QUESTIONS).sort().join(', ');
+  const asked = [...expected].sort().join(', ');
   const answered = Object.keys(envelope.data.answers).sort().join(', ');
   if (asked !== answered) {
     throw new JevUnusableAnswerError(
@@ -188,7 +211,7 @@ function answersOf(body: unknown): Record<string, unknown> {
  *                                  noul, got score" says nothing on its own
  *                                  when twelve questions were asked at once.
  */
-function read<T>(answers: Record<string, unknown>, name: QuestionName, schema: z.ZodType<T>): T {
+function read<T>(answers: Record<string, unknown>, name: QuestionName | 'room', schema: z.ZodType<T>): T {
   const parsed = schema.safeParse(answers[name]);
   if (!parsed.success) {
     throw new JevUnusableAnswerError(`${name}: ${describeIssues(parsed.error)}`, { cause: parsed.error });

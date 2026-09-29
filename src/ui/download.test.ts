@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Params, PlaceType } from '../core/types';
+import type { Params, Place } from '../core/types';
 
 import { createBlobSaver, FILENAME_PREFIX, mapFilename, REVOKE_DELAY_MS } from './download';
 
 function paramsFor(overrides: Partial<Params> = {}): Params {
   return {
-    placeType: 'tavern_hall',
+    place: { building: 'tavern', room: 'hall' },
     size: { w: 16, h: 14 },
     light: 'dim',
     condition: 'lived_in',
@@ -49,18 +49,24 @@ describe('naming the exported map', () => {
   });
 
   it('gives two kinds of place at one seed two names', () => {
-    const names = (['tavern_hall', 'tavern_room', 'tavern_storeroom'] as PlaceType[]).map(
-      (placeType) => mapFilename(paramsFor({ placeType })),
+    const names = ([{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'tavern', room: 'storeroom' }] as Place[]).map(
+      (place) => mapFilename(paramsFor({ place })),
     );
 
     expect(new Set(names).size).toBe(3);
   });
 
+  it('names a dungeon room with both parts of its place', () => {
+    expect(mapFilename(paramsFor({ place: { building: 'dungeon', room: 'room' }, seed: 42 }))).toBe(
+      'gridsmith-dungeon-room-seed-42.png',
+    );
+  });
+
   it('cannot be talked into a path', () => {
-    // `placeType` is closed by the schema before it reaches here, but this name
+    // `place` is closed by the schema before it reaches here, but this name
     // is handed to an operating system, and a slash in one is worth a line to
     // make impossible rather than a paragraph to reason about.
-    const name = mapFilename(paramsFor({ placeType: '../../etc/passwd' as PlaceType }));
+    const name = mapFilename(paramsFor({ place: { building: '../../etc/passwd', room: 'hall' } as unknown as Place }));
 
     expect(name).not.toContain('/');
     expect(name).not.toContain('..');

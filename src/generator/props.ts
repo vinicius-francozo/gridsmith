@@ -79,7 +79,7 @@ const CONDITION_SCATTER: Record<Condition, number> = {
  *                 the API does not enforce the schema — the client-side
  *                 validation is the only thing that closes the vocabulary, so
  *                 the generator closes it again here, as `profileFor` does
- *                 for `placeType`.
+ *                 for `place`.
  *
  * Left unguarded the lookup gives `undefined`, `chance` becomes `NaN`, and
  * `rng.float() >= NaN` is false — so the skip never fires and the scatter

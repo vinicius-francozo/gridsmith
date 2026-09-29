@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { PlaceType } from '../../core/types';
 import { FEATURES } from '../vocabulary';
+import { BUILDINGS } from '../../generator/profiles';
 
 import {
   CONDITION_LEVELS,
@@ -10,12 +10,13 @@ import {
   LIGHT_LEVELS,
   OUT_OF_VOCABULARY_THRESHOLD,
   QUESTIONS,
+  roomQuestionFor,
   SIZE_LEVELS,
   SIZE_MIN_CONFIDENCE,
 } from './questions';
 
-/** The three the generator can build, written out rather than imported as data. */
-const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
+const BUILDING_KEYS = ['tavern', 'dungeon'];
+const ROOMS = ['hall', 'room', 'storeroom'];
 
 describe('a score question and its levels', () => {
   it('has one level for each criterion, on all three scales', () => {
@@ -41,10 +42,22 @@ describe('a score question and its levels', () => {
 });
 
 describe('the choice question', () => {
-  it('offers exactly the three kinds of place the generator can build', () => {
+  it('offers the buildings first and only their rooms second', () => {
     // Jev answers a choice with one of these keys, so this is what keeps the
     // answer inside `constraintsSchema` before the schema is even reached.
-    expect(Object.keys(QUESTIONS.place_type.criteria).sort()).toEqual([...PLACE_TYPES].sort());
+    expect(Object.keys(QUESTIONS.building.criteria).sort()).toEqual([...BUILDING_KEYS].sort());
+    expect(Object.keys(roomQuestionFor('tavern').room.criteria).sort()).toEqual(ROOMS);
+    expect(Object.keys(roomQuestionFor('dungeon').room.criteria).sort()).toEqual(ROOMS);
+  });
+
+  it('removes an unavailable room from the second question', () => {
+    const filling = BUILDINGS.dungeon.rooms.room;
+    delete BUILDINGS.dungeon.rooms.room;
+    try {
+      expect(Object.keys(roomQuestionFor('dungeon').room.criteria)).toEqual(['hall', 'storeroom']);
+    } finally {
+      BUILDINGS.dungeon.rooms.room = filling;
+    }
   });
 });
 

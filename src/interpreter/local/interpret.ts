@@ -14,8 +14,8 @@
  * The LLM path fills `Constraints.unresolved` with what the description asked
  * for that this vocabulary cannot carry — a second floor, a named innkeeper,
  * weather. This path never fills it, and never will, because a classifier
- * cannot produce that list. Asking "which of these three kinds of place is it"
- * returns one of three; there is no answer available to it that means "you also
+ * cannot produce that list. Asking for a building and then one of its rooms
+ * returns a supported pair; there is no answer available that means "you also
  * asked for a trapdoor and I have no way to say so". Noticing an unmet request
  * requires reading the description for what is *not* in the label set, which is
  * generation, not classification.
@@ -29,7 +29,8 @@
  * interpreter genuinely has nothing to say there.
  */
 
-import type { Condition, Constraints, Light, PlaceType } from '../../core/types';
+import type { Building, Condition, Constraints, Light, Place, RoomKind } from '../../core/types';
+import { roomsFor } from '../../generator/profiles';
 import { constraintsSchema } from '../schema';
 import { FEATURES } from '../vocabulary';
 import type { Feature } from '../vocabulary';
@@ -42,7 +43,8 @@ import {
   CONDITION_TEMPLATE,
   FEATURE_TEMPLATE,
   LIGHT_TEMPLATE,
-  PLACE_TYPE_TEMPLATE,
+  BUILDING_TEMPLATE,
+  ROOM_TEMPLATES,
   SIZE_HINT_TEMPLATE,
 } from './templates';
 import type { ChoiceTemplate } from './templates';
@@ -142,37 +144,23 @@ export function bestOf<T extends string>(
   return { value: best, confidence: scores[best] };
 }
 
-/** A kind of place, how sure the classifier was, and whether that is enough. */
-export type PlaceTypeReading = Scored<PlaceType> & {
-  /**
-   * Whether the confidence cleared `PLACE_TYPE_TEMPLATE.minConfidence`.
-   *
-   * Nothing acts on this yet, and that is deliberate rather than an oversight —
-   * see `readPlaceType`.
-   */
-  readonly trusted: boolean;
-};
+/** The building is chosen first; the room question depends on this answer. */
+export function readBuilding(output: ZeroShotOutput): Building {
+  return bestOf(BUILDING_TEMPLATE, output).value;
+}
 
-/**
- * Which of the three kinds of tavern space this is, and whether to believe it.
- *
- * The gate is worth computing because it was measured to mean something: with
- * the short labels in `templates.ts`, confidence separates a right answer from
- * a wrong one at an AUC of 0.922, and at the threshold there the bench's twenty
- * descriptions split into thirteen accepted — all thirteen correct — and seven
- * held back.
- *
- * **`trusted` is reported and not obeyed.** Obeying it would mean falling back
- * to something, and there is nothing to fall back to: no rule-based reader of a
- * description exists in this project, and inventing one here to have somewhere
- * to fall would be a second interpreter smuggled in under a threshold. So the
- * answer is used either way, exactly as it was before this gate existed, and
- * what the gate buys today is that the number is computed, named and reachable
- * for the day the other path is built.
- */
-export function readPlaceType(output: ZeroShotOutput): PlaceTypeReading {
-  const best = bestOf(PLACE_TYPE_TEMPLATE, output);
-  return { ...best, trusted: best.confidence >= PLACE_TYPE_TEMPLATE.minConfidence };
+/** Room labels are limited to those declared for the selected building. */
+export function readRoom(building: Building, output: ZeroShotOutput): RoomKind {
+  return bestOf(roomTemplateFor(building), output).value;
+}
+
+export function roomTemplateFor(building: Building): ChoiceTemplate<RoomKind> {
+  const source = ROOM_TEMPLATES[building];
+  const labels = {} as Record<RoomKind, string>;
+  for (const room of roomsFor(building)) {
+    labels[room] = source.labels[room];
+  }
+  return { hypothesis: source.hypothesis, labels };
 }
 
 /** How lit it is. */
@@ -238,7 +226,7 @@ export function deriveClutter(probabilities: Readonly<Record<Condition, number>>
 
 /** Everything one classification pass produced, before it is checked. */
 export type ClassifiedParts = {
-  readonly placeType: PlaceType;
+  readonly place: Place;
   readonly sizeHint: Constraints['sizeHint'];
   readonly light: Light;
   readonly condition: Condition;
@@ -266,7 +254,7 @@ export type ClassifiedParts = {
  */
 export function constraintsFrom(parts: ClassifiedParts): Constraints {
   const candidate = {
-    placeType: parts.placeType,
+    place: parts.place,
     ...(parts.sizeHint === undefined ? {} : { sizeHint: parts.sizeHint }),
     light: parts.light,
     condition: parts.condition,
@@ -293,12 +281,12 @@ function describeIssue(issue: { path: PropertyKey[]; message: string }): string 
 }
 
 /**
- * The constraints `text` describes, in five classifications.
+ * The constraints `text` describes, in six classifications.
  *
- * Five and not one: each field is a different question with a different
+ * Six and not one: each field is a different question with a different
  * hypothesis, and the pipeline judges one hypothesis at a time. They run one
  * after another rather than together because a single model session is one
- * piece of hardware — issuing five at once on the WebAssembly path queues them
+ * piece of hardware — issuing six at once on the WebAssembly path queues them
  * behind each other anyway. The second half of that reason used to be "and on
  * WebGPU it contends for the same device"; WebGPU is never asked for now, so
  * the WebAssembly half is the whole of it. See `MODEL_DEVICE`.
@@ -307,8 +295,8 @@ function describeIssue(issue: { path: PropertyKey[]; message: string }): string 
  *
  * Not `text` itself: `synonyms.ts` rewrites the handful of words this model is
  * known to miss — "porão" for the storeroom, "estante" for the shelving — into
- * the words its labels use, and the result of that is the premise of all five
- * entailment pairs. All five get the *same* premise, so the five answers are
+ * the words its labels use, and the result of that is the premise of all six
+ * entailment pairs. All six get the *same* premise, so the six answers are
  * about one sentence.
  *
  * `text` is not touched. `premise.original` is it, character for character, and
@@ -332,8 +320,8 @@ export async function classify(text: string, pipeline: ZeroShotPipeline): Promis
       multiLabel,
     });
 
-  // `trusted` is read by nobody yet; `readPlaceType` says why it is computed.
-  const placeType = readPlaceType(await ask(PLACE_TYPE_TEMPLATE, false)).value;
+  const building = readBuilding(await ask(BUILDING_TEMPLATE, false));
+  const room = readRoom(building, await ask(roomTemplateFor(building), false));
   const light = readLight(await ask(LIGHT_TEMPLATE, false));
 
   const conditionOutput = await ask(CONDITION_TEMPLATE, false);
@@ -345,5 +333,5 @@ export async function classify(text: string, pipeline: ZeroShotPipeline): Promis
   // between seven. A hall with a bar and a hearth and stairs has all three.
   const features = readFeatures(await ask(FEATURE_TEMPLATE, true));
 
-  return constraintsFrom({ placeType, sizeHint, light, condition, clutter, features });
+  return constraintsFrom({ place: { building, room }, sizeHint, light, condition, clutter, features });
 }

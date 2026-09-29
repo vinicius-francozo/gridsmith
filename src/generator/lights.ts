@@ -25,7 +25,7 @@ const AMBIENT: Record<Light, { spacing: number; radiusCells: number } | null> = 
  * The lamp rule for `light`, or `null` where the level hangs no lamps.
  *
  * @throws {Error} if `light` is outside the closed vocabulary, for the same
- *                 reason `profileFor` guards `placeType`: `Params` may have
+ *                 reason `profileFor` guards `place`: `Params` may have
  *                 come through a language model and a JSON boundary, and the
  *                 API does not enforce the schema.
  *

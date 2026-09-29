@@ -1,17 +1,15 @@
 /**
- * The twelve questions the Jev engine asks, and the numbers that read the
- * answers back. Data only — the reading itself is `read.ts`, and the call is
+ * The twelve first-pass questions the Jev engine asks, and the numbers that read the
+ * answers back. Data and room criteria — the reading itself is `read.ts`, and the call is
  * `jev.ts`.
  *
- * Every question goes in one request. The zero-shot path pays one forward pass
- * per label and asks five separate questions for it; Jev takes the whole set in
- * a single call, so an interpretation is one round trip.
+ * The first twelve questions go in one request. The second request asks only
+ * for a room supported by the chosen building.
  *
  * The mapping onto Jev's three primitives is not one-to-one with
  * `local/templates.ts`, and the differences are the point:
  *
- * - `place_type` is a **choice**: a closed set with no order, which is what it
- *   is.
+ * - `building` and `room` are **choices**: closed sets with no order.
  * - `light`, `condition` and `size` are **scores**, because their levels are
  *   ordered — dark < dim < bright, tidy < lived_in < disordered < ruined. A
  *   classifier had to treat them as unordered and throw that away.
@@ -28,7 +26,8 @@
  * lives in the interface (`codes.ts:1-17`).
  */
 
-import type { Condition, Constraints, Light } from '../../core/types';
+import type { Building, Condition, Constraints, Light } from '../../core/types';
+import { roomsFor } from '../../generator/profiles';
 import type { Feature } from '../vocabulary';
 
 /** A proposition, answered with a calibrated probability. */
@@ -61,24 +60,22 @@ export type JevQuestion = JevNoulQuestion | JevChoiceQuestion | JevScoreQuestion
  * so that the twelve names a response is read by are visible in one place.
  */
 export const QUESTIONS = {
-  place_type: {
+  building: {
     type: 'choice',
-    instructions: 'Que tipo de lugar o texto descreve?',
+    instructions: 'Que tipo de construção o texto descreve?',
     criteria: {
-      tavern_hall: 'O salão comum de uma taverna: mesas, bancos, fregueses bebendo, um balcão',
-      tavern_room: 'Um quarto de hóspedes de uma taverna ou estalagem: cama, lugar de dormir',
-      tavern_storeroom:
-        'Um depósito, porão, adega ou despensa de taverna: onde se guardam barris, caixotes e mantimentos',
+      tavern: 'Uma taverna ou estalagem para hóspedes, comida e bebida',
+      dungeon: 'Uma masmorra, calabouço, prisão ou fortaleza subterrânea',
     },
   },
   out_of_vocabulary: {
     type: 'noul',
     instructions:
-      'O texto descreve um lugar que NÃO é nenhum destes três: salão de taverna, quarto de taverna, depósito de taverna?',
+      'O texto descreve uma construção que NÃO é taverna nem masmorra?',
     criteria: {
-      true: 'É outro tipo de lugar — uma ferraria, uma cripta, um pátio, uma floresta, uma cozinha, qualquer coisa fora dessa lista de três',
+      true: 'É outro tipo de construção ou espaço — uma ferraria, um pátio, uma floresta, qualquer coisa fora desta lista',
       false:
-        'É um dos três: salão de taverna, quarto de hóspedes de taverna, ou depósito/porão/adega de taverna',
+        'É uma taverna ou uma masmorra',
     },
   },
   light: {
@@ -160,6 +157,27 @@ export const QUESTIONS = {
 /** The name of a question in `QUESTIONS`, and so of an answer in a response. */
 export type QuestionName = keyof typeof QUESTIONS;
 
+const ROOM_CRITERIA = {
+  tavern: {
+    hall: 'Salão comum da taverna, com mesas, balcão e fregueses',
+    room: 'Quarto de hóspedes da taverna, com cama',
+    storeroom: 'Depósito, porão ou adega da taverna, com barris e mantimentos',
+  },
+  dungeon: {
+    hall: 'Sala comum ou da guarda da masmorra',
+    room: 'Cela ou quarto da masmorra, com catre',
+    storeroom: 'Arsenal ou depósito da masmorra, com armas e caixotes',
+  },
+} as const;
+
+export function roomQuestionFor(building: Building): { room: JevChoiceQuestion } {
+  const criteria: Record<string, string> = {};
+  for (const room of roomsFor(building)) {
+    criteria[room] = ROOM_CRITERIA[building][room];
+  }
+  return { room: { type: 'choice', instructions: 'Qual cômodo desta construção o texto descreve?', criteria } };
+}
+
 /**
  * Which question answers each feature.
  *
@@ -205,11 +223,13 @@ export const SIZE_LEVELS: readonly NonNullable<Constraints['sizeHint']>[] = ['sm
 export const FEATURE_THRESHOLD = 0.62;
 
 /**
- * How sure Jev has to be that the place is not one of the three before the map
+ * How sure Jev has to be that the construction is outside the vocabulary before the map
  * carries a notice saying so.
  *
  * **Provisional, and the numbers that make it provisional belong next to it.**
- * On the 46 descriptions the bench ran, this threshold does *not* separate the
+ * The figures below came from the old three-place tavern vocabulary. They do
+ * not measure the new building question. On the 46 descriptions the bench ran,
+ * this threshold did *not* separate the
  * two halves: the lowest out-of-vocabulary answer is 0.730 and the highest
  * in-scope answer is 0.870, so no single number splits them. Four of the items
  * causing that overlap are sentences where **Jev is right and the ruler is

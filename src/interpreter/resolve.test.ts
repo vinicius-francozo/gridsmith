@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Constraints, PlaceType, Rng, Size } from '../core/types';
+import type { Constraints, Place, Rng, Size } from '../core/types';
 
 import {
   CLUTTER_NOT_A_NUMBER,
@@ -11,7 +11,7 @@ import {
 } from './codes';
 import { featureBudget, jitterSize, resolve } from './resolve';
 
-const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
+const PLACE_TYPES: Place[] = [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'tavern', room: 'storeroom' }];
 const SIZE_HINTS = [undefined, 'small', 'medium', 'large'] as const;
 
 /** Enough seeds to exercise the variation without turning this into a fuzz run. */
@@ -33,15 +33,15 @@ const SEEDS = Array.from({ length: 60 }, (_, i) => i - 30);
  * test that reads `resolve`'s own output sees three bands where the map has
  * two.
  */
-const GENERATOR_BOUNDS: Readonly<Record<PlaceType, { min: Size; max: Size }>> = {
-  tavern_hall: { min: { w: 12, h: 10 }, max: { w: 20, h: 18 } },
-  tavern_room: { min: { w: 6, h: 6 }, max: { w: 11, h: 10 } },
-  tavern_storeroom: { min: { w: 8, h: 6 }, max: { w: 14, h: 12 } },
+const GENERATOR_BOUNDS: Readonly<Record<Place['room'], { min: Size; max: Size }>> = {
+  hall: { min: { w: 12, h: 10 }, max: { w: 20, h: 18 } },
+  room: { min: { w: 6, h: 6 }, max: { w: 11, h: 10 } },
+  storeroom: { min: { w: 8, h: 6 }, max: { w: 14, h: 12 } },
 };
 
 /** `size` as the generator's own `clampSize` would leave it. */
-function asBuilt(size: Size, placeType: PlaceType): Size {
-  const { min, max } = GENERATOR_BOUNDS[placeType];
+function asBuilt(size: Size, place: Place): Size {
+  const { min, max } = GENERATOR_BOUNDS[place.room];
   return {
     w: Math.min(max.w, Math.max(min.w, size.w)),
     h: Math.min(max.h, Math.max(min.h, size.h)),
@@ -50,7 +50,7 @@ function asBuilt(size: Size, placeType: PlaceType): Size {
 
 function constraints(overrides: Partial<Constraints> = {}): Constraints {
   return {
-    placeType: 'tavern_hall',
+    place: { building: 'tavern', room: 'hall' },
     light: 'dim',
     condition: 'lived_in',
     clutter: 0.3,
@@ -64,10 +64,10 @@ describe('size', () => {
   it('never exceeds 20 by 20, for any place, any hint, any seed', () => {
     // The hard business rule. The largest hall sits at the ceiling on purpose,
     // so the variation has somewhere to overshoot and the cap has to hold.
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (const sizeHint of SIZE_HINTS) {
         for (const seed of SEEDS) {
-          const { size } = resolve(constraints({ placeType, sizeHint }), seed);
+          const { size } = resolve(constraints({ place, sizeHint }), seed);
           expect(size.w).toBeLessThanOrEqual(20);
           expect(size.h).toBeLessThanOrEqual(20);
         }
@@ -76,9 +76,9 @@ describe('size', () => {
   });
 
   it('is always whole cells, because there is no half a square on a grid', () => {
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (const seed of SEEDS) {
-        const { size } = resolve(constraints({ placeType }), seed);
+        const { size } = resolve(constraints({ place }), seed);
         expect(Number.isInteger(size.w)).toBe(true);
         expect(Number.isInteger(size.h)).toBe(true);
       }
@@ -86,10 +86,10 @@ describe('size', () => {
   });
 
   it('always leaves floor inside the wall ring', () => {
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (const sizeHint of SIZE_HINTS) {
         for (const seed of SEEDS) {
-          const { size } = resolve(constraints({ placeType, sizeHint }), seed);
+          const { size } = resolve(constraints({ place, sizeHint }), seed);
           expect(size.w).toBeGreaterThan(2);
           expect(size.h).toBeGreaterThan(2);
         }
@@ -102,10 +102,10 @@ describe('size', () => {
     // places, not one place with a dial. Compared at their extremes: the
     // largest room must still be smaller than the smallest hall.
     const largestRoom = Math.max(
-      ...SEEDS.map((seed) => area(resolve(constraints({ placeType: 'tavern_room', sizeHint: 'large' }), seed).size)),
+      ...SEEDS.map((seed) => area(resolve(constraints({ place: { building: 'tavern', room: 'room' }, sizeHint: 'large' }), seed).size)),
     );
     const smallestHall = Math.min(
-      ...SEEDS.map((seed) => area(resolve(constraints({ placeType: 'tavern_hall', sizeHint: 'small' }), seed).size)),
+      ...SEEDS.map((seed) => area(resolve(constraints({ place: { building: 'tavern', room: 'hall' }, sizeHint: 'small' }), seed).size)),
     );
 
     expect(largestRoom).toBeLessThan(smallestHall);
@@ -138,11 +138,11 @@ describe('size', () => {
     // somewhere to stand beside it. Asked for less, the generator clamps —
     // and a band that lives under the clamp is a band nobody can tell from
     // the one above it.
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (const sizeHint of SIZE_HINTS) {
         for (const seed of SEEDS) {
-          const { size } = resolve(constraints({ placeType, sizeHint }), seed);
-          const { min } = GENERATOR_BOUNDS[placeType];
+          const { size } = resolve(constraints({ place, sizeHint }), seed);
+          const { min } = GENERATOR_BOUNDS[place.room];
           expect(size.w).toBeGreaterThanOrEqual(min.w);
           expect(size.h).toBeGreaterThanOrEqual(min.h);
         }
@@ -156,12 +156,12 @@ describe('size', () => {
     // sat at or under the generator's floor and the clamp closed the gap.
     // So this compares the footprints as built, and asks that no two hints
     // ever produce the same one — not that the numbers in the table differ.
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       const built = new Map<string, Set<string>>();
       for (const sizeHint of ['small', 'medium', 'large'] as const) {
         const footprints = SEEDS.map((seed) => {
-          const { size } = resolve(constraints({ placeType, sizeHint }), seed);
-          const { w, h } = asBuilt(size, placeType);
+          const { size } = resolve(constraints({ place, sizeHint }), seed);
+          const { w, h } = asBuilt(size, place);
           return `${String(w)}x${String(h)}`;
         });
         built.set(sizeHint, new Set(footprints));
@@ -173,16 +173,16 @@ describe('size', () => {
         ['small', 'large'],
       ] as const) {
         const shared = [...(built.get(a) ?? [])].filter((footprint) => built.get(b)?.has(footprint));
-        expect({ placeType, a, b, shared }).toEqual({ placeType, a, b, shared: [] });
+        expect({ place, a, b, shared }).toEqual({ place, a, b, shared: [] });
       }
     }
   });
 
   it('gives each hint more than one rectangle to be, so the seed still says something', () => {
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (const sizeHint of ['small', 'medium', 'large'] as const) {
         const built = new Set(
-          SEEDS.map((seed) => JSON.stringify(asBuilt(resolve(constraints({ placeType, sizeHint }), seed).size, placeType))),
+          SEEDS.map((seed) => JSON.stringify(asBuilt(resolve(constraints({ place, sizeHint }), seed).size, place))),
         );
         expect(built.size).toBeGreaterThan(1);
       }
@@ -196,10 +196,10 @@ describe('a place type outside the vocabulary', () => {
     // handing this straight through from a model's answer, and the failure it
     // used to produce read `Cannot read properties of undefined (reading
     // 'sizes')`, two files away and naming neither the field nor the word.
-    const asked = constraints({ placeType: 'throne_room' as PlaceType });
+    const asked = constraints({ place: { building: 'tavern', room: 'throne_room' } as unknown as Place });
 
     expect(() => resolve(asked, 1)).toThrow(RangeError);
-    expect(() => resolve(asked, 1)).toThrow(/placeType/);
+    expect(() => resolve(asked, 1)).toThrow(/place/);
     expect(() => resolve(asked, 1)).toThrow(/throne_room/);
   });
 
@@ -210,18 +210,38 @@ describe('a place type outside the vocabulary', () => {
     // guard written against `undefined`, and dies on a missing `sizes` one
     // line later with the raw `TypeError` the guard exists to replace.
     for (const key of ['constructor', 'toString', 'valueOf', '__proto__', 'hasOwnProperty']) {
-      const asked = constraints({ placeType: key as PlaceType });
+      const asked = constraints({ place: { building: key, room: 'hall' } as unknown as Place });
 
       expect(() => resolve(asked, 1)).toThrow(RangeError);
-      expect(() => resolve(asked, 1)).toThrow(/placeType/);
+      expect(() => resolve(asked, 1)).toThrow(/place/);
       expect(() => resolve(asked, 1)).toThrow(key);
     }
   });
 
   it('accepts every kind of place the vocabulary does have', () => {
-    for (const placeType of PLACE_TYPES) {
-      expect(() => resolve(constraints({ placeType }), 1)).not.toThrow();
+    for (const place of PLACE_TYPES) {
+      expect(() => resolve(constraints({ place }), 1)).not.toThrow();
     }
+  });
+});
+
+describe('feature compatibility by building and room', () => {
+  it('drops a tavern bar from a dungeon hall while keeping its brazier', () => {
+    const params = resolve(constraints({
+      place: { building: 'dungeon', room: 'hall' },
+      features: ['bar', 'hearth'],
+    }), 42);
+    expect(params.features).toEqual(['hearth']);
+    expect(params.conflicts).toEqual([`${FEATURE_NOT_IN_PLACE}:bar`]);
+  });
+
+  it('does not turn a requested hearth into a dungeon room torch', () => {
+    const params = resolve(constraints({
+      place: { building: 'dungeon', room: 'room' },
+      features: ['hearth'],
+    }), 42);
+    expect(params.features).toEqual([]);
+    expect(params.conflicts).toEqual([`${FEATURE_NOT_IN_PLACE}:hearth`]);
   });
 });
 
@@ -287,22 +307,22 @@ describe('determinism', () => {
 describe('doors', () => {
   it('gives a guest room exactly one way in', () => {
     for (const seed of SEEDS) {
-      expect(resolve(constraints({ placeType: 'tavern_room' }), seed).doorCount).toBe(1);
+      expect(resolve(constraints({ place: { building: 'tavern', room: 'room' } }), seed).doorCount).toBe(1);
     }
   });
 
   it('gives the common room at least two, being a room the public walks through', () => {
     for (const seed of SEEDS) {
-      const { doorCount } = resolve(constraints({ placeType: 'tavern_hall' }), seed);
+      const { doorCount } = resolve(constraints({ place: { building: 'tavern', room: 'hall' } }), seed);
       expect(doorCount).toBeGreaterThanOrEqual(2);
       expect(doorCount).toBeLessThanOrEqual(3);
     }
   });
 
   it('always gives every place a way in, so no floor is sealed off', () => {
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (const seed of SEEDS) {
-        expect(resolve(constraints({ placeType }), seed).doorCount).toBeGreaterThanOrEqual(1);
+        expect(resolve(constraints({ place }), seed).doorCount).toBeGreaterThanOrEqual(1);
       }
     }
   });
@@ -310,10 +330,10 @@ describe('doors', () => {
 
 describe('carrying the request through', () => {
   it('leaves the fields the generator can honour exactly as asked', () => {
-    const asked = constraints({ placeType: 'tavern_storeroom', light: 'dark', condition: 'ruined', clutter: 0.75 });
+    const asked = constraints({ place: { building: 'tavern', room: 'storeroom' }, light: 'dark', condition: 'ruined', clutter: 0.75 });
     const params = resolve(asked, 1);
 
-    expect(params.placeType).toBe('tavern_storeroom');
+    expect(params.place).toEqual({ building: 'tavern', room: 'storeroom' });
     expect(params.light).toBe('dark');
     expect(params.condition).toBe('ruined');
     expect(params.clutter).toBe(0.75);
@@ -327,7 +347,7 @@ describe('carrying the request through', () => {
   });
 
   it('keeps a feature the place can hold', () => {
-    expect(resolve(constraints({ placeType: 'tavern_room', features: ['bunks'] }), 1).features).toEqual(['bunks']);
+    expect(resolve(constraints({ place: { building: 'tavern', room: 'room' }, features: ['bunks'] }), 1).features).toEqual(['bunks']);
   });
 
   it('normalises a feature the model shouted or padded', () => {
@@ -365,18 +385,18 @@ describe('conflicts', () => {
 
   it('drops a real feature that does not belong in this kind of place', () => {
     // A bar in a bedroom is ordinary input from somebody talking quickly, not
-    // an error to refuse. Which bedroom it was is in `placeType`, so the code
+    // an error to refuse. Which bedroom it was is in `place`, so the code
     // does not carry it twice.
-    const params = resolve(constraints({ placeType: 'tavern_room', features: ['bar'] }), 1);
+    const params = resolve(constraints({ place: { building: 'tavern', room: 'room' }, features: ['bar'] }), 1);
 
     expect(params.features).toEqual([]);
     expect(params.conflicts).toEqual([`${FEATURE_NOT_IN_PLACE}:bar`]);
-    expect(params.placeType).toBe('tavern_room');
+    expect(params.place).toEqual({ building: 'tavern', room: 'room' });
   });
 
   it('tells the two kinds of dropped feature apart by code, not by wording', () => {
-    const unknown = resolve(constraints({ placeType: 'tavern_room', features: ['throne'] }), 1).conflicts[0];
-    const unsuited = resolve(constraints({ placeType: 'tavern_room', features: ['bar'] }), 1).conflicts[0];
+    const unknown = resolve(constraints({ place: { building: 'tavern', room: 'room' }, features: ['throne'] }), 1).conflicts[0];
+    const unsuited = resolve(constraints({ place: { building: 'tavern', room: 'room' }, features: ['bar'] }), 1).conflicts[0];
 
     expect(unknown).toBe(`${FEATURE_NOT_IN_VOCABULARY}:throne`);
     expect(unsuited).toBe(`${FEATURE_NOT_IN_PLACE}:bar`);
@@ -385,7 +405,7 @@ describe('conflicts', () => {
   it('drops features a small place has no floor for, and names each one dropped', () => {
     // Every one of these suits a guest room; the room simply cannot hold them all.
     const params = resolve(
-      constraints({ placeType: 'tavern_room', sizeHint: 'small', features: ['hearth', 'alcove', 'shelving', 'bunks'] }),
+      constraints({ place: { building: 'tavern', room: 'room' }, sizeHint: 'small', features: ['hearth', 'alcove', 'shelving', 'bunks'] }),
       1,
     );
 
@@ -401,7 +421,7 @@ describe('conflicts', () => {
     for (const seed of SEEDS) {
       const asked = ['hearth', 'alcove', 'shelving', 'bunks'];
       const params = resolve(
-        constraints({ placeType: 'tavern_room', sizeHint: 'small', features: asked }),
+        constraints({ place: { building: 'tavern', room: 'room' }, sizeHint: 'small', features: asked }),
         seed,
       );
       expect(params.conflicts).toHaveLength(asked.length - params.features.length);
@@ -411,7 +431,7 @@ describe('conflicts', () => {
   it('keeps at least one feature even in the smallest place', () => {
     for (const seed of SEEDS) {
       const params = resolve(
-        constraints({ placeType: 'tavern_room', sizeHint: 'small', features: ['bunks', 'hearth'] }),
+        constraints({ place: { building: 'tavern', room: 'room' }, sizeHint: 'small', features: ['bunks', 'hearth'] }),
         seed,
       );
       expect(params.features.length).toBeGreaterThanOrEqual(1);
@@ -461,7 +481,7 @@ describe('conflicts', () => {
   });
 
   it('collects every separate reason rather than reporting only the first', () => {
-    const params = resolve(constraints({ placeType: 'tavern_room', features: ['bar', 'throne'], clutter: 2 }), 1);
+    const params = resolve(constraints({ place: { building: 'tavern', room: 'room' }, features: ['bar', 'throne'], clutter: 2 }), 1);
 
     expect(params.conflicts).toHaveLength(3);
   });

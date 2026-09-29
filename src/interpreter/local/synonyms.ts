@@ -2,6 +2,10 @@
  * The words a person writes, rewritten into the words the model was asked
  * about — before the model is asked anything.
  *
+ * The place accuracy and confidence figures below were measured with the old
+ * single three-place tavern classifier. They do not measure the current
+ * building-then-room classifier or its dungeon labels.
+ *
  * ## Why this layer exists at all
  *
  * Every mistake the winning model made on the bench was a synonym, and nothing

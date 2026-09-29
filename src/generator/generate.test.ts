@@ -2,14 +2,31 @@ import { describe, expect, it } from 'vitest';
 
 import { cellAt, cellKey, inBounds } from '../core/grid';
 import { createRng } from '../core/prng';
-import type { Params, PlaceType, Scene } from '../core/types';
+import type { Params, Place, Scene } from '../core/types';
 import { floorCells } from './floorplan';
 import { generate } from './generate';
 import { profileFor } from './profiles';
 import { paramsFor } from './test-fixtures';
 import { validateScene } from './validate';
 
-const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
+const PLACE_TYPES: Place[] = [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'tavern', room: 'storeroom' }];
+
+describe('the six building-room pairs', () => {
+  for (const building of ['tavern', 'dungeon'] as const) {
+    for (const room of ['hall', 'room', 'storeroom'] as const) {
+      it(`generates a valid ${building}_${room} with its own palette`, () => {
+        const place = { building, room };
+        const params = paramsFor(place, { size: profileFor(place).maxSize, seed: 42 });
+        const scene = generate(params, createRng(42));
+        expect(validateScene(scene)).toEqual([]);
+        expect(scene.props.length).toBeGreaterThan(0);
+        expect(scene.props.every((prop) =>
+          building === 'tavern' ? !prop.assetId.includes('weapon_') : !prop.assetId.includes('bar_counter'),
+        )).toBe(true);
+      });
+    }
+  }
+});
 
 /**
  * A serialisation that does not depend on the order keys were written in.
@@ -30,9 +47,9 @@ function stable(value: unknown): string {
 }
 
 /** Params that exercise as much of a profile as its place allows. */
-function busy(placeType: PlaceType, overrides: Partial<Params> = {}): Params {
-  return paramsFor(placeType, {
-    size: profileFor(placeType).maxSize,
+function busy(place: Place, overrides: Partial<Params> = {}): Params {
+  return paramsFor(place, {
+    size: profileFor(place).maxSize,
     doorCount: 2,
     clutter: 0.6,
     features: ['bar', 'hearth', 'stairs', 'pillars', 'alcove', 'shelving', 'bunks'],
@@ -58,8 +75,8 @@ describe('generate', () => {
   it('gives back the same scene, cell for cell, for the same params and seed', () => {
     // The invariant the whole project rests on. Without it a map cannot be
     // regenerated, shared by seed, or edited a piece at a time later on.
-    for (const placeType of PLACE_TYPES) {
-      const params = busy(placeType);
+    for (const place of PLACE_TYPES) {
+      const params = busy(place);
       for (const seed of [0, 1, 42, 9_999]) {
         const first = generate(params, createRng(seed));
         const second = generate(params, createRng(seed));
@@ -70,13 +87,13 @@ describe('generate', () => {
 
   it('gives back a different scene for a different seed', () => {
     // A generator that ignored its rng would pass the test above perfectly.
-    for (const placeType of PLACE_TYPES) {
-      const params = busy(placeType);
+    for (const place of PLACE_TYPES) {
+      const params = busy(place);
       const scenes = new Set<string>();
       for (let seed = 0; seed < 12; seed += 1) {
         scenes.add(stable(generate(params, createRng(seed))));
       }
-      expect(`${placeType}: ${scenes.size} distinct`).toBe(`${placeType}: 12 distinct`);
+      expect(`${place}: ${scenes.size} distinct`).toBe(`${place}: 12 distinct`);
     }
   });
 
@@ -85,7 +102,7 @@ describe('generate', () => {
     // by the scatter layer alone, and clutter's other job — how many groups a
     // room of this size wants — is then left with no test at all.
     const scene = (overrides: Partial<Params>): Scene =>
-      generate(busy('tavern_hall', overrides), createRng(5));
+      generate(busy({ building: 'tavern', room: 'hall' }, overrides), createRng(5));
     const groupCount = (of: Scene): number =>
       of.props.filter((prop) => prop.layer === 'group').length;
 
@@ -102,23 +119,23 @@ describe('generate', () => {
   });
 
   it('produces a scene that passes its own validation, over every place and seed', () => {
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (let seed = 0; seed < 25; seed += 1) {
-        const scene = generate(busy(placeType), createRng(seed));
+        const scene = generate(busy(place), createRng(seed));
         const issues = validateScene(scene);
-        expect(`${placeType}/${seed}: ${issues.map((i) => i.message).join('; ')}`).toBe(
-          `${placeType}/${seed}: `,
+        expect(`${place}/${seed}: ${issues.map((i) => i.message).join('; ')}`).toBe(
+          `${place}/${seed}: `,
         );
       }
     }
   });
 
   it('produces a valid scene at the extremes of clutter and repair', () => {
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (const clutter of [0, 1]) {
         for (const condition of ['tidy', 'ruined'] as Params['condition'][]) {
           for (let seed = 0; seed < 8; seed += 1) {
-            const params = busy(placeType, { clutter, condition });
+            const params = busy(place, { clutter, condition });
             expect(validateScene(generate(params, createRng(seed)))).toEqual([]);
           }
         }
@@ -127,8 +144,8 @@ describe('generate', () => {
   });
 
   it('produces a valid scene at the smallest size each place allows', () => {
-    for (const placeType of PLACE_TYPES) {
-      const params = busy(placeType, { size: profileFor(placeType).minSize, doorCount: 1 });
+    for (const place of PLACE_TYPES) {
+      const params = busy(place, { size: profileFor(place).minSize, doorCount: 1 });
       for (let seed = 0; seed < 15; seed += 1) {
         expect(validateScene(generate(params, createRng(seed)))).toEqual([]);
       }
@@ -136,8 +153,8 @@ describe('generate', () => {
   });
 
   it('refuses a place type it has no profile for', () => {
-    expect(() => generate(paramsFor('tavern_cellar' as PlaceType), createRng(1))).toThrow(
-      'unknown place type',
+    expect(() => generate(paramsFor({ building: 'tavern', room: 'cellar' } as unknown as Place), createRng(1))).toThrow(
+      'unknown place',
     );
   });
 
@@ -147,7 +164,7 @@ describe('generate', () => {
     // `undefined`, the chance is `NaN`, `rng.float() >= NaN` is false, and
     // every free cell in the room takes a piece of debris — in a scene that
     // still passes `validateScene`, so nothing downstream notices either.
-    const params = busy('tavern_hall', { condition: 'scorched' as Params['condition'] });
+    const params = busy({ building: 'tavern', room: 'hall' }, { condition: 'scorched' as Params['condition'] });
     expect(() => generate(params, createRng(1))).toThrow('unknown condition');
   });
 
@@ -155,7 +172,7 @@ describe('generate', () => {
     // `dark` is a deliberate `null` in the lamp table, so an unknown level
     // comes back `undefined` and slips past a `!== null` test into a raw
     // `TypeError` from inside the generator.
-    const params = busy('tavern_hall', { light: 'candlelit' as Params['light'] });
+    const params = busy({ building: 'tavern', room: 'hall' }, { light: 'candlelit' as Params['light'] });
     expect(() => generate(params, createRng(1))).toThrow('unknown light level');
   });
 
@@ -169,7 +186,7 @@ describe('generate', () => {
     // and unguarded it carpeted a 20x18 hall with 167 pieces of debris over
     // 254 floor cells, in a scene `validateScene` had no complaint about.
     for (const key of ['toString', 'constructor', 'valueOf', '__proto__', 'hasOwnProperty']) {
-      const params = busy('tavern_hall', { condition: key as Params['condition'] });
+      const params = busy({ building: 'tavern', room: 'hall' }, { condition: key as Params['condition'] });
       expect(() => generate(params, createRng(1))).toThrow(`unknown condition '${key}'`);
     }
   });
@@ -180,27 +197,27 @@ describe('generate', () => {
     // lattice loop starts at `NaN` and never runs, and the room comes back
     // silently unlit but for its hearth.
     for (const key of ['toString', 'constructor', 'valueOf', '__proto__', 'hasOwnProperty']) {
-      const params = busy('tavern_hall', { light: key as Params['light'] });
+      const params = busy({ building: 'tavern', room: 'hall' }, { light: key as Params['light'] });
       expect(() => generate(params, createRng(1))).toThrow(`unknown light level '${key}'`);
     }
   });
 
   it('refuses a place type that is only a key of Object.prototype', () => {
     for (const key of ['toString', 'constructor', 'valueOf', '__proto__', 'hasOwnProperty']) {
-      expect(() => generate(paramsFor(key as PlaceType), createRng(1))).toThrow(
-        `unknown place type '${key}'`,
+      expect(() => generate(paramsFor({ building: key, room: 'hall' } as unknown as Place), createRng(1))).toThrow(
+        `unknown place '${key}_hall'`,
       );
     }
   });
 });
 
 describe('the scene generate returns', () => {
-  const scenes = (): { placeType: PlaceType; seed: number; scene: Scene }[] =>
-    PLACE_TYPES.flatMap((placeType) =>
+  const scenes = (): { place: Place; seed: number; scene: Scene }[] =>
+    PLACE_TYPES.flatMap((place) =>
       [0, 1, 2, 3, 4].map((seed) => ({
-        placeType,
+        place,
         seed,
-        scene: generate(busy(placeType), createRng(seed)),
+        scene: generate(busy(place), createRng(seed)),
       })),
     );
 
@@ -221,7 +238,7 @@ describe('the scene generate returns', () => {
   });
 
   it('covers every floor cell with a zone, no cell twice, and leaves no zone empty', () => {
-    for (const { placeType, seed, scene } of scenes()) {
+    for (const { place, seed, scene } of scenes()) {
       const keys = scene.zones.flatMap((zone) => zone.cells.map(cellKey));
       expect(new Set(keys).size).toBe(keys.length);
       expect(keys.length).toBe(floorCells(scene.floorplan).length);
@@ -230,8 +247,8 @@ describe('the scene generate returns', () => {
       // every other zone empty, and "material by region" quietly undone
       // without a cell being covered twice or left out.
       const empty = scene.zones.filter((zone) => zone.cells.length === 0).length;
-      expect(`${placeType}/${seed}: ${empty} of ${scene.zones.length} zones empty`).toBe(
-        `${placeType}/${seed}: 0 of ${scene.zones.length} zones empty`,
+      expect(`${place}/${seed}: ${empty} of ${scene.zones.length} zones empty`).toBe(
+        `${place}/${seed}: 0 of ${scene.zones.length} zones empty`,
       );
     }
   });
@@ -253,7 +270,7 @@ describe('the scene generate returns', () => {
 
 describe('the lights of a scene', () => {
   it('lights a hearth from where the hearth stands', () => {
-    const scene = generate(busy('tavern_hall', { light: 'dark' }), createRng(2));
+    const scene = generate(busy({ building: 'tavern', room: 'hall' }, { light: 'dark' }), createRng(2));
     const hearth = scene.props.filter((prop) => prop.assetId === 'anchor/hearth');
     expect(hearth).toHaveLength(1);
     expect(scene.lights).toHaveLength(1);
@@ -264,7 +281,7 @@ describe('the lights of a scene', () => {
   });
 
   it('hangs no lamp in a room described as dark', () => {
-    const scene = generate(busy('tavern_storeroom', { light: 'dark', features: [] }), createRng(3));
+    const scene = generate(busy({ building: 'tavern', room: 'storeroom' }, { light: 'dark', features: [] }), createRng(3));
     expect(scene.lights).toEqual([]);
   });
 
@@ -272,15 +289,15 @@ describe('the lights of a scene', () => {
     // The ambient level costs no draw from the rng, so the three rooms are
     // furnished identically and the only difference is the lamps.
     const count = (light: Params['light']): number =>
-      generate(busy('tavern_hall', { light, features: [] }), createRng(4)).lights.length;
+      generate(busy({ building: 'tavern', room: 'hall' }, { light, features: [] }), createRng(4)).lights.length;
     expect(count('bright')).toBeGreaterThan(count('dim'));
     expect(count('dim')).toBeGreaterThan(count('dark'));
   });
 
   it('puts every light on a floor cell, inside the grid', () => {
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (let seed = 0; seed < 8; seed += 1) {
-        const scene = generate(busy(placeType, { light: 'bright' }), createRng(seed));
+        const scene = generate(busy(place, { light: 'bright' }), createRng(seed));
         for (const source of scene.lights) {
           expect(inBounds(source.cell, scene.floorplan.size)).toBe(true);
           expect(cellAt(scene.floorplan.cells, source.cell)).toBe('floor');

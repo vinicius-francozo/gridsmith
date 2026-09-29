@@ -10,7 +10,7 @@
  * It is load-bearing in a way that is easy to underestimate. `zodOutputFormat`
  * does not turn these enums into grammar the API enforces — it sends them as a
  * hint inside the JSON Schema `description` (verified against the SDK's
- * `transformJSONSchema`). A model that answers `placeType: "throne_room"`
+ * `transformJSONSchema`). A model that answers `place.room: "throne_room"`
  * produces a perfectly successful HTTP response. This parse is what rejects
  * it.
  *
@@ -21,17 +21,18 @@
 import { z } from 'zod';
 
 import type { Constraints } from '../core/types';
+import { roomsFor } from '../generator/profiles';
 
 import { FEATURES } from './vocabulary';
 
 export const constraintsSchema = z
   .object({
-    placeType: z
-      .enum(['tavern_hall', 'tavern_room', 'tavern_storeroom'])
-      .describe(
-        'The kind of place. A hall is the common room where people drink; ' +
-          'a room is a single guest bedroom upstairs; a storeroom is the cellar or pantry.',
-      ),
+    place: z.object({
+      building: z.enum(['tavern', 'dungeon']),
+      room: z.enum(['hall', 'room', 'storeroom']),
+    }).refine((place) => roomsFor(place.building).includes(place.room), {
+      message: 'The room is unavailable in this building.',
+    }).describe('The building and its room. Choose a supported combination.'),
     sizeHint: z
       .enum(['small', 'medium', 'large'])
       .optional()
@@ -65,7 +66,7 @@ export const constraintsSchema = z
           'not an apology.',
       ),
   })
-  .describe('A tavern space, described in the closed vocabulary the map generator understands.') satisfies z.ZodType<Constraints>;
+  .describe('An enclosed room, described in the closed vocabulary the map generator understands.') satisfies z.ZodType<Constraints>;
 
 /**
  * What parsing a model's answer yields.

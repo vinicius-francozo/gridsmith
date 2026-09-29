@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { cellAt, cellKey, inBounds, step } from '../core/grid';
 import { createRng } from '../core/prng';
-import type { Cell, Facing, Floorplan, PlaceType, PlacedProp, Rotation, Size } from '../core/types';
+import type { Cell, Facing, Floorplan, Place, PlacedProp, Rotation, Size } from '../core/types';
 import { buildFloorplan, opposite } from './floorplan';
 import { assetIdFor, profileFor, ROTATIONS } from './profiles';
 import type { GroupPart, PlaceProfile } from './profiles';
@@ -10,7 +10,7 @@ import { placeProps, rotateFootprint, rotateTemplate } from './props';
 import { paramsFor, planFrom } from './test-fixtures';
 import type { Params } from '../core/types';
 
-const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
+const PLACE_TYPES: Place[] = [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'tavern', room: 'storeroom' }];
 
 /** Which wall a prop has its back to, per rotation. Mirrors `BACK_OF`. */
 const BACK: Record<Rotation, Facing> = { 0: 'n', 90: 'e', 180: 's', 270: 'w' };
@@ -26,8 +26,8 @@ const BACK: Record<Rotation, Facing> = { 0: 'n', 90: 'e', 180: 's', 270: 'w' };
  */
 const ANCHOR_FEATURES: string[] = [
   ...new Set(
-    PLACE_TYPES.flatMap((placeType) =>
-      profileFor(placeType)
+    PLACE_TYPES.flatMap((place) =>
+      profileFor(place)
         .anchors.map((spec) => spec.feature)
         .filter((feature): feature is string => feature !== undefined),
     ),
@@ -36,12 +36,12 @@ const ANCHOR_FEATURES: string[] = [
 
 /** A furnished room, for one place type and seed. */
 function furnished(
-  placeType: PlaceType,
+  place: Place,
   seed: number,
   overrides: Partial<Params> = {},
 ): { profile: PlaceProfile; floorplan: Floorplan; props: PlacedProp[] } {
-  const profile = profileFor(placeType);
-  const params = paramsFor(placeType, {
+  const profile = profileFor(place);
+  const params = paramsFor(place, {
     size: profile.maxSize,
     doorCount: 2,
     features: ANCHOR_FEATURES,
@@ -141,8 +141,8 @@ describe('rotateTemplate', () => {
     // — puts the profile's own `Size` into a `PlacedProp`, and from there
     // into the renderer's hands. One consumer normalising it in place would
     // rewrite the generator's profile for the rest of the session.
-    for (const placeType of PLACE_TYPES) {
-      for (const group of profileFor(placeType).groups) {
+    for (const place of PLACE_TYPES) {
+      for (const group of profileFor(place).groups) {
         for (const rotation of ROTATIONS) {
           const turned = rotateTemplate(group.size, group.parts, rotation);
           expect(turned.size).not.toBe(group.size);
@@ -161,8 +161,8 @@ describe('rotateTemplate', () => {
   it('keeps every part inside the turned box, for every template of every profile', () => {
     // A part that slid outside its own box would be placed against a
     // candidate check that never looked at the cell it actually lands on.
-    for (const placeType of PLACE_TYPES) {
-      for (const group of profileFor(placeType).groups) {
+    for (const place of PLACE_TYPES) {
+      for (const group of profileFor(place).groups) {
         for (const rotation of ROTATIONS) {
           const turned = rotateTemplate(group.size, group.parts, rotation);
           for (const part of turned.parts) {
@@ -177,8 +177,8 @@ describe('rotateTemplate', () => {
   });
 
   it('comes back to where it started after four quarter turns', () => {
-    for (const placeType of PLACE_TYPES) {
-      for (const group of profileFor(placeType).groups) {
+    for (const place of PLACE_TYPES) {
+      for (const group of profileFor(place).groups) {
         let turned = { size: group.size, parts: group.parts };
         for (let i = 0; i < 4; i += 1) {
           turned = rotateTemplate(turned.size, turned.parts, 90);
@@ -190,7 +190,7 @@ describe('rotateTemplate', () => {
 
   it('keeps the parts in the same arrangement relative to one another', () => {
     // A bench that turns while its table does not is no longer a long table.
-    const [long] = profileFor('tavern_hall').groups.filter((group) => group.id === 'long_table');
+    const [long] = profileFor({ building: 'tavern', room: 'hall' }).groups.filter((group) => group.id === 'long_table');
     expect(long).toBeDefined();
     const turned = rotateTemplate(long.size, long.parts, 90);
     expect(turned.parts.map((part) => part.assetId)).toEqual(['bench', 'table_long', 'bench']);
@@ -203,16 +203,16 @@ describe('rotateTemplate', () => {
 
 describe('the anchor layer', () => {
   it('puts every anchor with its back flat against a wall', () => {
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (let seed = 0; seed < 15; seed += 1) {
-        const { floorplan, props } = furnished(placeType, seed);
+        const { floorplan, props } = furnished(place, seed);
         const anchors = props.filter((prop) => prop.layer === 'anchor');
         expect(anchors.length).toBeGreaterThan(0);
         for (const anchor of anchors) {
           const behind = strip(anchor, BACK[anchor.rotation]).map((cell) =>
             inBounds(cell, floorplan.size) ? cellAt(floorplan.cells, cell) : 'off-grid',
           );
-          const label = `${placeType}/${seed} behind the ${anchor.assetId}`;
+          const label = `${place}/${seed} behind the ${anchor.assetId}`;
           expect(`${label}: ${behind.join()}`).toBe(
             `${label}: ${behind.map(() => 'wall').join()}`,
           );
@@ -223,8 +223,8 @@ describe('the anchor layer', () => {
 
   it('puts a corner anchor against a second wall at right angles to the first', () => {
     const cornerAnchors = new Set(
-      PLACE_TYPES.flatMap((placeType) =>
-        profileFor(placeType)
+      PLACE_TYPES.flatMap((place) =>
+        profileFor(place)
           .anchors.filter((spec) => spec.placement === 'corner')
           .map((spec) => assetIdFor('anchor', spec.assetId)),
       ),
@@ -232,9 +232,9 @@ describe('the anchor layer', () => {
     expect(cornerAnchors.size).toBeGreaterThan(0);
 
     let checked = 0;
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (let seed = 0; seed < 15; seed += 1) {
-        const { floorplan, props } = furnished(placeType, seed);
+        const { floorplan, props } = furnished(place, seed);
         for (const anchor of props) {
           if (anchor.layer !== 'anchor' || !cornerAnchors.has(anchor.assetId)) {
             continue;
@@ -262,9 +262,9 @@ describe('the anchor layer', () => {
     // simply all have their backs to the north wall, and nobody would see it
     // until the map was drawn.
     const seen = new Set<Rotation>();
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (let seed = 0; seed < 15; seed += 1) {
-        for (const anchor of furnished(placeType, seed).props) {
+        for (const anchor of furnished(place, seed).props) {
           if (anchor.layer === 'anchor') {
             seen.add(anchor.rotation);
           }
@@ -279,9 +279,9 @@ describe('the anchor layer', () => {
     // and applies no transform. An unturned footprint here would draw every
     // quarter-turned prop transposed — a 5x2 counter as 2x5 — and nothing in
     // the frozen types would catch it.
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (let seed = 0; seed < 15; seed += 1) {
-        const { profile, props } = furnished(placeType, seed);
+        const { profile, props } = furnished(place, seed);
         for (const prop of props.filter((p) => p.layer === 'anchor')) {
           const [spec] = profile.anchors.filter(
             (a) => assetIdFor('anchor', a.assetId) === prop.assetId,
@@ -307,11 +307,11 @@ describe('the anchor a feature asks for by name', () => {
    * chance seventeen times in twenty. Each word is therefore asked for alone,
    * over a run of seeds wide enough that luck cannot carry it.
    */
-  const REQUESTS = PLACE_TYPES.flatMap((placeType) =>
-    profileFor(placeType)
+  const REQUESTS = PLACE_TYPES.flatMap((place) =>
+    profileFor(place)
       .anchors.filter((spec) => spec.feature !== undefined)
       .map((spec) => ({
-        placeType,
+        place,
         feature: spec.feature as string,
         assetId: assetIdFor('anchor', spec.assetId),
       })),
@@ -329,17 +329,17 @@ describe('the anchor a feature asks for by name', () => {
     ]);
   });
 
-  for (const { placeType, feature, assetId } of REQUESTS) {
-    it(`puts ${assetId} in a ${placeType} that asks for '${feature}'`, () => {
+  for (const { place, feature, assetId } of REQUESTS) {
+    it(`puts ${assetId} in a ${place} that asks for '${feature}'`, () => {
       const missing: number[] = [];
       for (let seed = 0; seed < 30; seed += 1) {
-        const { props } = furnished(placeType, seed, { features: [feature] });
+        const { props } = furnished(place, seed, { features: [feature] });
         if (!props.some((prop) => prop.assetId === assetId)) {
           missing.push(seed);
         }
       }
-      expect(`${placeType} asked for '${feature}', missing on seeds: ${missing.join()}`).toBe(
-        `${placeType} asked for '${feature}', missing on seeds: `,
+      expect(`${place} asked for '${feature}', missing on seeds: ${missing.join()}`).toBe(
+        `${place} asked for '${feature}', missing on seeds: `,
       );
     });
   }
@@ -347,9 +347,9 @@ describe('the anchor a feature asks for by name', () => {
 
 describe('the whole prop set', () => {
   it('never puts two props on the same cell', () => {
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (let seed = 0; seed < 15; seed += 1) {
-        const { props } = furnished(placeType, seed);
+        const { props } = furnished(place, seed);
         const taken = new Set<string>();
         const doubled: string[] = [];
         for (const prop of props) {
@@ -360,15 +360,15 @@ describe('the whole prop set', () => {
             taken.add(cellKey(cell));
           }
         }
-        expect(`${placeType}/${seed}: ${doubled.join('; ')}`).toBe(`${placeType}/${seed}: `);
+        expect(`${place}/${seed}: ${doubled.join('; ')}`).toBe(`${place}/${seed}: `);
       }
     }
   });
 
   it('never puts a prop anywhere but on floor', () => {
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (let seed = 0; seed < 15; seed += 1) {
-        const { floorplan, props } = furnished(placeType, seed);
+        const { floorplan, props } = furnished(place, seed);
         for (const prop of props) {
           for (const cell of propCells(prop)) {
             expect(inBounds(cell, floorplan.size)).toBe(true);
@@ -381,9 +381,9 @@ describe('the whole prop set', () => {
 
   it('keeps the ground in front of every door clear, scatter included', () => {
     // A mug in the doorway blocks the door as surely as a crate does.
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (let seed = 0; seed < 15; seed += 1) {
-        const { floorplan, props } = furnished(placeType, seed);
+        const { floorplan, props } = furnished(place, seed);
         const taken = new Set(props.flatMap(propCells).map(cellKey));
         for (const door of floorplan.doors) {
           const approach = step(door.cell, opposite(door.facing));
@@ -398,9 +398,9 @@ describe('the whole prop set', () => {
     // The library resolves a prop by this exact string and `bitmap()` throws
     // on an id it does not know, so a bare name here is not a cosmetic
     // difference: it is every prop of every scene failing to render.
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (let seed = 0; seed < 15; seed += 1) {
-        const { profile, props } = furnished(placeType, seed, { clutter: 1 });
+        const { profile, props } = furnished(place, seed, { clutter: 1 });
         const declared = new Set([
           ...profile.anchors.map((spec) => assetIdFor('anchor', spec.assetId)),
           ...profile.groups.flatMap((group) =>
@@ -428,15 +428,15 @@ describe('the whole prop set', () => {
     // the silent loss of the invariant the whole project rests on, and it is
     // exactly what a group part handed back by identity at rotation 0 or 180
     // used to do.
-    const profileShape = (placeType: PlaceType): string => {
-      const profile = profileFor(placeType);
+    const profileShape = (place: Place): string => {
+      const profile = profileFor(place);
       return JSON.stringify([profile.anchors, profile.groups, profile.scatter]);
     };
 
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
       for (const seed of [0, 3, 7, 11]) {
-        const before = profileShape(placeType);
-        const { props } = furnished(placeType, seed);
+        const before = profileShape(place);
+        const { props } = furnished(place, seed);
         expect(props.length).toBeGreaterThan(0);
         const scene = JSON.stringify(props);
 
@@ -449,10 +449,10 @@ describe('the whole prop set', () => {
           prop.footprint.h = 99;
         }
 
-        expect(`${placeType}/${seed} profile: ${profileShape(placeType)}`).toBe(
-          `${placeType}/${seed} profile: ${before}`,
+        expect(`${place}/${seed} profile: ${profileShape(place)}`).toBe(
+          `${place}/${seed} profile: ${before}`,
         );
-        expect(JSON.stringify(furnished(placeType, seed).props)).toBe(scene);
+        expect(JSON.stringify(furnished(place, seed).props)).toBe(scene);
       }
     }
   });
@@ -485,18 +485,18 @@ describe('the whole prop set', () => {
     };
 
     let quarterTurned = 0;
-    for (const placeType of PLACE_TYPES) {
-      const known = turnable(profileFor(placeType));
+    for (const place of PLACE_TYPES) {
+      const known = turnable(profileFor(place));
       for (let seed = 0; seed < 20; seed += 1) {
-        for (const prop of furnished(placeType, seed).props) {
+        for (const prop of furnished(place, seed).props) {
           const unturned = prop.layer === 'group' ? known.get(prop.assetId) : undefined;
           if (unturned === undefined) {
             continue;
           }
           const want = rotateFootprint(unturned, prop.rotation);
           expect(
-            `${placeType}/${seed} ${prop.assetId}@${prop.rotation}: ${prop.footprint.w}x${prop.footprint.h}`,
-          ).toBe(`${placeType}/${seed} ${prop.assetId}@${prop.rotation}: ${want.w}x${want.h}`);
+            `${place}/${seed} ${prop.assetId}@${prop.rotation}: ${prop.footprint.w}x${prop.footprint.h}`,
+          ).toBe(`${place}/${seed} ${prop.assetId}@${prop.rotation}: ${want.w}x${want.h}`);
           if (prop.rotation === 90 || prop.rotation === 270) {
             quarterTurned += 1;
           }
@@ -511,8 +511,8 @@ describe('the whole prop set', () => {
 
   it('returns the layers in drawing order: anchors, then groups, then scatter', () => {
     const order = { anchor: 0, group: 1, scatter: 2 };
-    for (const placeType of PLACE_TYPES) {
-      const { props } = furnished(placeType, 4);
+    for (const place of PLACE_TYPES) {
+      const { props } = furnished(place, 4);
       const layers = props.map((prop) => order[prop.layer]);
       expect([...layers].sort((a, b) => a - b)).toEqual(layers);
     }
@@ -521,23 +521,23 @@ describe('the whole prop set', () => {
 
 describe('the scatter layer', () => {
   it('drops nothing in a room with no clutter', () => {
-    for (const placeType of PLACE_TYPES) {
-      const { props } = furnished(placeType, 1, { clutter: 0 });
+    for (const place of PLACE_TYPES) {
+      const { props } = furnished(place, 1, { clutter: 0 });
       expect(props.filter((prop) => prop.layer === 'scatter')).toEqual([]);
     }
   });
 
   it('drops more in a ruin than in a room somebody keeps tidy', () => {
     const count = (condition: Params['condition']): number =>
-      furnished('tavern_hall', 5, { clutter: 1, condition }).props.filter(
+      furnished({ building: 'tavern', room: 'hall' }, 5, { clutter: 1, condition }).props.filter(
         (prop) => prop.layer === 'scatter',
       ).length;
     expect(count('ruined')).toBeGreaterThan(count('tidy'));
   });
 
   it('only ever names a prop its profile declares', () => {
-    for (const placeType of PLACE_TYPES) {
-      const { profile, props } = furnished(placeType, 7, { clutter: 1 });
+    for (const place of PLACE_TYPES) {
+      const { profile, props } = furnished(place, 7, { clutter: 1 });
       const declared = profile.scatter.map((spec) => assetIdFor('scatter', spec.assetId));
       for (const prop of props.filter((p) => p.layer === 'scatter')) {
         expect(declared).toContain(prop.assetId);
@@ -552,7 +552,7 @@ describe('the scatter layer', () => {
     // is still 1x1. The weights would just be decoration on the page.
     const counts = new Map<string, number>();
     for (let seed = 0; seed < 20; seed += 1) {
-      for (const prop of furnished('tavern_hall', seed, { clutter: 1, condition: 'ruined' })
+      for (const prop of furnished({ building: 'tavern', room: 'hall' }, seed, { clutter: 1, condition: 'ruined' })
         .props) {
         if (prop.layer === 'scatter') {
           counts.set(prop.assetId, (counts.get(prop.assetId) ?? 0) + 1);
@@ -561,7 +561,7 @@ describe('the scatter layer', () => {
     }
 
     const drawn = (name: string): number => counts.get(assetIdFor('scatter', name)) ?? 0;
-    for (const spec of profileFor('tavern_hall').scatter) {
+    for (const spec of profileFor({ building: 'tavern', room: 'hall' }).scatter) {
       expect(`${spec.assetId} at weight ${spec.weight}: ${drawn(spec.assetId)} drawn`).not.toBe(
         `${spec.assetId} at weight ${spec.weight}: 0 drawn`,
       );
@@ -576,8 +576,8 @@ describe('the scatter layer', () => {
   it('drops nothing when the profile declares no scatter at all', () => {
     // `weightedPick` has nothing to draw from, and drawing from it anyway
     // would either throw or return undefined into `assetId`.
-    const profile = { ...profileFor('tavern_hall'), scatter: [] };
-    const params = paramsFor('tavern_hall', { size: profile.maxSize, clutter: 1 });
+    const profile = { ...profileFor({ building: 'tavern', room: 'hall' }), scatter: [] };
+    const params = paramsFor({ building: 'tavern', room: 'hall' }, { size: profile.maxSize, clutter: 1 });
     const rng = createRng(3);
     const { floorplan } = buildFloorplan(params, profile, rng);
     const props = placeProps(floorplan, params, profile, rng);
@@ -592,8 +592,8 @@ describe('placeProps on a hand-drawn plan', () => {
       'D.#',
       '###',
     ]);
-    const profile = profileFor('tavern_room');
-    const params = paramsFor('tavern_room', { clutter: 1 });
+    const profile = profileFor({ building: 'tavern', room: 'room' });
+    const params = paramsFor({ building: 'tavern', room: 'room' }, { clutter: 1 });
     expect(placeProps(floorplan, params, profile, createRng(1))).toEqual([]);
   });
 });
