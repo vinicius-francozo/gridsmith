@@ -7,9 +7,12 @@ import {
   CLUTTER_OUT_OF_RANGE,
   CONFLICT_CODES,
   entry,
+  FEATURE_ALSO_EXCLUDED,
   FEATURE_NOT_IN_PLACE,
   FEATURE_NOT_IN_VOCABULARY,
   FEATURE_OVER_BUDGET,
+  FURNISHING_NOT_A_NUMBER,
+  FURNISHING_OUT_OF_RANGE,
   PLACE_NOT_IN_VOCABULARY,
   UNRESOLVED_CODES,
   UNSUPPORTED_REQUEST,
@@ -260,6 +263,31 @@ describe('an entry becomes a sentence', () => {
     expect(notANumber).not.toBe(outOfRange);
     expect(outOfRange).toContain('2.5');
   });
+
+  it('never calls the furniture count tralha, which is the other number', () => {
+    // The two are separate fields and the person has to be able to tell which
+    // of them the map got wrong. One shared wording would leave them guessing.
+    for (const code of [FURNISHING_NOT_A_NUMBER, FURNISHING_OUT_OF_RANGE] as const) {
+      expect(describeEntry(entry(code, '2.5'))).toContain('mobília');
+      expect(describeEntry(entry(code, '2.5'))).not.toContain('tralha');
+    }
+    for (const code of [CLUTTER_NOT_A_NUMBER, CLUTTER_OUT_OF_RANGE] as const) {
+      expect(describeEntry(entry(code, '2.5'))).toContain('tralha');
+      expect(describeEntry(entry(code, '2.5'))).not.toContain('mobília');
+    }
+  });
+
+  it('says a refused feature was refused, in the vocabulary word the person used', () => {
+    const sentence = describeEntry(entry(FEATURE_ALSO_EXCLUDED, 'stairs'));
+
+    expect(sentence).toContain('escada');
+    expect(sentence).not.toContain('stairs');
+    // Distinct from the other three ways to lose a feature: each of the four
+    // asks something different of the person reading it.
+    for (const other of [FEATURE_NOT_IN_PLACE, FEATURE_OVER_BUDGET, FEATURE_NOT_IN_VOCABULARY] as const) {
+      expect(sentence).not.toBe(describeEntry(entry(other, 'stairs')));
+    }
+  });
 });
 
 describe('a failure becomes something to do about it', () => {
@@ -403,7 +431,9 @@ describe('the line under a finished map', () => {
     light: 'dark',
     condition: 'lived_in',
     clutter: 0.5,
+    furnishing: 0.5,
     features: [],
+    excluded: [],
     doorCount: 1,
     seed: 4242,
     conflicts: [],

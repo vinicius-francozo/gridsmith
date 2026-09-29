@@ -2,8 +2,8 @@
  * The sixth implementation of `Interpreter`, and the first that needs a server.
  *
  * `ClaudeInterpreter` sends a sentence to a language model and reads JSON back.
- * `LocalInterpreter` runs a classifier in the browser and asks six
- * entailment questions. This one asks TypeSafe's Jev twelve structured
+ * `LocalInterpreter` runs a classifier in the browser and asks seven
+ * entailment questions. This one asks TypeSafe's Jev thirteen structured
  * questions, then asks for a room in a second call restricted to the chosen
  * building. See `questions.ts` and `read.ts` for the translation.
  *

@@ -5,8 +5,10 @@ import { BUILDINGS } from '../../generator/profiles';
 
 import {
   CONDITION_LEVELS,
+  EXCLUSION_THRESHOLD,
   FEATURE_QUESTIONS,
   FEATURE_THRESHOLD,
+  FURNISHING_TOP,
   LIGHT_LEVELS,
   OUT_OF_VOCABULARY_THRESHOLD,
   QUESTIONS,
@@ -26,6 +28,9 @@ describe('a score question and its levels', () => {
     expect(QUESTIONS.light.criteria).toHaveLength(LIGHT_LEVELS.length);
     expect(QUESTIONS.condition.criteria).toHaveLength(CONDITION_LEVELS.length);
     expect(QUESTIONS.size.criteria).toHaveLength(SIZE_LEVELS.length);
+    // `furnishing` has no level array — it is divided into a 0..1 field — so
+    // what has to agree with its criteria is the divisor.
+    expect(QUESTIONS.furnishing.criteria).toHaveLength(FURNISHING_TOP + 1);
   });
 
   it('describes each level in the order the table names them', () => {
@@ -100,7 +105,7 @@ describe('every question, whatever its primitive', () => {
   });
 });
 
-describe('the three thresholds', () => {
+describe('the four thresholds', () => {
   it('are probabilities, and are the measured figures', () => {
     // Pinned here as well as where they bite, because these are the numbers a
     // future measurement moves, and the comment beside each one is the record
@@ -108,9 +113,23 @@ describe('the three thresholds', () => {
     expect(FEATURE_THRESHOLD).toBe(0.62);
     expect(OUT_OF_VOCABULARY_THRESHOLD).toBe(0.75);
     expect(SIZE_MIN_CONFIDENCE).toBe(0.55);
-    for (const threshold of [FEATURE_THRESHOLD, OUT_OF_VOCABULARY_THRESHOLD, SIZE_MIN_CONFIDENCE]) {
+    expect(EXCLUSION_THRESHOLD).toBe(0.05);
+    for (const threshold of [
+      FEATURE_THRESHOLD,
+      OUT_OF_VOCABULARY_THRESHOLD,
+      SIZE_MIN_CONFIDENCE,
+      EXCLUSION_THRESHOLD,
+    ]) {
       expect(threshold).toBeGreaterThan(0);
       expect(threshold).toBeLessThan(1);
     }
+  });
+
+  it('keeps the two feature thresholds apart, so a noul cannot be both', () => {
+    // The band between them is "the description never mentioned it", and it is
+    // the reason there are two numbers rather than one split. If they ever met,
+    // every feature would be either built or refused and the ordinary case
+    // would have nowhere to go.
+    expect(EXCLUSION_THRESHOLD).toBeLessThan(FEATURE_THRESHOLD);
   });
 });

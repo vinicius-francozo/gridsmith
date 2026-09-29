@@ -40,6 +40,24 @@ export const FEATURE_NOT_IN_PLACE = 'feature_not_in_place';
  */
 export const FEATURE_OVER_BUDGET = 'feature_over_budget';
 
+/**
+ * A feature the description asked for and, in the same breath, asked there to
+ * be none of. The exclusion won and the feature was dropped.
+ *
+ * Detail: the feature, lowercased.
+ *
+ * This is the only thing `excluded` reports, and the restraint is measured
+ * rather than stylistic. An exclusion the generator simply honoured is not a
+ * shortfall and says nothing worth reading — and, on the Jev engine, saying it
+ * anyway would put words in the person's mouth: at the exclusion threshold that
+ * front measured (`jev/questions.ts`, `EXCLUSION_THRESHOLD`), about one in nine
+ * features a description never mentions also lands in `excluded`. A line
+ * reading "you asked for no bunks" under a description that never mentioned
+ * bunks is worse than silence. A feature that was asked for and then dropped is
+ * a real loss, it cannot arrive by accident, and it is what this code is for.
+ */
+export const FEATURE_ALSO_EXCLUDED = 'feature_also_excluded';
+
 /** `clutter` was not a number and was read as an empty floor. No detail. */
 export const CLUTTER_NOT_A_NUMBER = 'clutter_not_a_number';
 
@@ -51,13 +69,27 @@ export const CLUTTER_NOT_A_NUMBER = 'clutter_not_a_number';
  */
 export const CLUTTER_OUT_OF_RANGE = 'clutter_out_of_range';
 
+/** `furnishing` was not a number and was read as a bare room. No detail. */
+export const FURNISHING_NOT_A_NUMBER = 'furnishing_not_a_number';
+
+/**
+ * `furnishing` was outside 0 to 1 and was brought into it.
+ *
+ * Detail: the value as it arrived, written as `String` writes it. What it
+ * became is in `Params.furnishing`.
+ */
+export const FURNISHING_OUT_OF_RANGE = 'furnishing_out_of_range';
+
 /** Every code `resolve` can put in `Params.conflicts`. */
 export const CONFLICT_CODES = [
   FEATURE_NOT_IN_VOCABULARY,
   FEATURE_NOT_IN_PLACE,
   FEATURE_OVER_BUDGET,
+  FEATURE_ALSO_EXCLUDED,
   CLUTTER_NOT_A_NUMBER,
   CLUTTER_OUT_OF_RANGE,
+  FURNISHING_NOT_A_NUMBER,
+  FURNISHING_OUT_OF_RANGE,
 ] as const;
 
 /** A code `resolve` can report. `conflicts` is ours, so it holds only these. */

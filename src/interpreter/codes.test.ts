@@ -19,6 +19,15 @@ const SIZE_HINTS = [undefined, 'small', 'medium', 'large'] as const;
 const CLUTTERS = [-1, 0, 0.5, 1, 2, Number.NaN];
 /** Real words, a word for another place, and a word from nowhere. */
 const FEATURES = ['bar', 'hearth', 'stairs', 'pillars', 'alcove', 'shelving', 'bunks', 'Marble Fountain', ''];
+/**
+ * Nothing refused, and one feature refused.
+ *
+ * Both, and not only the second: an exclusion is checked before the place and
+ * the budget are, so a sweep that refused every feature would hide
+ * `feature_not_in_place` and `feature_over_budget` behind
+ * `feature_also_excluded` and still look exhaustive.
+ */
+const EXCLUSIONS = [[], ['bar']];
 
 /**
  * Every conflict `resolve` produces across a sweep of the input space.
@@ -32,17 +41,24 @@ function everyConflict(): string[] {
   for (const place of PLACE_TYPES) {
     for (const sizeHint of SIZE_HINTS) {
       for (const clutter of CLUTTERS) {
-        for (let seed = 0; seed < 12; seed += 1) {
-          const constraints: Constraints = {
-            place,
-            sizeHint,
-            light: 'dim',
-            condition: 'lived_in',
-            clutter,
-            features: FEATURES,
-            unresolved: [],
-          };
-          conflicts.push(...resolve(constraints, seed).conflicts);
+        for (const excluded of EXCLUSIONS) {
+          for (let seed = 0; seed < 12; seed += 1) {
+            const constraints: Constraints = {
+              place,
+              sizeHint,
+              light: 'dim',
+              condition: 'lived_in',
+              clutter,
+              // The same sweep serves both numbers: they take the same values
+              // and are screened by the same two checks, so a value that
+              // reaches one code reaches the other.
+              furnishing: clutter,
+              features: FEATURES,
+              excluded,
+              unresolved: [],
+            };
+            conflicts.push(...resolve(constraints, seed).conflicts);
+          }
         }
       }
     }
@@ -71,6 +87,7 @@ const OUT_OF_VOCABULARY_ANSWER = `{
     "light": { "type": "score", "score": 1.8, "legend": {}, "probabilities": {}, "confidence": 0.8 },
     "condition": { "type": "score", "score": 1.2, "legend": {}, "probabilities": {}, "confidence": 0.7 },
     "size": { "type": "score", "score": 1, "legend": {}, "probabilities": {}, "confidence": 0.3 },
+    "furnishing": { "type": "score", "score": 2.1, "legend": {}, "probabilities": {}, "confidence": 0.6 },
     "feature_bar": { "type": "noul", "noul": 0.03 },
     "feature_hearth": { "type": "noul", "noul": 0.96 },
     "feature_stairs": { "type": "noul", "noul": 0.05 },

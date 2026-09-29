@@ -24,9 +24,12 @@ import {
   CLUTTER_NOT_A_NUMBER,
   CLUTTER_OUT_OF_RANGE,
   entry,
+  FEATURE_ALSO_EXCLUDED,
   FEATURE_NOT_IN_PLACE,
   FEATURE_NOT_IN_VOCABULARY,
   FEATURE_OVER_BUDGET,
+  FURNISHING_NOT_A_NUMBER,
+  FURNISHING_OUT_OF_RANGE,
 } from './codes';
 import { featureSuits, isFeature } from './vocabulary';
 import type { Feature } from './vocabulary';
@@ -129,8 +132,11 @@ export function resolve(constraints: Constraints, seed: number): Params {
   const size = jitterSize(profile.sizes[constraints.sizeHint ?? DEFAULT_SIZE_HINT], rng);
   const doorCount = rng.int(profile.doors.min, profile.doors.max);
 
-  const features = resolveFeatures(constraints, size, conflicts);
+  // Before the features, because it decides which of them survive.
+  const excluded = resolveExcluded(constraints);
+  const features = resolveFeatures(constraints, excluded, size, conflicts);
   const clutter = resolveClutter(constraints.clutter, conflicts);
+  const furnishing = resolveFurnishing(constraints.furnishing, conflicts);
 
   return {
     place: constraints.place,
@@ -138,11 +144,42 @@ export function resolve(constraints: Constraints, seed: number): Params {
     light: constraints.light,
     condition: constraints.condition,
     clutter,
+    furnishing,
     features,
+    excluded,
     doorCount,
     seed,
     conflicts,
   };
+}
+
+/**
+ * The words of `excluded` the generator can act on, normalised and deduplicated.
+ *
+ * Nothing is reported for a word that is dropped here, and both drops are
+ * silent on purpose.
+ *
+ * A word outside the vocabulary — "sem bigorna" — asks for the absence of
+ * something the generator was never going to draw, so the request is already
+ * satisfied and there is no shortfall to report. That is the opposite case from
+ * `FEATURE_NOT_IN_VOCABULARY`, where an anvil *was* asked for and the person
+ * loses it; the two look alike and are not.
+ *
+ * A feature that does not suit the place — "sem balcão" in a cellar — is the
+ * same story: `featureSuits` already keeps a bar out of a cellar, so excluding
+ * it changes nothing. It is kept in the list rather than filtered out, because
+ * the list is read by the generator as "never place this" and a value the
+ * generator would never place anyway costs nothing to carry.
+ */
+function resolveExcluded(constraints: Constraints): Feature[] {
+  const kept: Feature[] = [];
+  for (const raw of constraints.excluded) {
+    const word = raw.trim().toLowerCase();
+    if (isFeature(word) && !kept.includes(word)) {
+      kept.push(word);
+    }
+  }
+  return kept;
 }
 
 /**
@@ -201,11 +238,29 @@ export function jitterSize(base: Size, rng: Rng): Size {
  * The features that survive, appending a code to `conflicts` for each that
  * does not.
  *
- * Three ways to lose one, and they are different things to be told, so they
- * are three codes: the generator has never heard the word, the word is real
- * but not for this kind of place, or the place is too small to hold one more.
+ * Four ways to lose one, and they are different things to be told, so they are
+ * four codes: the generator has never heard the word, the word is real but not
+ * for this kind of place, the same description asked there to be none of it, or
+ * the place is too small to hold one more.
+ *
+ * The third is the one that can only come from a description contradicting
+ * itself, and the exclusion is what wins. Neither classifier can produce the
+ * contradiction — a score is either above the presence threshold or below the
+ * exclusion one, never both — so it arrives from the prompted model or from a
+ * caller building `Constraints` by hand. Between "there is a staircase" and
+ * "there is no staircase" read out of one sentence, the refusal is the stronger
+ * reading: a person says "no stairs" about stairs they had in mind, and the
+ * sentence that mentions them at all is what makes the presence side score. The
+ * cost of choosing wrong is also not symmetric — honouring the refusal omits
+ * something, honouring the request draws the very thing that was refused, which
+ * is the defect this whole field exists to close.
  */
-function resolveFeatures(constraints: Constraints, size: Size, conflicts: string[]): string[] {
+function resolveFeatures(
+  constraints: Constraints,
+  excluded: readonly Feature[],
+  size: Size,
+  conflicts: string[],
+): string[] {
   const kept: Feature[] = [];
   const seen = new Set<string>();
 
@@ -221,6 +276,10 @@ function resolveFeatures(constraints: Constraints, size: Size, conflicts: string
       // The word as it was written, not as it was normalised: this is what
       // the person is going to be told was left out.
       conflicts.push(entry(FEATURE_NOT_IN_VOCABULARY, raw));
+      continue;
+    }
+    if (excluded.includes(word)) {
+      conflicts.push(entry(FEATURE_ALSO_EXCLUDED, word));
       continue;
     }
     if (!featureSuits(word, constraints.place)) {
@@ -283,4 +342,33 @@ function resolveClutter(clutter: number, conflicts: string[]): number {
     return Math.min(1, Math.max(0, clutter));
   }
   return clutter;
+}
+
+/**
+ * `furnishing` brought into 0..1, appending to `conflicts` if it had to move.
+ *
+ * The same two checks as `resolveClutter`, at the same untrusted boundary and
+ * for the same reasons — the schema's range is advice to a model, not grammar
+ * the API enforces, and `resolve` is a public function. It is written out
+ * rather than folded into one helper with `clutter` so that each field's codes
+ * stay its own: a person told "the amount of loose stuff was out of range" when
+ * the number that was wrong was the furniture count is told the wrong thing,
+ * and one shared function would have to carry the pair of codes as parameters
+ * to avoid it, which is longer than this.
+ *
+ * Nothing rather than something is the fallback, as it is for `clutter`: a
+ * furnished room that should have been bare is furniture the person has to
+ * delete, and a bare room that should have been furnished is a map they can
+ * regenerate.
+ */
+function resolveFurnishing(furnishing: number, conflicts: string[]): number {
+  if (typeof furnishing !== 'number' || Number.isNaN(furnishing)) {
+    conflicts.push(entry(FURNISHING_NOT_A_NUMBER));
+    return 0;
+  }
+  if (furnishing < 0 || furnishing > 1) {
+    conflicts.push(entry(FURNISHING_OUT_OF_RANGE, String(furnishing)));
+    return Math.min(1, Math.max(0, furnishing));
+  }
+  return furnishing;
 }

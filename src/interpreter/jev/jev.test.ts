@@ -29,6 +29,7 @@ const ANSWER = `{
     "light": { "type": "score", "score": 0.2, "legend": {}, "probabilities": {}, "confidence": 0.81 },
     "condition": { "type": "score", "score": 2, "legend": {}, "probabilities": {}, "confidence": 0.77 },
     "size": { "type": "score", "score": 0.1, "legend": {}, "probabilities": {}, "confidence": 0.72 },
+    "furnishing": { "type": "score", "score": 1.5, "legend": {}, "probabilities": {}, "confidence": 0.7 },
     "feature_bar": { "type": "noul", "noul": 0.04 },
     "feature_hearth": { "type": "noul", "noul": 0.03 },
     "feature_stairs": { "type": "noul", "noul": 0.91 },
@@ -41,9 +42,10 @@ const ANSWER = `{
 }`;
 const ROOM_ANSWER = '{"answers":{"room":{"type":"choice","choice":"storeroom","confidence":0.94}}}';
 
-/** The twelve names the request has to carry, written out rather than derived. */
+/** The thirteen names the request has to carry, written out rather than derived. */
 const QUESTION_NAMES = [
   'condition',
+  'furnishing',
   'feature_alcove',
   'feature_bar',
   'feature_bunks',
@@ -220,7 +222,14 @@ describe('what comes back', () => {
       light: 'dark',
       condition: 'disordered',
       clutter: 0.6,
+      // The `furnishing` score of 1.5 on a four-level scale, and nothing to do
+      // with the `condition` of 2 the same answer carries. Before the two were
+      // split, this line read 0.6 as well.
+      furnishing: 0.5,
       features: ['stairs', 'shelving'],
+      // Every noul at or under 0.05. `pillars` at 0.12 and `alcove` at 0.07
+      // are in neither list, which is the band this answer never mentioned.
+      excluded: ['bar', 'hearth', 'bunks'],
       unresolved: [],
     });
   });

@@ -90,7 +90,9 @@ vi.mock('../interpreter/claude', () => ({
         light: 'dim',
         condition: 'lived_in',
         clutter: 0.4,
+        furnishing: 0.4,
         features: [],
+        excluded: [],
         unresolved: [],
       });
     }
@@ -291,7 +293,9 @@ function sceneFor(place: Place, seed: number): Scene {
       light: 'dim',
       condition: 'lived_in',
       clutter: 0.6,
+      furnishing: 0.6,
       features: featuresFor(place),
+      excluded: [],
       unresolved: [],
     },
     seed,

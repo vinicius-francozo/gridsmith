@@ -106,7 +106,13 @@ export function paramsFor(place: Place, overrides: Partial<Params> = {}): Params
     light: 'dim',
     condition: 'lived_in',
     clutter: 0.5,
+    // The same figure `clutter` carries, so that the tests written when one
+    // number drove both the scatter layer and the group count keep asserting
+    // the counts they were written against. The split is what is new; the
+    // midpoint is not.
+    furnishing: 0.5,
     features: [],
+    excluded: [],
     doorCount: 1,
     seed: 1,
     conflicts: [],

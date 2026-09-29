@@ -597,3 +597,116 @@ describe('placeProps on a hand-drawn plan', () => {
     expect(placeProps(floorplan, params, profile, createRng(1))).toEqual([]);
   });
 });
+
+describe('an anchor the description refused', () => {
+  /**
+   * Every (place, word, anchor) again, read off the profiles for the reason
+   * `REQUESTS` gives. The claim on this side is the stronger one — the anchor
+   * must be absent on *every* seed, not present on every seed — so it is worth
+   * asking over the same run.
+   */
+  const REFUSALS = PLACE_TYPES.flatMap((place) =>
+    profileFor(place)
+      .anchors.filter((spec) => spec.feature !== undefined)
+      .map((spec) => ({
+        place,
+        feature: spec.feature as string,
+        assetId: assetIdFor('anchor', spec.assetId),
+      })),
+  );
+
+  for (const { place, feature, assetId } of REFUSALS) {
+    it(`never puts ${assetId} in a ${place.building}_${place.room} that refuses '${feature}'`, () => {
+      // Defect D2. The fill drew from the whole profile, so a description that
+      // said "sem escadaria" got a staircase anyway and `conflicts` came back
+      // empty — nothing anywhere said no had been ignored. Thirty seeds
+      // because the fill is a draw: one seed that happens not to pick the
+      // anchor proves nothing.
+      const drawn: number[] = [];
+      for (let seed = 0; seed < 30; seed += 1) {
+        const { props } = furnished(place, seed, { features: [], excluded: [feature] });
+        if (props.some((prop) => prop.assetId === assetId)) {
+          drawn.push(seed);
+        }
+      }
+      expect(`${place.building}_${place.room} refused '${feature}', drawn on seeds: ${drawn.join()}`).toBe(
+        `${place.building}_${place.room} refused '${feature}', drawn on seeds: `,
+      );
+    });
+  }
+
+  it('keeps filling the room from what is left, so a refusal does not empty it', () => {
+    // The risk this rule was written against: stopping the fill as soon as the
+    // requested anchors ran out would leave a dungeon hall with nothing against
+    // any of its walls, which is the reading of "sem escadaria" that looks
+    // broken. `weapon_rack` carries no feature, so nothing can refuse it.
+    const place: Place = { building: 'dungeon', room: 'hall' };
+    const empty: number[] = [];
+    for (let seed = 0; seed < 30; seed += 1) {
+      const { props } = furnished(place, seed, { features: [], excluded: ['hearth', 'stairs'] });
+      if (!props.some((prop) => prop.layer === 'anchor')) {
+        empty.push(seed);
+      }
+    }
+    expect(`dungeon_hall with both featured anchors refused, bare on seeds: ${empty.join()}`).toBe(
+      'dungeon_hall with both featured anchors refused, bare on seeds: ',
+    );
+  });
+
+  it('leaves the walls bare when every anchor of the place is in `excluded`', () => {
+    // The one case where the refusal outranks the filling. A tavern storeroom
+    // offers two anchors and both carry a feature, so refusing both leaves the
+    // draw nothing to offer.
+    //
+    // Not named "refused by name": `excluded` is not only what the person said,
+    // and `props.ts` says how often it is not. What is pinned here is the rule,
+    // not a claim about why the list looks the way it does — filling from the
+    // refused anchors instead would put back the staircase this whole field
+    // exists to keep out.
+    const place: Place = { building: 'tavern', room: 'storeroom' };
+    for (let seed = 0; seed < 12; seed += 1) {
+      const { props } = furnished(place, seed, { features: [], excluded: ['shelving', 'stairs'] });
+      expect(`seed ${String(seed)}: ${String(props.filter((prop) => prop.layer === 'anchor').length)} anchors`)
+        .toBe(`seed ${String(seed)}: 0 anchors`);
+    }
+  });
+});
+
+describe('the two dials over the group layer', () => {
+  const groupCount = (props: PlacedProp[]): number =>
+    props.filter((prop) => prop.layer === 'group').length;
+
+  it('counts groups off furnishing and not off clutter', () => {
+    // Defect D3, at the line that computes the target rather than at a whole
+    // scene. `clutter` swept across its range with `furnishing` held still has
+    // to leave the count alone; before the split it multiplied it.
+    for (const place of PLACE_TYPES) {
+      const counts = [0, 0.5, 1].map(
+        (clutter) => groupCount(furnished(place, 7, { clutter, furnishing: 0.5 }).props),
+      );
+      expect(`${place.building}_${place.room} groups at clutter 0 / 0.5 / 1: ${counts.join(' / ')}`).toBe(
+        `${place.building}_${place.room} groups at clutter 0 / 0.5 / 1: ${String(counts[0])} / ${String(counts[0])} / ${String(counts[0])}`,
+      );
+    }
+  });
+
+  it('draws more groups as furnishing rises, in every place', () => {
+    for (const place of PLACE_TYPES) {
+      const sparse = groupCount(furnished(place, 7, { furnishing: 0, clutter: 0.5 }).props);
+      const crowded = groupCount(furnished(place, 7, { furnishing: 1, clutter: 0.5 }).props);
+      expect(`${place.building}_${place.room}: ${String(sparse)} then ${String(crowded)}`).toBe(
+        `${place.building}_${place.room}: ${String(sparse)} then ${String(Math.max(crowded, sparse + 1))}`,
+      );
+    }
+  });
+
+  it('leaves the scatter layer to clutter alone', () => {
+    // The other half of the separation. A bare floor stays bare however much
+    // furniture stands on it.
+    for (const furnishing of [0, 1]) {
+      const { props } = furnished({ building: 'tavern', room: 'hall' }, 7, { clutter: 0, furnishing });
+      expect(`furnishing ${String(furnishing)} at clutter 0: ${String(props.filter((p) => p.layer === 'scatter').length)} scattered`)
+        .toBe(`furnishing ${String(furnishing)} at clutter 0: 0 scattered`);
+    }
+  });
+});

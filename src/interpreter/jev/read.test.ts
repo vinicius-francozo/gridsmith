@@ -4,8 +4,16 @@ import type { Place } from '../../core/types';
 import { CLUTTER_BY_CONDITION } from '../local/templates';
 
 import { JevUnusableAnswerError } from './errors';
-import { CONDITION_LEVELS, FEATURE_THRESHOLD, OUT_OF_VOCABULARY_THRESHOLD, SIZE_MIN_CONFIDENCE } from './questions';
-import { clutterFromScore, readBuildingAnswers, readRoomAnswers } from './read';
+import {
+  CONDITION_LEVELS,
+  EXCLUSION_THRESHOLD,
+  FEATURE_THRESHOLD,
+  FURNISHING_TOP,
+  OUT_OF_VOCABULARY_THRESHOLD,
+  QUESTIONS,
+  SIZE_MIN_CONFIDENCE,
+} from './questions';
+import { clutterFromScore, furnishingFromScore, readBuildingAnswers, readRoomAnswers } from './read';
 
 /**
  * Every response in this file is JSON **text**, typed out by hand and parsed
@@ -44,6 +52,10 @@ type Figures = {
   sizeScore: number;
   /** Not measured: `p01` came back without a `sizeHint`, so it was under the gate. */
   sizeConfidence: number;
+  /** Not measured: the question did not exist when this bench ran. */
+  furnishingScore: number;
+  /** Not measured. */
+  furnishingConfidence: number;
   bar: number;
   hearth: number;
   stairs: number;
@@ -63,6 +75,8 @@ const P01: Figures = {
   conditionConfidence: 0.64,
   sizeScore: 1.4,
   sizeConfidence: 0.41,
+  furnishingScore: 2,
+  furnishingConfidence: 0.7,
   bar: 0.98,
   hearth: 0.26,
   stairs: 0.15,
@@ -106,6 +120,13 @@ function responseText(figures: Partial<Figures> = {}): string {
       "legend": { "0": "Pequeno", "1": "Médio", "2": "Grande" },
       "probabilities": { "0": 0.2, "1": 0.4, "2": 0.4 },
       "confidence": ${String(f.sizeConfidence)}
+    },
+    "furnishing": {
+      "type": "score",
+      "score": ${String(f.furnishingScore)},
+      "legend": { "0": "Nenhuma", "1": "Pouca", "2": "Mobiliado", "3": "Abarrotado" },
+      "probabilities": { "0": 0.05, "1": 0.15, "2": 0.6, "3": 0.2 },
+      "confidence": ${String(f.furnishingConfidence)}
     },
     "feature_bar": { "type": "noul", "noul": ${String(f.bar)} },
     "feature_hearth": { "type": "noul", "noul": ${String(f.hearth)} },
@@ -316,5 +337,92 @@ describe('an answer this layer cannot use', () => {
     // `schema.ts:10-15` is why that gate is not optional.
     expect(() => readAnswers(response({ place: { building: 'tavern', room: 'throne_room' } as unknown as Place }))).toThrow(JevUnusableAnswerError);
     expect(() => readAnswers(response({ place: { building: 'tavern', room: 'throne_room' } as unknown as Place }))).toThrow(/room/);
+  });
+});
+
+describe('furnishing, off a scale of its own', () => {
+  it('spans nought to one across the scale the question actually asks about', () => {
+    // Against the question's own criteria rather than against a 3 written here:
+    // a criterion added there without this divisor moving would silently rescale
+    // every answer.
+    expect(furnishingFromScore(0)).toBe(0);
+    expect(furnishingFromScore(FURNISHING_TOP)).toBe(1);
+    expect(FURNISHING_TOP).toBe(QUESTIONS.furnishing.criteria.length - 1);
+  });
+
+  it('fills in between the levels instead of rounding to one of four', () => {
+    expect(furnishingFromScore(1.5)).toBeCloseTo(0.5, 12);
+  });
+
+  it('reaches Constraints.furnishing, and does not follow the condition', () => {
+    // Defect D3, at this layer: the same answer carries a ruined condition and
+    // a nearly bare floor, and both survive the reading.
+    const constraints = readAnswers(response({ conditionScore: 3, furnishingScore: 0.3 }));
+
+    expect(constraints.condition).toBe('ruined');
+    expect(constraints.clutter).toBeCloseTo(0.85, 12);
+    expect(constraints.furnishing).toBeCloseTo(0.1, 12);
+  });
+
+  it('refuses a furnishing score outside the scale rather than clamping it', () => {
+    // The same trade the other scores make: a score out of band is an answer to
+    // a different question, and clamping turns that into a plausible map.
+    //
+    // Asserted on the sentence `scoreOn` writes, not on the type and not on the
+    // word "furnishing". `constraintsSchema` would refuse these two anyway —
+    // the reading is `score / 3`, so out of band in means out of 0..1 out — and
+    // both paths throw a `JevUnusableAnswerError` that names the field. A test
+    // that watched either of those would go on passing with this guard deleted,
+    // which is what it did until it was asked to prove otherwise. Only this
+    // wording tells the reader which of the two refused, and that matters: the
+    // schema is the last net, and a field that reaches it is a field this layer
+    // let through.
+    // Not `NaN`: the fixture is JSON text by the rule at the top of this file,
+    // and `NaN` is not JSON. `scoreSchema` is what refuses a score that is not
+    // a number, one step earlier.
+    for (const furnishingScore of [FURNISHING_TOP + 0.1, -0.1, 99]) {
+      expect(() => readAnswers(response({ furnishingScore }))).toThrow(
+        /furnishing: a score of .+ is outside the 4 levels it was asked about/,
+      );
+    }
+  });
+});
+
+describe('which features the description refused', () => {
+  it('takes them at the threshold and leaves them above it', () => {
+    // `<=`, not `<`: three of the twenty negations in the corpus sit exactly on
+    // 0.050, and the answers are quantised to a hundredth.
+    const constraints = readAnswers(
+      response({ hearth: EXCLUSION_THRESHOLD, stairs: EXCLUSION_THRESHOLD + 0.01 }),
+    );
+
+    expect(constraints.excluded).toContain('hearth');
+    expect(constraints.excluded).not.toContain('stairs');
+  });
+
+  it('leaves the band between the two thresholds in neither list', () => {
+    // The ordinary case, and the whole reason there are two numbers: a feature
+    // the description never mentioned is not asked for and not refused.
+    const middling = (FEATURE_THRESHOLD + EXCLUSION_THRESHOLD) / 2;
+    const constraints = readAnswers(response({ pillars: middling }));
+
+    expect(constraints.features).not.toContain('pillars');
+    expect(constraints.excluded).not.toContain('pillars');
+  });
+
+  it('lists them in vocabulary order, not in the order they scored', () => {
+    const constraints = readAnswers(response({ bunks: 0.01, bar: 0.04, shelving: 0.02, hearth: 0.03 }));
+
+    expect(constraints.excluded).toEqual(['bar', 'hearth', 'shelving', 'bunks']);
+  });
+
+  it('never puts the same feature in both lists', () => {
+    // Impossible by construction while the two thresholds do not cross, and
+    // `resolve` settles the contradiction if a hand-built `Constraints` ever
+    // produces one. Asserted here so that crossing them is a red test.
+    for (const noul of [0, 0.03, 0.05, 0.3, 0.62, 0.9, 1]) {
+      const constraints = readAnswers(response({ stairs: noul }));
+      expect(constraints.features.filter((f) => constraints.excluded.includes(f))).toEqual([]);
+    }
   });
 });

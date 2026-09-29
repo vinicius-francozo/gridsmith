@@ -211,14 +211,81 @@ export const FEATURE_TEMPLATE: GatedTemplate<Feature> = {
  * distribution at all.
  *
  * The map's own vocabulary says these two axes are separate — a swept room can
- * be crowded — and this front cannot honour that separation, because it has
- * only one of the two signals. That is a real difference from the LLM path,
- * where the prompt asks for the two independently, and it is written down here
- * rather than left for someone to discover from a suspiciously tidy map.
+ * be crowded — and this table is only one of them. It used to be both: until
+ * `Constraints.furnishing` existed, the number below drove the count of
+ * furniture groups as well as the loose stuff underfoot, so a description of a
+ * ruin came back full of war tables. `groupTarget` in `generator/props.ts`
+ * carries the arithmetic and the floor area it is true of; the count is a
+ * function of both, so it is quoted in one place rather than restated here. The second signal is now
+ * `FURNISHING_TEMPLATE`, a question of its own, and this table is back to
+ * meaning what its name says.
  */
 export const CLUTTER_BY_CONDITION: Readonly<Record<Condition, number>> = {
   tidy: 0.1,
   lived_in: 0.35,
   disordered: 0.6,
   ruined: 0.85,
+};
+
+/** How furnished a place is, in four ordered steps. */
+export type FurnishingLevel = 'bare' | 'sparse' | 'furnished' | 'crowded';
+
+/**
+ * How much furniture stands in the place — asked apart from `condition`.
+ *
+ * The seventh classification, and the one that lets this front answer the two
+ * axes the map declares rather than answering one and letting the other follow
+ * it. The labels describe furniture on the floor and say nothing about how
+ * clean it is, so that a sentence can come back ruined and nearly bare, which
+ * is what a filthy ruin usually is.
+ *
+ * Ungated, like `CONDITION_TEMPLATE` and for the same reason: the answer is
+ * read as a distribution rather than as a winner (`deriveFurnishing`), so there
+ * is no winner to withhold. A description that says nothing about furniture
+ * spreads across the four and lands in the middle, which is the honest reading
+ * of a place nobody described the contents of.
+ *
+ * **No accuracy measurement.** Neither has `light`, `condition` or `size` — this
+ * project has no gold for any of the four, and `CLUTTER_BY_CONDITION`'s own
+ * figures are the old bench's. The labels are written in the shape the bench
+ * found worked for the other scales (a short Portuguese phrase, no enrichment),
+ * and that is the whole of the claim being made for them.
+ *
+ * The hypothesis is its own sentence and not `CONDITION_TEMPLATE`'s
+ * `'O lugar está {}.'`, which would also have read correctly. Two templates
+ * sharing a hypothesis is a hazard rather than a saving: `classify` names the
+ * template it is asking about, but every stand-in classifier in the tests
+ * dispatches on the hypothesis, and two questions answering to one string is a
+ * silent wrong answer. `LIGHT_TEMPLATE` already carries the shape used here.
+ */
+export const FURNISHING_TEMPLATE: ChoiceTemplate<FurnishingLevel> = {
+  hypothesis: 'A mobília do lugar é assim: {}.',
+  labels: {
+    bare: 'sem móveis, o chão está vazio',
+    // No alternative inside a label — `templates.test.ts` holds every label to
+    // that, and the rule is measured rather than stylistic.
+    sparse: 'com pouca mobília, umas poucas peças',
+    furnished: 'mobiliado, com mesas, bancos e caixotes',
+    crowded: 'abarrotado de móveis, quase sem espaço livre',
+  },
+};
+
+/**
+ * What `Constraints.furnishing` is at each level.
+ *
+ * Read as an average weighted by the whole distribution, never as a lookup on
+ * the winner — `deriveFurnishing` says why, and it is the same argument
+ * `deriveClutter` makes about `CLUTTER_BY_CONDITION`.
+ *
+ * The four figures are the scale's own quarters, not a bench's: 0 for a room
+ * with nothing in it and 1 for one with no floor left, evenly spaced between.
+ * `CLUTTER_BY_CONDITION` does not start at 0 because a tidy room still has dust
+ * in it; a bare room has no furniture, and that is a number this scale can
+ * honestly reach.
+ */
+export const FURNISHING_BY_LEVEL: Readonly<Record<FurnishingLevel, number>> = {
+  bare: 0,
+  sparse: 1 / 3,
+  furnished: 2 / 3,
+  crowded: 1,
 };

@@ -6,6 +6,7 @@ import type { ModelProgress, PipelineLoader, ZeroShotOutput, ZeroShotPipeline } 
 import {
   CONDITION_TEMPLATE,
   FEATURE_TEMPLATE,
+  FURNISHING_TEMPLATE,
   LIGHT_TEMPLATE,
   BUILDING_TEMPLATE,
   ROOM_TEMPLATES,
@@ -27,6 +28,7 @@ const ALL_TEMPLATES: Array<ChoiceTemplate<string>> = [
   CONDITION_TEMPLATE,
   SIZE_HINT_TEMPLATE,
   FEATURE_TEMPLATE,
+  FURNISHING_TEMPLATE,
 ];
 
 /**
@@ -44,7 +46,7 @@ function confidentAbout(template: ChoiceTemplate<string>, winner: string): ZeroS
   };
 }
 
-/** A classifier that answers every one of the six questions. */
+/** A classifier that answers every one of the seven questions. */
 const answering: ZeroShotPipeline = (_text, _labels, options) => {
   const template = ALL_TEMPLATES.find((each) => each.hypothesis === options.hypothesisTemplate);
   if (template === undefined) {
@@ -267,7 +269,9 @@ describe('what it answers with', () => {
       light: 'dark',
       condition: 'tidy',
       clutter: expect.any(Number) as unknown as number,
+      furnishing: expect.any(Number) as unknown as number,
       features: ['bar'],
+      excluded: [],
       unresolved: [],
     });
   });
@@ -278,5 +282,17 @@ describe('what it answers with', () => {
     const constraints = await interpreter.interpret('um salão com um segundo andar e um alçapão');
 
     expect(constraints.unresolved).toEqual([]);
+  });
+
+  it('never reports anything excluded, however plainly the description denies one', async () => {
+    // Measured, not assumed: this model scores a denied feature and an
+    // unmentioned one the same, and scores `"a lareira foi arrancada e não há
+    // fogo nenhum"` at 0.977 for `hearth`. See this front's `interpret.ts`
+    // header for the three buckets and their medians.
+    const interpreter = new LocalInterpreter({ loadPipeline: loaderFor().loadPipeline });
+
+    const constraints = await interpreter.interpret('um salão de taverna sem escadaria e sem lareira');
+
+    expect(constraints.excluded).toEqual([]);
   });
 });

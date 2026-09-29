@@ -27,6 +27,34 @@
  * *resolver* had to drop. The interface shows an empty `unresolved` as no
  * section at all, which is the correct thing for it to show, because this
  * interpreter genuinely has nothing to say there.
+ *
+ * ## `excluded` is always empty here too, and that one was measured
+ *
+ * The Jev engine reads "the description says this is NOT there" off the same
+ * number it reads presence off, below a second threshold. The obvious move is
+ * to do the same here, below `FEATURE_TEMPLATE.minConfidence`. It was tried and
+ * it does not work, and the numbers are why rather than a judgement.
+ *
+ * Forty-one sentences — the canonical ruler's twenty-eight `features`
+ * sentences, its standalone negation control, and twelve written with an
+ * explicit negation in them — classified against this model, this device and
+ * this dtype, one score per feature per sentence. The corpus and every number
+ * are in `corpus-exclusao-jev.md`, kept outside this repository beside the
+ * canonical ruler. Three buckets, 20 · 227 · 33 observations, and the medians are **0.033 for a feature the description
+ * explicitly denies and 0.049 for one it never mentions** — the same
+ * distribution twice. No threshold separates them: at 0.05 it catches 13 of the
+ * 20 negations and calls 116 of the 227 unmentioned features refused as well,
+ * and it also refuses a feature the gold says is *there*
+ * (`"Há um fogo aceso no canto…"`, `hearth` 0.023). The one sentence it gets
+ * most confidently wrong is `"a lareira foi arrancada e não há fogo nenhum"`,
+ * where `hearth` comes back **0.977**.
+ *
+ * That is the same shape of limit as `unresolved`, reached from the other
+ * direction: this model scores what a sentence is *about*, and a sentence about
+ * a missing hearth is about a hearth. A threshold over that cannot mean
+ * "refused", so this front does not pretend it does. A person who needs
+ * "sem escadaria" honoured needs one of the other two engines, and the map they
+ * get here is the map this front always gave them.
  */
 
 import type { Building, Condition, Constraints, Light, Place, RoomKind } from '../../core/types';
@@ -42,14 +70,19 @@ import {
   CLUTTER_BY_CONDITION,
   CONDITION_TEMPLATE,
   FEATURE_TEMPLATE,
+  FURNISHING_BY_LEVEL,
+  FURNISHING_TEMPLATE,
   LIGHT_TEMPLATE,
   BUILDING_TEMPLATE,
   ROOM_TEMPLATES,
   SIZE_HINT_TEMPLATE,
 } from './templates';
-import type { ChoiceTemplate } from './templates';
+import type { ChoiceTemplate, FurnishingLevel } from './templates';
 
-/** How much of `clutter` is kept. Three places is finer than any map notices. */
+/**
+ * How much of `clutter` and `furnishing` is kept. Three places is finer than
+ * any map notices.
+ */
 const CLUTTER_PLACES = 3;
 
 /** A value the classifier settled on, and how sure it was. */
@@ -224,6 +257,28 @@ export function deriveClutter(probabilities: Readonly<Record<Condition, number>>
   return Math.round(total * scale) / scale;
 }
 
+/**
+ * How furnished the place is, from the whole furnishing distribution.
+ *
+ * The same reading as `deriveClutter`, over its own question, and for the same
+ * two reasons. A description the model splits evenly between `sparse` and
+ * `furnished` describes a room between the two, and the winner alone would
+ * round it to one of four numbers. And it deliberately does not clamp: a
+ * single-label classification is a softmax, so a real answer lands between the
+ * smallest and the largest figure in `FURNISHING_BY_LEVEL` — 0 and 1 — and a
+ * result outside that means the scores were not a distribution at all.
+ * `constraintsFrom` is what turns that into an error the person can act on
+ * instead of into a plausible map.
+ */
+export function deriveFurnishing(probabilities: Readonly<Record<FurnishingLevel, number>>): number {
+  let total = 0;
+  for (const level of Object.keys(FURNISHING_BY_LEVEL) as FurnishingLevel[]) {
+    total += probabilities[level] * FURNISHING_BY_LEVEL[level];
+  }
+  const scale = 10 ** CLUTTER_PLACES;
+  return Math.round(total * scale) / scale;
+}
+
 /** Everything one classification pass produced, before it is checked. */
 export type ClassifiedParts = {
   readonly place: Place;
@@ -231,6 +286,7 @@ export type ClassifiedParts = {
   readonly light: Light;
   readonly condition: Condition;
   readonly clutter: number;
+  readonly furnishing: number;
   readonly features: readonly Feature[];
 };
 
@@ -259,7 +315,10 @@ export function constraintsFrom(parts: ClassifiedParts): Constraints {
     light: parts.light,
     condition: parts.condition,
     clutter: parts.clutter,
+    furnishing: parts.furnishing,
     features: [...parts.features],
+    // Always empty, and measured to be. See this file's header.
+    excluded: [],
     // Always empty. See this file's header: a classifier cannot notice what it
     // was not asked about, so there is nothing honest to put here.
     unresolved: [],
@@ -281,22 +340,28 @@ function describeIssue(issue: { path: PropertyKey[]; message: string }): string 
 }
 
 /**
- * The constraints `text` describes, in six classifications.
+ * The constraints `text` describes, in seven classifications.
  *
- * Six and not one: each field is a different question with a different
+ * Seven and not one: each field is a different question with a different
  * hypothesis, and the pipeline judges one hypothesis at a time. They run one
  * after another rather than together because a single model session is one
- * piece of hardware — issuing six at once on the WebAssembly path queues them
+ * piece of hardware — issuing seven at once on the WebAssembly path queues them
  * behind each other anyway. The second half of that reason used to be "and on
  * WebGPU it contends for the same device"; WebGPU is never asked for now, so
  * the WebAssembly half is the whole of it. See `MODEL_DEVICE`.
+ *
+ * It was six until `furnishing` became a field of its own. The seventh pass is
+ * what that costs, and it buys the map the two axes it declares: the old six
+ * answered `condition` and let the furniture count follow it, which is how a
+ * ruin came back full of war tables. The arithmetic and the floor area that
+ * make it a number are in `groupTarget` (`generator/props.ts`).
  *
  * ## What the model is shown
  *
  * Not `text` itself: `synonyms.ts` rewrites the handful of words this model is
  * known to miss — "porão" for the storeroom, "estante" for the shelving — into
- * the words its labels use, and the result of that is the premise of all six
- * entailment pairs. All six get the *same* premise, so the six answers are
+ * the words its labels use, and the result of that is the premise of all seven
+ * entailment pairs. All seven get the *same* premise, so the seven answers are
  * about one sentence.
  *
  * `text` is not touched. `premise.original` is it, character for character, and
@@ -327,11 +392,20 @@ export async function classify(text: string, pipeline: ZeroShotPipeline): Promis
   const conditionOutput = await ask(CONDITION_TEMPLATE, false);
   const condition = bestOf(CONDITION_TEMPLATE, conditionOutput).value;
   const clutter = deriveClutter(scoresByValue(CONDITION_TEMPLATE, conditionOutput));
+  const furnishing = deriveFurnishing(scoresByValue(FURNISHING_TEMPLATE, await ask(FURNISHING_TEMPLATE, false)));
 
   const sizeHint = readSizeHint(await ask(SIZE_HINT_TEMPLATE, false));
   // The only multi-label pass: seven independent yes/no questions, not a choice
   // between seven. A hall with a bar and a hearth and stairs has all three.
   const features = readFeatures(await ask(FEATURE_TEMPLATE, true));
 
-  return constraintsFrom({ place: { building, room }, sizeHint, light, condition, clutter, features });
+  return constraintsFrom({
+    place: { building, room },
+    sizeHint,
+    light,
+    condition,
+    clutter,
+    furnishing,
+    features,
+  });
 }

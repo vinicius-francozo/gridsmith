@@ -22,8 +22,35 @@ export type Constraints = {
   sizeHint?: 'small' | 'medium' | 'large';
   light: Light;
   condition: Condition;
-  clutter: number;              // 0..1
+  /**
+   * 0..1. How much loose stuff covers the floor. Governs the scatter layer and
+   * nothing else.
+   *
+   * It used to govern the furniture count as well, and that was the defect: a
+   * description of a filthy ruin came back with nine tables in it, because one
+   * dial was wired to two things a person asks for separately. The two are
+   * split here, at the contract, so no engine can answer only one of them and
+   * have the other silently follow.
+   */
+  clutter: number;
+  /** 0..1. How furnished the place is. Governs the count of furniture groups. */
+  furnishing: number;
   features: string[];           // 'hearth' | 'bar' | 'stairs' | ...
+  /**
+   * What the description asked for there to be **none of**, in the words of
+   * `features`.
+   *
+   * Never filled by absence. A description that simply does not mention stairs
+   * leaves this empty; only one that says there are none puts `stairs` here.
+   * That distinction is the whole reason the field exists — before it,
+   * "sem escadaria" and "said nothing about stairs" arrived at the generator as
+   * the same thing, and the generator drew a staircase for both.
+   *
+   * Not every engine can fill it. See `local/interpret.ts`, which measured that
+   * its classifier cannot tell the two apart and leaves this empty for the same
+   * reason it leaves `unresolved` empty.
+   */
+  excluded: string[];
   unresolved: string[];         // asked for, not expressible
 };
 
@@ -34,7 +61,10 @@ export type Params = {
   light: Light;
   condition: Condition;
   clutter: number;
+  furnishing: number;
   features: string[];
+  /** Features the generator must not place, whatever else it wants to fill with. */
+  excluded: string[];
   doorCount: number;
   seed: number;
   conflicts: string[];          // what could not be satisfied, and why

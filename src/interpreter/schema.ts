@@ -51,12 +51,30 @@ export const constraintsSchema = z
       .number()
       .min(0)
       .max(1)
-      .describe('How much loose stuff covers the floor. 0 is a bare floor, 1 is barely walkable.'),
+      .describe(
+        'How much loose stuff is strewn over the floor — dust, rubble, shards, straw. ' +
+          '0 is a bare floor, 1 is barely walkable. Not about furniture: that is `furnishing`.',
+      ),
+    furnishing: z
+      .number()
+      .min(0)
+      .max(1)
+      .describe(
+        'How furnished the place is: how many tables, benches, crates and the like stand in it. ' +
+          '0 is an empty room, 1 is packed. Judge it separately from `clutter` — a filthy ruin ' +
+          'is usually high clutter and low furnishing.',
+      ),
     features: z
       .array(z.string())
       .describe(
         `Named things the place contains, drawn only from: ${FEATURES.join(', ')}. ` +
           'Anything the description asks for that is not on that list goes in `unresolved` instead.',
+      ),
+    excluded: z
+      .array(z.string())
+      .describe(
+        `Things from that same list the description says are NOT there, e.g. "sem escadaria" gives ["stairs"]. ` +
+          'Only when the description says so. Leave it empty for anything it merely does not mention.',
       ),
     unresolved: z
       .array(z.string())
