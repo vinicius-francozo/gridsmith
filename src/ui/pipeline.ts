@@ -99,7 +99,7 @@ export async function generateMap(
   // watches, so it is the part the stage is named for.
   reached('drawing');
   const params = resolve(constraints, input.seed);
-  const scene = generate(params, createRng(input.seed));
+  const scene = generate(params, createRng(input.seed), deps.library);
   await renderScene(scene, deps.library, deps.target);
   return { constraints, params, scene };
 }

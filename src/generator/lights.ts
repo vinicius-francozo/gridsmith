@@ -12,7 +12,7 @@
 import { cellAt } from '../core/grid';
 import type { Floorplan, Light, LightSource, PlacedProp } from '../core/types';
 import { assetIdFor } from './profiles';
-import type { PlaceProfile } from './profiles';
+import type { ResolvedProfile } from './profiles';
 
 /** Lamp spacing and reach per ambient level. `dark` gets no lamps at all. */
 const AMBIENT: Record<Light, { spacing: number; radiusCells: number } | null> = {
@@ -71,7 +71,7 @@ export function deriveLights(
   floorplan: Floorplan,
   props: PlacedProp[],
   light: Light,
-  profile: PlaceProfile,
+  profile: ResolvedProfile,
 ): LightSource[] {
   const lights: LightSource[] = [];
 

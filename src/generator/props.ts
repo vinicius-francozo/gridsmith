@@ -41,7 +41,7 @@ import type {
 } from '../core/types';
 import { floorCells, opposite } from './floorplan';
 import { assetIdFor, ROTATIONS, pickRotation } from './profiles';
-import type { AnchorSpec, GroupPart, GroupSpec, PlaceProfile, ScatterSpec } from './profiles';
+import type { GroupPart, GroupSpec, PlacedAnchor, ResolvedProfile, ScatterSpec } from './profiles';
 import type { Rect } from './shapes';
 
 /** Cells of walking space kept between one piece of furniture and the next. */
@@ -407,7 +407,7 @@ function placedFootprint(footprint: Size): Size {
 }
 
 /** Every way `spec` could stand against a wall of this room. */
-function anchorCandidates(room: Room, spec: AnchorSpec, size: Size): Placement[] {
+function anchorCandidates(room: Room, spec: PlacedAnchor, size: Size): Placement[] {
   const found: Placement[] = [];
   for (const rotation of ROTATIONS) {
     const footprint = rotateFootprint(spec.footprint, rotation);
@@ -535,7 +535,7 @@ function placeOneOf(room: Room, candidates: Placement[], rng: Rng): PlacedProp[]
  * often is the cheaper of the two failures — it is also the one a person can
  * see and regenerate, where the staircase reads as the tool not listening.
  */
-function anchorOrder(params: Params, profile: PlaceProfile, rng: Rng): AnchorSpec[] {
+function anchorOrder(params: Params, profile: ResolvedProfile, rng: Rng): PlacedAnchor[] {
   const allowed = profile.anchors.filter(
     (spec) => spec.feature === undefined || !params.excluded.includes(spec.feature),
   );
@@ -575,7 +575,7 @@ function anchorOrder(params: Params, profile: PlaceProfile, rng: Rng): AnchorSpe
  * that reads the second one. `scatterProps` still reads `clutter`, which is
  * what dirt actually is.
  */
-function groupTarget(floorArea: number, params: Params, profile: PlaceProfile): number {
+function groupTarget(floorArea: number, params: Params, profile: ResolvedProfile): number {
   const furnishing = Math.min(1, Math.max(0, params.furnishing));
   const { min, max } = profile.groupsPerHundredCells;
   return Math.round((floorArea / 100) * (min + (max - min) * furnishing));
@@ -588,7 +588,7 @@ function groupTarget(floorArea: number, params: Params, profile: PlaceProfile): 
 export function placeProps(
   floorplan: Floorplan,
   params: Params,
-  profile: PlaceProfile,
+  profile: ResolvedProfile,
   rng: Rng,
 ): PlacedProp[] {
   const room = new Room(floorplan);
@@ -623,7 +623,7 @@ function scatterProps(
   room: Room,
   floor: Cell[],
   params: Params,
-  profile: PlaceProfile,
+  profile: ResolvedProfile,
   rng: Rng,
 ): PlacedProp[] {
   const specs: ScatterSpec[] = profile.scatter;

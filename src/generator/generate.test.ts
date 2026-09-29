@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { createPlaceholderLibrary } from '../assets/placeholder';
 import { cellAt, cellKey, inBounds } from '../core/grid';
 import { createRng } from '../core/prng';
 import type { Params, Place, Scene } from '../core/types';
@@ -9,6 +10,15 @@ import { profileFor } from './profiles';
 import { paramsFor } from './test-fixtures';
 import { validateScene } from './validate';
 
+/**
+ * The marking library, built once.
+ *
+ * `generate` reads it to draw a variant for each concept a profile names, and
+ * it is a parameter rather than something the generator reaches for so that a
+ * real library can take its place without the generator knowing.
+ */
+const library = createPlaceholderLibrary();
+
 const PLACE_TYPES: Place[] = [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'tavern', room: 'storeroom' }];
 
 describe('the six building-room pairs', () => {
@@ -17,7 +27,7 @@ describe('the six building-room pairs', () => {
       it(`generates a valid ${building}_${room} with its own palette`, () => {
         const place = { building, room };
         const params = paramsFor(place, { size: profileFor(place).maxSize, seed: 42 });
-        const scene = generate(params, createRng(42));
+        const scene = generate(params, createRng(42), library);
         expect(validateScene(scene)).toEqual([]);
         expect(scene.props.length).toBeGreaterThan(0);
         expect(scene.props.every((prop) =>
@@ -78,8 +88,8 @@ describe('generate', () => {
     for (const place of PLACE_TYPES) {
       const params = busy(place);
       for (const seed of [0, 1, 42, 9_999]) {
-        const first = generate(params, createRng(seed));
-        const second = generate(params, createRng(seed));
+        const first = generate(params, createRng(seed), library);
+        const second = generate(params, createRng(seed), library);
         expect(stable(second)).toBe(stable(first));
       }
     }
@@ -91,7 +101,7 @@ describe('generate', () => {
       const params = busy(place);
       const scenes = new Set<string>();
       for (let seed = 0; seed < 12; seed += 1) {
-        scenes.add(stable(generate(params, createRng(seed))));
+        scenes.add(stable(generate(params, createRng(seed), library)));
       }
       expect(`${place}: ${scenes.size} distinct`).toBe(`${place}: 12 distinct`);
     }
@@ -101,7 +111,7 @@ describe('generate', () => {
     // One param at a time, so that a change satisfied by the scatter layer
     // alone cannot stand in for one that should have moved the groups.
     const scene = (overrides: Partial<Params>): Scene =>
-      generate(busy({ building: 'tavern', room: 'hall' }, overrides), createRng(5));
+      generate(busy({ building: 'tavern', room: 'hall' }, overrides), createRng(5), library);
 
     const bare = scene({ clutter: 0, condition: 'lived_in' });
     const full = scene({ clutter: 1, condition: 'lived_in' });
@@ -125,8 +135,8 @@ describe('generate', () => {
     // Counted rather than compared as whole scenes: the two layers draw from
     // one `Rng`, so moving either number moves the sequence and every scene
     // differs from every other. What must not move is the *count*.
-    const scene = (overrides: Partial<Params>): Scene =>
-      generate(busy({ building: 'tavern', room: 'hall' }, overrides), createRng(5));
+    const scene = (overrides: Partial<Params>, seed = 5): Scene =>
+      generate(busy({ building: 'tavern', room: 'hall' }, overrides), createRng(seed), library);
     const countOf = (of: Scene, layer: 'group' | 'scatter'): number =>
       of.props.filter((prop) => prop.layer === layer).length;
 
@@ -139,11 +149,29 @@ describe('generate', () => {
       `groups at clutter 0 / 0.5 / 1: ${String(groupsByClutter[0])} / ${String(groupsByClutter[0])} / ${String(groupsByClutter[0])}`,
     );
 
-    // And furnishing is what does move it.
-    const sparse = countOf(scene({ furnishing: 0, clutter: 0.5 }), 'group');
-    const crowded = countOf(scene({ furnishing: 1, clutter: 0.5 }), 'group');
-    expect(`groups at furnishing 0 / 1: ${String(sparse)} / ${String(crowded)}`).toBe(
-      `groups at furnishing 0 / 1: ${String(sparse)} / ${String(Math.max(crowded, sparse + 1))}`,
+    // And furnishing is what does move it — over a run of seeds rather than on
+    // one, because a single plan can tie at both ends. Measured on these twelve
+    // with all seven features asked for: 238 group props at furnishing 0
+    // against 345 at furnishing 1, higher on eleven of them, and seed 5 the
+    // exception at 17 either way — a hall carrying three anchors, pillars and
+    // an alcove has as much furniture on it as the circulation rule will allow
+    // before the dial is consulted. Never *fewer* is held seed by seed, which
+    // is the half a tie cannot hide.
+    const seeds = Array.from({ length: 12 }, (_, seed) => seed);
+    const groupsAt = (furnishing: number): number[] =>
+      seeds.map((seed) => countOf(scene({ furnishing, clutter: 0.5 }, seed), 'group'));
+    const sparseBySeed = groupsAt(0);
+    const crowdedBySeed = groupsAt(1);
+    for (const seed of seeds) {
+      expect(`seed ${String(seed)}: ${String(crowdedBySeed[seed])} >= ${String(sparseBySeed[seed])}`).toBe(
+        `seed ${String(seed)}: ${String(Math.max(crowdedBySeed[seed], sparseBySeed[seed]))} >= ${String(sparseBySeed[seed])}`,
+      );
+    }
+    const total = (counts: number[]): number => counts.reduce((sum, count) => sum + count, 0);
+    const sparse = total(sparseBySeed);
+    const crowded = total(crowdedBySeed);
+    expect(`groups at furnishing 0 / 1 over ${String(seeds.length)} seeds: ${String(sparse)} / ${String(crowded)}`).toBe(
+      `groups at furnishing 0 / 1 over ${String(seeds.length)} seeds: ${String(sparse)} / ${String(Math.max(crowded, sparse + 1))}`,
     );
 
     // The other direction. A bare floor has nothing strewn on it whatever the
@@ -159,7 +187,7 @@ describe('generate', () => {
   it('produces a scene that passes its own validation, over every place and seed', () => {
     for (const place of PLACE_TYPES) {
       for (let seed = 0; seed < 25; seed += 1) {
-        const scene = generate(busy(place), createRng(seed));
+        const scene = generate(busy(place), createRng(seed), library);
         const issues = validateScene(scene);
         expect(`${place}/${seed}: ${issues.map((i) => i.message).join('; ')}`).toBe(
           `${place}/${seed}: `,
@@ -174,7 +202,7 @@ describe('generate', () => {
         for (const condition of ['tidy', 'ruined'] as Params['condition'][]) {
           for (let seed = 0; seed < 8; seed += 1) {
             const params = busy(place, { clutter, condition });
-            expect(validateScene(generate(params, createRng(seed)))).toEqual([]);
+            expect(validateScene(generate(params, createRng(seed), library))).toEqual([]);
           }
         }
       }
@@ -185,13 +213,13 @@ describe('generate', () => {
     for (const place of PLACE_TYPES) {
       const params = busy(place, { size: profileFor(place).minSize, doorCount: 1 });
       for (let seed = 0; seed < 15; seed += 1) {
-        expect(validateScene(generate(params, createRng(seed)))).toEqual([]);
+        expect(validateScene(generate(params, createRng(seed), library))).toEqual([]);
       }
     }
   });
 
   it('refuses a place type it has no profile for', () => {
-    expect(() => generate(paramsFor({ building: 'tavern', room: 'cellar' } as unknown as Place), createRng(1))).toThrow(
+    expect(() => generate(paramsFor({ building: 'tavern', room: 'cellar' } as unknown as Place), createRng(1), library)).toThrow(
       'unknown place',
     );
   });
@@ -203,7 +231,7 @@ describe('generate', () => {
     // every free cell in the room takes a piece of debris — in a scene that
     // still passes `validateScene`, so nothing downstream notices either.
     const params = busy({ building: 'tavern', room: 'hall' }, { condition: 'scorched' as Params['condition'] });
-    expect(() => generate(params, createRng(1))).toThrow('unknown condition');
+    expect(() => generate(params, createRng(1), library)).toThrow('unknown condition');
   });
 
   it('refuses a light level outside the closed vocabulary', () => {
@@ -211,7 +239,7 @@ describe('generate', () => {
     // comes back `undefined` and slips past a `!== null` test into a raw
     // `TypeError` from inside the generator.
     const params = busy({ building: 'tavern', room: 'hall' }, { light: 'candlelit' as Params['light'] });
-    expect(() => generate(params, createRng(1))).toThrow('unknown light level');
+    expect(() => generate(params, createRng(1), library)).toThrow('unknown light level');
   });
 
   it('refuses a condition that is only a key of Object.prototype', () => {
@@ -225,7 +253,7 @@ describe('generate', () => {
     // 254 floor cells, in a scene `validateScene` had no complaint about.
     for (const key of ['toString', 'constructor', 'valueOf', '__proto__', 'hasOwnProperty']) {
       const params = busy({ building: 'tavern', room: 'hall' }, { condition: key as Params['condition'] });
-      expect(() => generate(params, createRng(1))).toThrow(`unknown condition '${key}'`);
+      expect(() => generate(params, createRng(1), library)).toThrow(`unknown condition '${key}'`);
     }
   });
 
@@ -236,13 +264,13 @@ describe('generate', () => {
     // silently unlit but for its hearth.
     for (const key of ['toString', 'constructor', 'valueOf', '__proto__', 'hasOwnProperty']) {
       const params = busy({ building: 'tavern', room: 'hall' }, { light: key as Params['light'] });
-      expect(() => generate(params, createRng(1))).toThrow(`unknown light level '${key}'`);
+      expect(() => generate(params, createRng(1), library)).toThrow(`unknown light level '${key}'`);
     }
   });
 
   it('refuses a place type that is only a key of Object.prototype', () => {
     for (const key of ['toString', 'constructor', 'valueOf', '__proto__', 'hasOwnProperty']) {
-      expect(() => generate(paramsFor({ building: key, room: 'hall' } as unknown as Place), createRng(1))).toThrow(
+      expect(() => generate(paramsFor({ building: key, room: 'hall' } as unknown as Place), createRng(1), library)).toThrow(
         `unknown place '${key}_hall'`,
       );
     }
@@ -255,7 +283,7 @@ describe('the scene generate returns', () => {
       [0, 1, 2, 3, 4].map((seed) => ({
         place,
         seed,
-        scene: generate(busy(place), createRng(seed)),
+        scene: generate(busy(place), createRng(seed), library),
       })),
     );
 
@@ -308,7 +336,7 @@ describe('the scene generate returns', () => {
 
 describe('the lights of a scene', () => {
   it('lights a hearth from where the hearth stands', () => {
-    const scene = generate(busy({ building: 'tavern', room: 'hall' }, { light: 'dark' }), createRng(2));
+    const scene = generate(busy({ building: 'tavern', room: 'hall' }, { light: 'dark' }), createRng(2), library);
     const hearth = scene.props.filter((prop) => prop.assetId === 'anchor/hearth');
     expect(hearth).toHaveLength(1);
     expect(scene.lights).toHaveLength(1);
@@ -319,7 +347,7 @@ describe('the lights of a scene', () => {
   });
 
   it('hangs no lamp in a room described as dark', () => {
-    const scene = generate(busy({ building: 'tavern', room: 'storeroom' }, { light: 'dark', features: [] }), createRng(3));
+    const scene = generate(busy({ building: 'tavern', room: 'storeroom' }, { light: 'dark', features: [] }), createRng(3), library);
     expect(scene.lights).toEqual([]);
   });
 
@@ -327,7 +355,7 @@ describe('the lights of a scene', () => {
     // The ambient level costs no draw from the rng, so the three rooms are
     // furnished identically and the only difference is the lamps.
     const count = (light: Params['light']): number =>
-      generate(busy({ building: 'tavern', room: 'hall' }, { light, features: [] }), createRng(4)).lights.length;
+      generate(busy({ building: 'tavern', room: 'hall' }, { light, features: [] }), createRng(4), library).lights.length;
     expect(count('bright')).toBeGreaterThan(count('dim'));
     expect(count('dim')).toBeGreaterThan(count('dark'));
   });
@@ -335,7 +363,7 @@ describe('the lights of a scene', () => {
   it('puts every light on a floor cell, inside the grid', () => {
     for (const place of PLACE_TYPES) {
       for (let seed = 0; seed < 8; seed += 1) {
-        const scene = generate(busy(place, { light: 'bright' }), createRng(seed));
+        const scene = generate(busy(place, { light: 'bright' }), createRng(seed), library);
         for (const source of scene.lights) {
           expect(inBounds(source.cell, scene.floorplan.size)).toBe(true);
           expect(cellAt(scene.floorplan.cells, source.cell)).toBe('floor');

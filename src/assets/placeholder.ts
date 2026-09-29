@@ -125,7 +125,15 @@ export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   { id: 'anchor/hearth_small', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['hearth', 'stone', 'light'], againstWall: true },
   { id: 'anchor/stairs_up', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['stairs', 'wood'], againstWall: true },
   { id: 'anchor/bed', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['bed', 'furniture', 'wood'], againstWall: true },
-  { id: 'anchor/bunk_beds', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['bunks', 'bed', 'furniture', 'wood'], againstWall: true },
+  // **`bed` is deliberately not on this one, and its absence is the whole of
+  // what makes `bed` a concept a room can ask for.** The generator resolves an
+  // anchor by querying the concept and the slot's footprint, and `bed` at 2x3
+  // otherwise matched `bed`, `cot` **and** these: three assets, of which two
+  // carry `wood` and `furniture`, so no tag a tavern could prefer tells the
+  // guest bed from the bunks. A room that declares both — the guest room does —
+  // could then have drawn the same bunks into both of its slots. `iron_bunks`,
+  // the dungeon's, never carried `bed`; this is the two being made to agree.
+  { id: 'anchor/bunk_beds', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['bunks', 'furniture', 'wood'], againstWall: true },
   { id: 'anchor/wardrobe', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['storage', 'furniture', 'wood'], againstWall: true },
   { id: 'anchor/shelf_row', kind: 'anchor', footprint: { w: 4, h: 1 }, tags: ['shelving', 'storage', 'wood'], againstWall: true },
   { id: 'anchor/shelf_row_short', kind: 'anchor', footprint: { w: 3, h: 1 }, tags: ['shelving', 'storage', 'wood'], againstWall: true },

@@ -12,7 +12,7 @@
  * Every measurement here is in grid cells.
  */
 
-import type { Building, Cell, Place, PlacedProp, RoomKind, Rotation, Size } from '../core/types';
+import type { AssetDef, AssetLibrary, Building, Cell, Place, PlacedProp, RoomKind, Rotation, Size } from '../core/types';
 import type { Rng } from '../core/types';
 
 /** The four rotations, in clockwise order. */
@@ -184,7 +184,18 @@ export type ShapeName = 'rectangle' | 'l_shape' | 't_shape' | 'alcove';
  * reading. A bar counter, a hearth, a bed.
  */
 export type AnchorSpec = {
-  assetId: string;
+  /**
+   * What this slot holds, as a word from `CONCEPTS` rather than as the id of
+   * one asset.
+   *
+   * The variant is chosen at generation time, by asking the library for
+   * everything carrying the concept at this footprint and preferring what
+   * carries the room's palette — see `resolveAssets`. That is the whole of what
+   * a building's filling used to say by naming `hearth` in a tavern and
+   * `stone_hearth` in a dungeon, with the difference that a variant added to
+   * the library arrives on the map without this table being touched.
+   */
+  concept: Concept;
   /**
    * The unrotated footprint: `w` runs along the wall, `h` is the depth away
    * from it. At rotation 0 the prop's back is against a wall to its north;
@@ -209,6 +220,17 @@ export type AnchorSpec = {
   light?: { radiusCells: number; colorHex: string };
 };
 
+/**
+ * An anchor with its variant drawn: what the placement layer is handed.
+ *
+ * Separate from `AnchorSpec` because the two are true at different moments. A
+ * profile read out of the registry has a concept and no asset; only
+ * `resolveAssets`, which has a library and an `Rng`, can say which piece the
+ * room gets. Keeping them one type would have meant an `assetId` that is
+ * sometimes a string and sometimes nothing, checked nowhere.
+ */
+export type PlacedAnchor = AnchorSpec & { assetId: string };
+
 /** One prop inside a group template, positioned relative to the group's box. */
 export type GroupPart = { assetId: string; offset: Cell; footprint: Size };
 
@@ -224,8 +246,53 @@ export type GroupSpec = {
   parts: GroupPart[];
 };
 
-/** A layer-three prop: loose debris, drawn per cell. */
+/**
+ * A layer-three prop: loose debris, drawn per cell.
+ *
+ * Resolved, like `PlacedAnchor`. The registry declares the *tags* a room's
+ * debris carries and the pool is whatever the library answers with, so this
+ * type only ever exists on the far side of `resolveAssets`.
+ */
 export type ScatterSpec = { assetId: string; weight: number };
+
+/**
+ * Every concept a room may ask for, and the `FEATURE_VOCABULARY` word that asks
+ * for it by name.
+ *
+ * **Explicit rather than inferred**, and it is worth saying what was rejected:
+ * the catalogue happens to list an asset's concept first in its tags today, so
+ * "the first tag is the concept" would work — and would be a convention held up
+ * by nothing, which the next asset breaks silently. This table is where the
+ * word is, and `profileFor` holds a slot's `feature` to the concept it names.
+ *
+ * Five carry a feature and four do not, and the four are not an omission. A
+ * featureless anchor cannot appear in `Params.excluded`, so it is the piece of
+ * a room no description can take away — the sarcophagus in a crypt, the weapon
+ * rack in a dungeon hall. Which slots are featureless is the *building's*
+ * business and is declared on the filling; this table says which words *may*
+ * ask, so that a slot cannot claim to be asked for by a word that names
+ * something else.
+ */
+export const CONCEPTS = {
+  bar: { feature: 'bar' },
+  bed: {},
+  bunks: { feature: 'bunks' },
+  hearth: { feature: 'hearth' },
+  shelving: { feature: 'shelving' },
+  stairs: { feature: 'stairs' },
+  storage: {},
+  tomb: {},
+  weapons: {},
+} satisfies Record<string, { feature?: string }>;
+
+/** A word a room may ask the library for. */
+export type Concept = keyof typeof CONCEPTS;
+
+/** The feature word that asks for `concept`, if any asks for it at all. */
+function featureOf(concept: Concept): string | undefined {
+  const declared: { feature?: string } = CONCEPTS[concept];
+  return declared.feature;
+}
 
 // --- The registry ----------------------------------------------------------
 
@@ -253,6 +320,33 @@ export type PlaceProfile = {
   groups: GroupSpec[];
   /** Chance a free floor cell takes a scatter prop, at clutter 1. */
   scatterChance: number;
+  /** The tags this room's debris carries. The pool is whatever the library answers with. */
+  scatterTags: string[];
+  /**
+   * The room's palette, as tags, **most particular first**.
+   *
+   * Read as a ladder rather than as a set: `resolveAssets` takes the first tag
+   * any candidate carries and chooses among those, so `['weapons', 'dungeon',
+   * 'stone']` says "an armoury piece if there is one, otherwise a dungeon one,
+   * otherwise a stone one". A flat set cannot do this job, and that is measured
+   * rather than assumed — a tavern needs `stone` to tell `hearth` from
+   * `stone_hearth` at 3x2 and needs *not* `stone` to tell `stairs_up` from
+   * `stone_stairs` at 2x3, so no single set separates both.
+   *
+   * **It orders; it does not filter.** If nothing in the ladder matches, the
+   * whole candidate list stands and the room gets the piece anyway. That is the
+   * same answer `resolve.ts` gives a feature that does not fit and `anchorOrder`
+   * gives an excluded one: leave nothing out silently.
+   */
+  assetTags: string[];
+};
+
+/**
+ * A profile with its variants drawn — what the placement and lighting stages
+ * are handed, and the only shape in which a profile names an asset.
+ */
+export type ResolvedProfile = Omit<PlaceProfile, 'anchors'> & {
+  anchors: PlacedAnchor[];
   scatter: ScatterSpec[];
 };
 
@@ -277,7 +371,6 @@ type RoomGeometry = {
   groupsPerHundredCells: { min: number; max: number };
   groups: (Omit<GroupSpec, 'parts'> & { parts: Omit<GroupPart, 'assetId'>[] })[];
   scatterChance: number;
-  scatter: Pick<ScatterSpec, 'weight'>[];
 };
 
 /**
@@ -317,9 +410,16 @@ type RoomFilling = {
   floorMaterials: string[];
   wallMaterials: Record<string, string>;
   defaultWallMaterial: string;
-  anchors: Pick<AnchorSpec, 'assetId' | 'feature' | 'light'>[];
+  anchors: Pick<AnchorSpec, 'concept' | 'feature' | 'light'>[];
   groups: string[][];
-  scatter: string[];
+  /** The tags this room's debris carries, queried against the library. */
+  scatterTags: string[];
+  /**
+   * This room's palette ladder, where it is not the building's. See
+   * `PlaceProfile.assetTags`; two rooms need one of their own, and both are
+   * rooms whose furniture is not what the rest of the building's is.
+   */
+  assetTags?: string[];
   words: RoomWords;
 };
 
@@ -335,6 +435,8 @@ type RoomFilling = {
  * what the exact `Record` on `ROOMS` buys at compile time and this one cannot.
  */
 type BuildingPalette = {
+  /** The palette every room of this building uses unless it declares its own. */
+  assetTags: string[];
   rooms: Partial<Record<RoomKind, RoomFilling>>;
 };
 
@@ -392,7 +494,6 @@ export const ROOM_REGISTRY = {
       },
     ],
     scatterChance: 0.16,
-    scatter: [{ weight: 4 }, { weight: 2 }, { weight: 2 }, { weight: 1 }],
   },
   room: {
     minSize: { w: 6, h: 6 },
@@ -420,7 +521,6 @@ export const ROOM_REGISTRY = {
       },
     ],
     scatterChance: 0.12,
-    scatter: [{ weight: 3 }, { weight: 2 }, { weight: 1 }],
   },
   storeroom: {
     minSize: { w: 8, h: 6 },
@@ -454,7 +554,6 @@ export const ROOM_REGISTRY = {
       },
     ],
     scatterChance: 0.18,
-    scatter: [{ weight: 3 }, { weight: 2 }, { weight: 3 }],
   },
   /**
    * The burial chamber. A dungeon has one; a tavern does not.
@@ -547,12 +646,11 @@ export const ROOM_REGISTRY = {
         ],
       },
     ],
-    // Above the hall's 0.16: dust and bone underfoot is what a catacomb is, and
-    // `shard` is in the dungeon's filling because "cacos de piso quebrado" is
-    // what the description that started this asked for and there was nowhere for
-    // it to land.
+    // Above the hall's 0.16: dust and bone underfoot is what a catacomb is.
+    // "cacos de piso quebrado" is what the description that started this asked
+    // for, and `scatter/shard` is in the pool the dungeon's `debris` tag
+    // answers with, so there is somewhere for it to land.
     scatterChance: 0.2,
-    scatter: [{ weight: 4 }, { weight: 2 }, { weight: 3 }, { weight: 2 }, { weight: 2 }],
   },
 } satisfies Record<string, RoomGeometry>;
 
@@ -577,21 +675,29 @@ export const ROOMS: Record<RoomKind, RoomGeometry> = ROOM_REGISTRY;
  */
 export const BUILDING_REGISTRY = {
   tavern: {
+    // Wood first, then stone: an inn is built of timber and falls back to
+    // masonry for the pieces there is no wooden version of — the hearth.
+    assetTags: ['wood', 'stone'],
     rooms: {
       hall: {
         floorMaterials: ['wood_plank', 'flagstone'],
         wallMaterials: { wood_plank: 'timber_wall', flagstone: 'stone_wall' },
         defaultWallMaterial: 'stone_wall',
         anchors: [
-          { assetId: 'bar_counter', feature: 'bar' },
-          { assetId: 'hearth', feature: 'hearth', light: { radiusCells: 6, colorHex: '#ffb46b' } },
-          { assetId: 'stairs_up', feature: 'stairs' },
+          { concept: 'bar', feature: 'bar' },
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 6, colorHex: '#ffb46b' } },
+          { concept: 'stairs', feature: 'stairs' },
         ],
         groups: [
           ['table_round', 'chair', 'chair', 'chair', 'chair'],
           ['bench', 'table_long', 'bench'],
         ],
-        scatter: ['mug', 'stool', 'bottle', 'straw'],
+        scatterTags: ['clutter'],
+        // `tableware` is the tavern's, and only the common room's: it is what
+        // makes a mug and a bottle the likely litter of a taproom. It never
+        // reaches an anchor — every anchor slot in a tavern is settled by
+        // `wood` or `stone` before the ladder gets this far.
+        assetTags: ['wood', 'stone', 'tableware'],
         words: {
           name: 'Salão de taverna',
           criterion: 'Salão comum da taverna, com mesas, balcão e fregueses',
@@ -603,14 +709,14 @@ export const BUILDING_REGISTRY = {
         wallMaterials: { wood_plank: 'plaster_wall' },
         defaultWallMaterial: 'plaster_wall',
         anchors: [
-          { assetId: 'bed' },
-          { assetId: 'bunk_beds', feature: 'bunks' },
-          { assetId: 'wardrobe' },
-          { assetId: 'shelf_row_short', feature: 'shelving' },
-          { assetId: 'hearth_small', feature: 'hearth', light: { radiusCells: 4, colorHex: '#ffb46b' } },
+          { concept: 'bed' },
+          { concept: 'bunks', feature: 'bunks' },
+          { concept: 'storage' },
+          { concept: 'shelving', feature: 'shelving' },
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 4, colorHex: '#ffb46b' } },
         ],
         groups: [['table_small', 'chair']],
-        scatter: ['mug', 'bottle', 'straw'],
+        scatterTags: ['clutter'],
         words: {
           name: 'Quarto de taverna',
           criterion: 'Quarto de hóspedes da taverna, com cama',
@@ -622,11 +728,11 @@ export const BUILDING_REGISTRY = {
         wallMaterials: { stone_floor: 'stone_wall', dirt_floor: 'stone_wall' },
         defaultWallMaterial: 'stone_wall',
         anchors: [
-          { assetId: 'shelf_row', feature: 'shelving' },
-          { assetId: 'stairs_up', feature: 'stairs' },
+          { concept: 'shelving', feature: 'shelving' },
+          { concept: 'stairs', feature: 'stairs' },
         ],
         groups: [['crate', 'crate_small', 'barrel'], ['barrel', 'barrel']],
-        scatter: ['sack', 'shard', 'straw'],
+        scatterTags: ['clutter'],
         words: {
           name: 'Depósito de taverna',
           criterion: 'Depósito, porão ou adega da taverna, com barris e mantimentos',
@@ -640,21 +746,23 @@ export const BUILDING_REGISTRY = {
     },
   },
   dungeon: {
+    // The other way round, and for the same reason from the other side.
+    assetTags: ['dungeon', 'stone'],
     rooms: {
       hall: {
         floorMaterials: ['flagstone', 'stone_floor'],
         wallMaterials: { flagstone: 'stone_wall', stone_floor: 'stone_wall' },
         defaultWallMaterial: 'stone_wall',
         anchors: [
-          { assetId: 'weapon_rack' },
-          { assetId: 'stone_hearth', feature: 'hearth', light: { radiusCells: 6, colorHex: '#ffb46b' } },
-          { assetId: 'stone_stairs', feature: 'stairs' },
+          { concept: 'weapons' },
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 6, colorHex: '#ffb46b' } },
+          { concept: 'stairs', feature: 'stairs' },
         ],
         groups: [
           ['war_table', 'guard_stool', 'guard_stool', 'guard_stool', 'guard_stool'],
           ['stone_bench', 'war_table_long', 'stone_bench'],
         ],
-        scatter: ['bone', 'broken_chain', 'rubble', 'dust'],
+        scatterTags: ['debris'],
         words: {
           name: 'Salão da masmorra',
           criterion: 'Sala comum ou da guarda da masmorra',
@@ -666,14 +774,14 @@ export const BUILDING_REGISTRY = {
         wallMaterials: { flagstone: 'stone_wall', stone_floor: 'stone_wall' },
         defaultWallMaterial: 'stone_wall',
         anchors: [
-          { assetId: 'cot' },
-          { assetId: 'iron_bunks', feature: 'bunks' },
-          { assetId: 'lockers' },
-          { assetId: 'wall_rack', feature: 'shelving' },
-          { assetId: 'wall_torch', light: { radiusCells: 4, colorHex: '#ffb46b' } },
+          { concept: 'bed' },
+          { concept: 'bunks', feature: 'bunks' },
+          { concept: 'storage' },
+          { concept: 'shelving', feature: 'shelving' },
+          { concept: 'hearth', light: { radiusCells: 4, colorHex: '#ffb46b' } },
         ],
         groups: [['prison_desk', 'guard_stool']],
-        scatter: ['bone', 'broken_chain', 'dust'],
+        scatterTags: ['debris'],
         words: {
           name: 'Cela da masmorra',
           criterion: 'Cela ou quarto da masmorra, com catre',
@@ -684,9 +792,12 @@ export const BUILDING_REGISTRY = {
         floorMaterials: ['flagstone', 'stone_floor'],
         wallMaterials: { flagstone: 'stone_wall', stone_floor: 'stone_wall' },
         defaultWallMaterial: 'stone_wall',
-        anchors: [{ assetId: 'armory_rack', feature: 'shelving' }, { assetId: 'stone_stairs', feature: 'stairs' }],
+        anchors: [{ concept: 'shelving', feature: 'shelving' }, { concept: 'stairs', feature: 'stairs' }],
         groups: [['supply_crate', 'small_crate', 'weapon_bundle'], ['weapon_bundle', 'weapon_bundle']],
-        scatter: ['loose_arrow', 'rubble', 'dust'],
+        scatterTags: ['debris'],
+        // An arsenal's own floor: `weapons` first, so a loose arrow is the piece
+        // this room is likeliest to be strewn with.
+        assetTags: ['weapons', 'dungeon', 'stone'],
         words: {
           name: 'Arsenal da masmorra',
           criterion: 'Arsenal ou depósito da masmorra, com armas e caixotes',
@@ -706,20 +817,27 @@ export const BUILDING_REGISTRY = {
           // exists for: that description excluded `hearth` along with `stairs`,
           // so the brazier never entered the draw and the crypt came back as a
           // sarcophagus and a bone niche.
-          { assetId: 'sarcophagus' },
-          { assetId: 'bone_niche', feature: 'shelving' },
+          { concept: 'tomb' },
+          { concept: 'shelving', feature: 'shelving' },
           // The only light this room has, and it is worth saying that the room
           // usually has none: a crypt described the archetypal way is described
           // as dark, `hearth` is read as refused, and the brazier is dropped —
           // so `Scene.lights` comes back empty. That is the honest reading of
           // the sentence and not a fault; the v1 renderer draws no light anyway.
-          { assetId: 'votive_brazier', feature: 'hearth', light: { radiusCells: 3, colorHex: '#ffb46b' } },
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 3, colorHex: '#ffb46b' } },
         ],
         groups: [
           ['grave_slab', 'slab_lid', 'grave_marker'],
           ['funerary_urn', 'funerary_urn'],
         ],
-        scatter: ['bone', 'skull', 'rubble', 'shard', 'dust'],
+        scatterTags: ['debris'],
+        // `tomb` rather than `dungeon`, and this is the room that proves the
+        // ladder has to be a room's and not only a building's. The three pieces
+        // that make a crypt read as a crypt are each the *third* candidate at
+        // their footprint — `bone_niche` behind `shelf_row` and `armory_rack`,
+        // `votive_brazier` behind `hearth_small` and `wall_torch` — and
+        // `dungeon` picks the guard room's piece every time.
+        assetTags: ['tomb', 'stone'],
         words: {
           name: 'Cripta da masmorra',
           // **Measured, and the other three criteria were left alone because
@@ -830,10 +948,21 @@ export function profileFor(place: Place): PlaceProfile {
   if (filling.anchors.length !== geometry.anchors.length ||
       filling.groups.length !== geometry.groups.length ||
       geometry.groups.some((group, index) => filling.groups[index].length !== group.parts.length) ||
-      filling.scatter.length !== geometry.scatter.length ||
-      filling.anchors.some((slot) => !slot.assetId) || filling.groups.some((group) => group.some((id) => !id)) ||
-      filling.scatter.some((id) => !id)) {
+      filling.anchors.some((slot) => !slot.concept) || filling.groups.some((group) => group.some((id) => !id))) {
     throw new Error(`invalid slot filling for '${place.building}_${place.room}'`);
+  }
+  // A slot may be asked for by the word that names its concept, or by no word
+  // at all. Any other pairing is a request that would be answered by the wrong
+  // piece of furniture: `anchorOrder` puts a requested anchor first and drops an
+  // excluded one by this word alone, so a `bunks` slot claiming `hearth` would
+  // make "sem lareira" take the beds out of the room. Nothing else checks it —
+  // `feature` is the building's to declare and `CONCEPTS` is the project's.
+  for (const slot of filling.anchors) {
+    if (slot.feature !== undefined && slot.feature !== featureOf(slot.concept)) {
+      throw new Error(
+        `feature '${slot.feature}' does not ask for concept '${slot.concept}' in '${place.building}_${place.room}'`,
+      );
+    }
   }
   return {
     place,
@@ -841,6 +970,8 @@ export function profileFor(place: Place): PlaceProfile {
     floorMaterials: filling.floorMaterials,
     wallMaterials: filling.wallMaterials,
     defaultWallMaterial: filling.defaultWallMaterial,
+    assetTags: filling.assetTags ?? building.assetTags,
+    scatterTags: filling.scatterTags,
     anchors: geometry.anchors.map((slot, index) => ({ ...slot, ...filling.anchors[index] })),
     groups: geometry.groups.map((group, groupIndex) => ({
       ...group,
@@ -848,8 +979,96 @@ export function profileFor(place: Place): PlaceProfile {
         ...slot, assetId: filling.groups[groupIndex][index],
       })),
     })),
-    scatter: geometry.scatter.map((slot, index) => ({ ...slot, assetId: filling.scatter[index] })),
   };
+}
+
+/**
+ * How much likelier a scatter piece is to be drawn for carrying the room's
+ * palette.
+ *
+ * Three rather than a filter, and that is the same decision as the anchor
+ * ladder made for a pool instead of for a single choice. Narrowing the pool to
+ * the palette would empty it: a crypt's `tomb` matches one piece of debris in
+ * the whole library, and a floor strewn with nothing but skulls is not a
+ * crypt. Weighting keeps every piece the tags answered with reachable and still
+ * lets the room's own litter dominate.
+ */
+const PALETTE_SCATTER_WEIGHT = 3;
+
+/**
+ * The candidates the palette prefers, or all of them.
+ *
+ * The ladder is walked in order and the **first** tag anything carries wins, so
+ * a room whose palette is `['weapons', 'dungeon', 'stone']` takes the armoury
+ * piece when there is one and never weighs it against a merely stone one. An
+ * empty answer at every rung hands back the whole list: this orders, it does
+ * not filter.
+ */
+function preferred(candidates: AssetDef[], assetTags: string[]): AssetDef[] {
+  for (const tag of assetTags) {
+    const carrying = candidates.filter((def) => def.tags.includes(tag));
+    if (carrying.length > 0) {
+      return carrying;
+    }
+  }
+  return candidates;
+}
+
+/**
+ * An asset's own name, without the kind it is filed under.
+ *
+ * The profiles name the *name* and the layer supplies the kind, through
+ * `assetIdFor`, so that a shelf declared as an anchor can never be emitted
+ * under a group id. The library is indexed by the whole id, so a variant that
+ * came back from a query has to be cut back down to the half the profile
+ * speaks in.
+ */
+function assetNameOf(def: AssetDef): string {
+  return def.id.slice(def.id.lastIndexOf('/') + 1);
+}
+
+/**
+ * `profile` with a variant drawn for every concept it names.
+ *
+ * This is the one place in the generator that reads the asset library, and it
+ * runs before stage one so that the three stages stay pure functions of a
+ * profile that already knows what it holds.
+ *
+ * @throws {Error} if the library has nothing carrying a slot's concept at that
+ *                 slot's footprint.
+ *
+ * The guard is worded for the slot on purpose, and it is not redundant with
+ * what `Rng` does. `createRng`'s `pick` refuses an empty array on its own, but
+ * it says `pick() needs a non-empty array` from two frames deeper and names
+ * neither the concept nor the room — and `Rng` is an interface: the
+ * generator's own test fixtures index the array instead, so `pick([])` there is
+ * `undefined` with no throw at all. That becomes the id `anchor/undefined`, a
+ * prop the renderer cannot draw, on a scene `validateScene` passes in full.
+ *
+ * The footprint is part of the question rather than a filter applied after,
+ * because a slot's footprint is structural: placement is computed from it, and
+ * a 3x1 shelf standing in a 4x1 slot is a hole in the wall. It is also what
+ * keeps `hearth` meaning two different pieces in a hall and in a guest room.
+ */
+export function resolveAssets(profile: PlaceProfile, library: AssetLibrary, rng: Rng): ResolvedProfile {
+  const anchors = profile.anchors.map((spec) => {
+    const candidates = library
+      .query([spec.concept], 'anchor')
+      .filter((def) => def.footprint.w === spec.footprint.w && def.footprint.h === spec.footprint.h);
+    if (candidates.length === 0) {
+      throw new Error(
+        `no anchor for concept '${spec.concept}' at ${String(spec.footprint.w)}x${String(spec.footprint.h)}`,
+      );
+    }
+    return { ...spec, assetId: assetNameOf(rng.pick(preferred(candidates, profile.assetTags))) };
+  });
+
+  const scatter = library.query(profile.scatterTags, 'scatter').map((def) => ({
+    assetId: assetNameOf(def),
+    weight: def.tags.some((tag) => profile.assetTags.includes(tag)) ? PALETTE_SCATTER_WEIGHT : 1,
+  }));
+
+  return { ...profile, anchors, scatter };
 }
 
 

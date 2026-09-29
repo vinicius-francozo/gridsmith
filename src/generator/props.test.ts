@@ -1,16 +1,33 @@
 import { describe, expect, it } from 'vitest';
 
+import { createPlaceholderLibrary } from '../assets/placeholder';
 import { cellAt, cellKey, inBounds, step } from '../core/grid';
 import { createRng } from '../core/prng';
 import type { Cell, Facing, Floorplan, Place, PlacedProp, Rotation, Size } from '../core/types';
 import { buildFloorplan, opposite } from './floorplan';
-import { assetIdFor, profileFor, ROTATIONS } from './profiles';
-import type { GroupPart, PlaceProfile } from './profiles';
+import { assetIdFor, profileFor, resolveAssets, ROTATIONS } from './profiles';
+import type { GroupPart, ResolvedProfile } from './profiles';
 import { placeProps, rotateFootprint, rotateTemplate } from './props';
 import { paramsFor, planFrom } from './test-fixtures';
 import type { Params } from '../core/types';
 
 const PLACE_TYPES: Place[] = [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'tavern', room: 'storeroom' }];
+
+const library = createPlaceholderLibrary();
+
+/**
+ * A profile with its variants drawn, the way `generate` hands one to this
+ * stage.
+ *
+ * The seed is here because the draw is one: a slot names a concept and the
+ * library is asked which pieces carry it at that footprint. It settles to one
+ * candidate for every slot the seven rooms declare today, so nothing below
+ * depends on which seed this is — but the argument is real, and a variant added
+ * to the library would make it matter.
+ */
+function resolved(place: Place, rng = createRng(1)): ResolvedProfile {
+  return resolveAssets(profileFor(place), library, rng);
+}
 
 /** Which wall a prop has its back to, per rotation. Mirrors `BACK_OF`. */
 const BACK: Record<Rotation, Facing> = { 0: 'n', 90: 'e', 180: 's', 270: 'w' };
@@ -39,15 +56,19 @@ function furnished(
   place: Place,
   seed: number,
   overrides: Partial<Params> = {},
-): { profile: PlaceProfile; floorplan: Floorplan; props: PlacedProp[] } {
-  const profile = profileFor(place);
+): { profile: ResolvedProfile; floorplan: Floorplan; props: PlacedProp[] } {
+  // One `Rng`, drawn from in the order `generate` draws from it: the variants
+  // first, then the plan, then the props. A second generator here would let
+  // this helper agree with the real pipeline on the assets and disagree on
+  // every rotation.
+  const rng = createRng(seed);
+  const profile = resolved(place, rng);
   const params = paramsFor(place, {
     size: profile.maxSize,
     doorCount: 2,
     features: ANCHOR_FEATURES,
     ...overrides,
   });
-  const rng = createRng(seed);
   const { floorplan } = buildFloorplan(params, profile, rng);
   return { profile, floorplan, props: placeProps(floorplan, params, profile, rng) };
 }
@@ -224,7 +245,7 @@ describe('the anchor layer', () => {
   it('puts a corner anchor against a second wall at right angles to the first', () => {
     const cornerAnchors = new Set(
       PLACE_TYPES.flatMap((place) =>
-        profileFor(place)
+        resolved(place)
           .anchors.filter((spec) => spec.placement === 'corner')
           .map((spec) => assetIdFor('anchor', spec.assetId)),
       ),
@@ -308,7 +329,7 @@ describe('the anchor a feature asks for by name', () => {
    * over a run of seeds wide enough that luck cannot carry it.
    */
   const REQUESTS = PLACE_TYPES.flatMap((place) =>
-    profileFor(place)
+    resolved(place)
       .anchors.filter((spec) => spec.feature !== undefined)
       .map((spec) => ({
         place,
@@ -429,7 +450,7 @@ describe('the whole prop set', () => {
     // exactly what a group part handed back by identity at rotation 0 or 180
     // used to do.
     const profileShape = (place: Place): string => {
-      const profile = profileFor(place);
+      const profile = resolved(place);
       return JSON.stringify([profile.anchors, profile.groups, profile.scatter]);
     };
 
@@ -466,7 +487,7 @@ describe('the whole prop set', () => {
     // for word what the frozen contract warns about, and the anchors have
     // this test while the groups did not.
     /** Group part ids that name exactly one footprint, and a non-square one. */
-    const turnable = (profile: PlaceProfile): Map<string, Size> => {
+    const turnable = (profile: ResolvedProfile): Map<string, Size> => {
       const declared = new Map<string, Size[]>();
       for (const group of profile.groups) {
         for (const part of group.parts) {
@@ -486,7 +507,7 @@ describe('the whole prop set', () => {
 
     let quarterTurned = 0;
     for (const place of PLACE_TYPES) {
-      const known = turnable(profileFor(place));
+      const known = turnable(resolved(place));
       for (let seed = 0; seed < 20; seed += 1) {
         for (const prop of furnished(place, seed).props) {
           const unturned = prop.layer === 'group' ? known.get(prop.assetId) : undefined;
@@ -561,13 +582,16 @@ describe('the scatter layer', () => {
     }
 
     const drawn = (name: string): number => counts.get(assetIdFor('scatter', name)) ?? 0;
-    for (const spec of profileFor({ building: 'tavern', room: 'hall' }).scatter) {
+    for (const spec of resolved({ building: 'tavern', room: 'hall' }).scatter) {
       expect(`${spec.assetId} at weight ${spec.weight}: ${drawn(spec.assetId)} drawn`).not.toBe(
         `${spec.assetId} at weight ${spec.weight}: 0 drawn`,
       );
     }
-    // A mug carries four times the weight of straw; twice as many is the
-    // loosest claim that still separates the weights from a flat draw.
+    // A mug carries `PALETTE_SCATTER_WEIGHT` against straw's 1, because a
+    // taproom's palette names `tableware` and straw's tags do not; twice as
+    // many is the loosest claim that still separates the weights from a flat
+    // draw. Straw is still *in* the pool, which is the half of this that says
+    // the palette prefers rather than filters.
     expect(`mug ${drawn('mug')} vs straw ${drawn('straw')}`).toBe(
       `mug ${drawn('mug')} vs straw ${drawn('straw') * 2 < drawn('mug') ? drawn('straw') : 'too many'}`,
     );
@@ -576,7 +600,7 @@ describe('the scatter layer', () => {
   it('drops nothing when the profile declares no scatter at all', () => {
     // `weightedPick` has nothing to draw from, and drawing from it anyway
     // would either throw or return undefined into `assetId`.
-    const profile = { ...profileFor({ building: 'tavern', room: 'hall' }), scatter: [] };
+    const profile = { ...resolved({ building: 'tavern', room: 'hall' }), scatter: [] };
     const params = paramsFor({ building: 'tavern', room: 'hall' }, { size: profile.maxSize, clutter: 1 });
     const rng = createRng(3);
     const { floorplan } = buildFloorplan(params, profile, rng);
@@ -592,7 +616,7 @@ describe('placeProps on a hand-drawn plan', () => {
       'D.#',
       '###',
     ]);
-    const profile = profileFor({ building: 'tavern', room: 'room' });
+    const profile = resolved({ building: 'tavern', room: 'room' });
     const params = paramsFor({ building: 'tavern', room: 'room' }, { clutter: 1 });
     expect(placeProps(floorplan, params, profile, createRng(1))).toEqual([]);
   });
@@ -606,7 +630,7 @@ describe('an anchor the description refused', () => {
    * asking over the same run.
    */
   const REFUSALS = PLACE_TYPES.flatMap((place) =>
-    profileFor(place)
+    resolved(place)
       .anchors.filter((spec) => spec.feature !== undefined)
       .map((spec) => ({
         place,
