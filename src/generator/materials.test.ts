@@ -8,6 +8,7 @@ import { isPillar, paintMaterials, segmentZones } from './materials';
 import {
   MATERIALS,
   materialDef,
+  PILLAR_MATERIAL,
   profileFor,
   ROTATIONS,
   VOID_MATERIAL,
@@ -179,7 +180,7 @@ describe('tiles', () => {
       // A pillar is a wall cell too, and the one wall cell that is allowed a
       // material of its own. The rule being checked here is that no wall ever
       // takes a *floor* material.
-      walls.add(profile.pillarMaterial);
+      walls.add(PILLAR_MATERIAL);
       for (let y = 0; y < floorplan.size.h; y += 1) {
         for (let x = 0; x < floorplan.size.w; x += 1) {
           const cell = { x, y };
@@ -315,11 +316,16 @@ describe('tiles', () => {
 //
 // Stage one grows free-standing pillars and then throws away the fact that it
 // did: `growPillars` marks them `'void'` and `deriveWalls` turns them into
-// `'wall'` like any other cell that touches floor. Stage two used to paint
-// every wall with the material of the zone it borders, so a pillar came out in
-// the perimeter's own colour and the person looking at the PNG reported that
-// the pillars he had asked for were missing. They were not missing; they were
-// invisible.
+// `'wall'` like any other cell that touches floor. Stage two then painted
+// every wall with the material of the zone it borders, pillars included.
+//
+// **They were not invisible.** On the map that prompted this the four columns
+// were the wall's brown on a green floor, 42.6 ΔE2000 apart — about the most
+// contrast anything on that image had. Asked what had gone wrong, the person
+// who reported them missing said he had not noticed them. So the fix is not
+// "tell a pillar from a wall", which was never the difficulty; it is to make
+// a pillar loud against the **floor it stands in**, which is what these tests
+// and `PILLAR_MATERIAL` are measured against.
 
 /** The plans below are drawn small so the cell each test is about is visible. */
 const PILLAR_IN_THE_OPEN = [
@@ -400,6 +406,29 @@ describe('isPillar', () => {
     expect(isPillar(plan.cells, plan.size, { x: 2, y: 2 })).toBe(false);
     expect(isPillar(planFrom(INSIDE_CORNER).cells, { w: 8, h: 7 }, { x: 6, y: 5 })).toBe(false);
   });
+
+  it('counts a side as floor only when it is floor, and void is not floor', () => {
+    // Written against a plan stage one cannot produce — `deriveWalls` would
+    // have made that void cell a wall, because it touches floor. It is here
+    // because `isPillar` is exported and takes any cell grid, so "three sides
+    // of floor" has to mean floor and not merely "not wall". Under the looser
+    // reading the cell below counts three and is painted as a column standing
+    // in the open, with a hole in the building on one side of it.
+    //
+    // The two readings agree on every plan the generator makes: swapping one
+    // for the other changed nothing across 7,712 plans. This is the one plan
+    // that tells them apart.
+    const plan = planFrom([
+      '#####',
+      '#...#',
+      '#.###',
+      '#. ##',
+      '#D###',
+    ]);
+    expect(cellAt(plan.cells, { x: 2, y: 2 })).toBe('wall');
+    expect(cellAt(plan.cells, { x: 2, y: 3 })).toBe('void');
+    expect(isPillar(plan.cells, plan.size, { x: 2, y: 2 })).toBe(false);
+  });
 });
 
 /** Where `growPillars` puts its four columns, and which of them became one. */
@@ -448,7 +477,7 @@ describe('pillars on a generated plan', () => {
           const painted: string[] = [];
           for (let y = 0; y < floorplan.size.h; y += 1) {
             for (let x = 0; x < floorplan.size.w; x += 1) {
-              if (cellAt(tiles, { x, y }).material === profile.pillarMaterial) {
+              if (cellAt(tiles, { x, y }).material === PILLAR_MATERIAL) {
                 painted.push(cellKey({ x, y }));
               }
             }
@@ -462,11 +491,11 @@ describe('pillars on a generated plan', () => {
     }
   });
 
-  it('paints a pillar in something no wall of the same profile is painted in', () => {
+  it('paints a pillar in something no wall of a hall is painted in', () => {
     for (const place of HALLS) {
       const profile = profileFor(place);
       const walls = [...Object.values(profile.wallMaterials), profile.defaultWallMaterial];
-      expect(`${place.building}: ${walls.includes(profile.pillarMaterial)}`)
+      expect(`${place.building}: ${walls.includes(PILLAR_MATERIAL)}`)
         .toBe(`${place.building}: false`);
     }
   });

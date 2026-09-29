@@ -11,12 +11,12 @@
  * `Scene.tiles` is total: every cell of the grid gets a `TileRef`, wall and
  * void included. A void cell takes the void material; a wall cell takes the
  * wall material of the zone it borders, unless it is one of stage one's
- * free-standing pillars, which takes the profile's pillar material instead.
+ * free-standing pillars, which takes `PILLAR_MATERIAL` instead.
  */
 
 import { cellAt, setCellAt } from '../core/grid';
 import type { Cell, CellKind, Floorplan, Rng, Size, TileRef, Zone } from '../core/types';
-import { materialDef, pickRotation, VOID_MATERIAL, wallMaterialFor } from './profiles';
+import { materialDef, PILLAR_MATERIAL, pickRotation, VOID_MATERIAL, wallMaterialFor } from './profiles';
 import type { PlaceProfile } from './profiles';
 import { rectArea, rectContains } from './shapes';
 import type { Rect } from './shapes';
@@ -155,12 +155,23 @@ function tileOf(material: string, rng: Rng): TileRef {
  * plans, covering all four shapes, both buildings, all three room kinds, the
  * smallest and the largest size each profile allows, and `features` with and
  * without `pillars`, this rule named every pillar stage one grew and named
- * nothing else — no false positive, no false negative.
+ * nothing else — no false positive, no false negative. A histogram of 774,000
+ * non-pillar wall cells puts none of them above two.
  *
  * Counting the **eight** neighbours instead is the trap, and a cheap one to
  * fall into: a straight perimeter cell faces three floor cells once diagonals
  * are included, so "three of eight" selects the whole wall ring — 64 cells of
  * a 20x18 rectangular hall, where there are four pillars.
+ *
+ * **The margin is zero, and it rests on a constant in another module.** Two
+ * sides is a real inside corner and four is a pillar in the open, so three is
+ * the only line there is. It holds because `MIN_INTERIOR_FOR_PILLARS`
+ * (`floorplan.ts:38`) is 9x9 and the four columns are grown two cells in from
+ * the interior's edge, which leaves them at least four cells apart. Lower that
+ * gate to 6 and two pillars become adjacent, each drops to two floor sides,
+ * and all four stop being painted — silently, because nothing here can see
+ * that constant. There is no test on this side that would fail; this note is
+ * the only thing standing between that edit and a quiet regression.
  */
 export function isPillar(cells: CellKind[][], size: Size, cell: Cell): boolean {
   if (cellAt(cells, cell) !== 'wall') {
@@ -228,13 +239,13 @@ export function paintMaterials(
         continue;
       }
       // A pillar is asked about before the bordering zone, because it is a
-      // wall cell and would otherwise be painted the perimeter's own colour —
-      // which is exactly the defect: the pillars were there and invisible.
+      // wall cell and would otherwise take the wall's material — which is
+      // what it used to do, and what left four columns nobody looked at.
       const material =
         kind === 'floor'
           ? zones[cellAt(zoneOf, cell)].material
           : isPillar(cells, size, cell)
-            ? profile.pillarMaterial
+            ? PILLAR_MATERIAL
             : wallMaterialFor(borderingMaterial(zoneOf, zones, size, cell), profile);
       setCellAt(tiles, cell, tileOf(material, rng));
     }
