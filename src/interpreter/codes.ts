@@ -73,7 +73,7 @@ export const UNSUPPORTED_REQUEST = 'unsupported_request';
 
 /**
  * The description is of a kind of place this vocabulary has no word for — a
- * forge, a crypt, a courtyard — and the nearest of the three was built.
+ * forge, a crypt, a courtyard — and the nearest supported building/room pair was built.
  *
  * Detail: the stable `building_room` identifier that was built, so the wording can say what the
  * person got and not only what they did not get.
