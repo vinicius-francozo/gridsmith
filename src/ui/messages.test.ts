@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Params, Place } from '../core/types';
+import { roomsFor } from '../generator/profiles';
 import { SceneValidationError } from '../generator/validate';
 import {
   CLUTTER_NOT_A_NUMBER,
@@ -52,11 +53,12 @@ import {
 /** Every code any layer of the interpreter can put in front of a person. */
 const EVERY_CODE: readonly Code[] = [...CONFLICT_CODES, ...UNRESOLVED_CODES];
 
-/** The three kinds of place the generator can build. */
+/** Every kind of place the generator can build. */
 const PLACE_TYPES: readonly Place[] = [
   { building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' },
   { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' },
   { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'storeroom' },
+  { building: 'dungeon', room: 'crypt' },
 ];
 
 describe('the table covers the codes, and only the codes', () => {
@@ -173,6 +175,7 @@ describe('an entry becomes a sentence', () => {
       dungeon_hall: 'Salão da masmorra',
       dungeon_room: 'Cela da masmorra',
       dungeon_storeroom: 'Arsenal da masmorra',
+      dungeon_crypt: 'Cripta da masmorra',
     };
 
     for (const place of PLACE_TYPES) {
@@ -451,7 +454,35 @@ describe('the line under a finished map', () => {
   it('has a different name for each kind of place', () => {
     const names = PLACE_TYPES.map((place) => describeResult({ ...params, place }));
 
-    expect(new Set(names).size).toBe(6);
+    expect(new Set(names).size).toBe(7);
+  });
+
+  it('has a name for every pair the generator declares', () => {
+    // This is the check that took over from the exact `Record` in
+    // `messages.ts`. The key type there was every building crossed with every
+    // room, and `crypt` ended that — a dungeon has one and a tavern does not,
+    // so keeping the cross-product exact would have meant writing a name for
+    // `tavern_crypt`. What the type can no longer say, this says better,
+    // because it reads the matrix instead of approximating it.
+    const declared = (['tavern', 'dungeon'] as const).flatMap((building) =>
+      roomsFor(building).map((room) => ({ building, room })),
+    );
+    expect(declared.length).toBe(PLACE_TYPES.length);
+    for (const place of declared) {
+      const line = describeResult({ ...params, place });
+      expect(line).not.toContain(`${place.building}_${place.room}`);
+      expect(line).not.toContain('undefined');
+    }
+  });
+
+  it('refuses a place it has no name for, rather than writing "undefined" under the map', () => {
+    // The guard the exact `Record` used to make unnecessary. Without it the
+    // line reads "undefined, 12×8 casas, semente 4242" — a place name a person
+    // cannot tell from a rendering fault, under a map that is otherwise right.
+    const place = { building: 'tavern', room: 'crypt' } as Place;
+
+    expect(() => describeResult({ ...params, place })).toThrow(TypeError);
+    expect(() => describeResult({ ...params, place })).toThrow("no name for the place 'tavern_crypt'");
   });
 });
 

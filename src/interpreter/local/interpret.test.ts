@@ -179,6 +179,22 @@ describe('the two place choices', () => {
       BUILDINGS.dungeon.rooms = rooms;
     }
   });
+
+  it('refuses to ask about a room it has no label for', () => {
+    // The labels are sparse now — a dungeon has a crypt and a tavern does not —
+    // so the pairing is a throw rather than a type. Left unchecked, the missing
+    // room's hypothesis is built by substituting `undefined` into the template,
+    // the classifier scores `"O cômodo é undefined."` like any other premise,
+    // and it can win: `bestOf` always returns a room and never a refusal.
+    const rooms = BUILDINGS.dungeon.rooms;
+    const stray = 'bunkhouse' as RoomKind;
+    BUILDINGS.dungeon.rooms = { ...rooms, [stray]: rooms.hall };
+    try {
+      expect(() => roomTemplateFor('dungeon')).toThrow("no room label for 'dungeon_bunkhouse'");
+    } finally {
+      BUILDINGS.dungeon.rooms = rooms;
+    }
+  });
 });
 
 describe('reading a size hint, or none', () => {

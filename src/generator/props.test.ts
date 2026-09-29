@@ -700,6 +700,24 @@ describe('the two dials over the group layer', () => {
     }
   });
 
+  it('empties the crypt when asked for no furniture, and never the common room', () => {
+    // `groupTarget` scales between the profile's two numbers, so the `min` is a
+    // floor the dial cannot get under: at `furnishing: 0` a hall still comes
+    // back with groups in it, because a common room with no tables is not a
+    // common room. A crypt is different — a burial chamber with nothing
+    // standing in it is an ordinary burial chamber — and that difference is a
+    // `min: 0` in `profiles.ts`, not a special case here.
+    for (const seed of [1, 7, 2985161997]) {
+      const crypt = furnished({ building: 'dungeon', room: 'crypt' }, seed, { furnishing: 0, clutter: 0.8 });
+      const hall = furnished({ building: 'dungeon', room: 'hall' }, seed, { furnishing: 0, clutter: 0.8 });
+      expect(`seed ${String(seed)}: ${String(groupCount(crypt.props))} in the crypt`)
+        .toBe(`seed ${String(seed)}: 0 in the crypt`);
+      expect(groupCount(hall.props)).toBeGreaterThan(0);
+      // And the dirt is still there, which is the whole of what was asked for.
+      expect(crypt.props.filter((prop) => prop.layer === 'scatter').length).toBeGreaterThan(0);
+    }
+  });
+
   it('leaves the scatter layer to clutter alone', () => {
     // The other half of the separation. A bare floor stays bare however much
     // furniture stands on it.
