@@ -2,7 +2,6 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type { AssetDef, AssetKind, AssetLibrary, Rotation } from '../core/types';
 import { PIXELS_PER_CELL, validateCatalog } from './contract';
-import { materialColor } from './palette';
 import {
   MATERIAL_VARIANTS,
   PLACEHOLDER_CATALOG,
@@ -163,83 +162,6 @@ describe('MATERIAL_VARIANTS', () => {
       stone_column: 1,
       timber_column: 1,
     });
-  });
-});
-
-/**
- * The straight-line distance between two `#rrggbb` colours in sRGB channels.
- *
- * Crude next to a perceptual metric, and enough for the one question asked
- * below — whether two flat fills side by side read as two colours or as one —
- * because it needs no colour science in a test and the yardstick it is
- * compared against is measured in the very same units.
- */
-function channelDistance(a: string, b: string): number {
-  const channels = (hex: string): number[] =>
-    [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16));
-  const [ar, ag, ab] = channels(a);
-  const [br, bg, bb] = channels(b);
-  return Math.hypot(ar - br, ag - bg, ab - bb);
-}
-
-/** Every colour the record says a material can be drawn in. */
-function shadesOf(material: string): string[] {
-  return Array.from({ length: MATERIAL_VARIANTS[material] }, (_, variant) =>
-    materialColor(material, variant),
-  );
-}
-
-describe('the pillar materials', () => {
-  /**
-   * How far apart two materials have to be to read as two materials.
-   *
-   * Measured, not chosen. Across the vocabulary as it stood before pillars had
-   * a material of their own, the *worst* separation between two different
-   * materials was 13.7 — `dirt_floor` variant 0 (#723771) against
-   * `plaster_wall` variant 1 (#673569) — and that pair is one colour on the
-   * map. 30 is comfortably above the whole of that noise floor and below every
-   * measurement the two names below produce.
-   */
-  const READS_AS_DIFFERENT = 30;
-
-  const PILLARS = ['stone_column', 'timber_column'];
-
-  it('stand apart from every other material the generator can paint', () => {
-    // The defect this fixes was not that pillars were missing. They were
-    // drawn, in the wall's own colour, and the person looking at the PNG
-    // reported them missing. A pillar material that came out as one more
-    // shade of the wall would reproduce the defect exactly.
-    for (const pillar of PILLARS) {
-      for (const material of Object.keys(MATERIAL_VARIANTS)) {
-        if (PILLARS.includes(material)) {
-          continue;
-        }
-        for (const shade of shadesOf(material)) {
-          for (const pillarShade of shadesOf(pillar)) {
-            expect(`${pillar} vs ${material}: ${channelDistance(pillarShade, shade) >= READS_AS_DIFFERENT}`)
-              .toBe(`${pillar} vs ${material}: true`);
-          }
-        }
-      }
-    }
-  });
-
-  it('would have failed on the names the defect invited', () => {
-    // `stone_pillar` measures 16.6 against `timber_wall` variant 1 and
-    // `timber_pillar` 12.9 against `flagstone` variant 1 — the second below
-    // even the noise floor above. The colour is a pure function of the name
-    // (`materialColor`), so the name is the only lever there is, and this
-    // pins that the two in use were chosen by measuring rather than by ear.
-    expect(channelDistance(materialColor('stone_pillar', 0), materialColor('timber_wall', 1)))
-      .toBeLessThan(READS_AS_DIFFERENT);
-    expect(channelDistance(materialColor('timber_pillar', 0), materialColor('flagstone', 1)))
-      .toBeLessThan(READS_AS_DIFFERENT);
-  });
-
-  it('are drawn in one flat shade each, so four cells never read as a gradient', () => {
-    for (const pillar of PILLARS) {
-      expect(MATERIAL_VARIANTS[pillar]).toBe(1);
-    }
   });
 });
 

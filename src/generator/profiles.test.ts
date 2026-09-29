@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { createRng } from '../core/prng';
-import { PLACEHOLDER_CATALOG } from '../assets/placeholder';
+import { materialColor } from '../assets/palette';
+import { MATERIAL_VARIANTS, PLACEHOLDER_CATALOG } from '../assets/placeholder';
 import type { Place, Size } from '../core/types';
 import {
   ALCOVE_FEATURE,
@@ -94,6 +95,49 @@ describe('profileFor', () => {
   });
 });
 
+/**
+ * How far apart two materials have to be to read as two materials, in sRGB
+ * channels.
+ *
+ * Measured, not chosen. Across the vocabulary as it stood before a pillar had
+ * a material of its own, the *worst* separation between two different
+ * materials was 13.7 — `dirt_floor` variant 0 (#723771) against
+ * `plaster_wall` variant 1 (#673569) — and that pair is one colour on the map.
+ * 30 clears the whole of that noise floor and sits below every measurement the
+ * two pillar materials produce; the nearest of them is 31.5.
+ */
+const READS_AS_DIFFERENT = 30;
+
+/**
+ * The straight-line distance between two `#rrggbb` colours in sRGB channels.
+ *
+ * Crude next to a perceptual metric, and enough for the one question asked of
+ * it — whether two flat fills side by side read as two colours or as one —
+ * because it needs no colour science in a test and the yardstick above is
+ * measured in these same units.
+ */
+function channelDistance(a: string, b: string): number {
+  const channels = (hex: string): number[] =>
+    [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16));
+  const [ar, ag, ab] = channels(a);
+  const [br, bg, bb] = channels(b);
+  return Math.hypot(ar - br, ag - bg, ab - bb);
+}
+
+/**
+ * Every colour a material can be drawn in.
+ *
+ * @throws {Error} if the marking library has no record of the material, which
+ *                 would otherwise make every comparison below vacuously true.
+ */
+function shadesOf(material: string): string[] {
+  const variants = MATERIAL_VARIANTS[material];
+  if (variants === undefined) {
+    throw new Error(`the test expects ${material} in the marking library's material record`);
+  }
+  return Array.from({ length: variants }, (_, variant) => materialColor(material, variant));
+}
+
 describe('profile material vocabulary', () => {
   it('names only materials the catalogue declares', () => {
     for (const place of PLACE_TYPES) {
@@ -125,6 +169,43 @@ describe('profile material vocabulary', () => {
       expect(`${place.building}/${place.room}: ${others.includes(profile.pillarMaterial)}`)
         .toBe(`${place.building}/${place.room}: false`);
     }
+  });
+
+  it('paints a pillar in a colour none of the same profile\u2019s materials is painted in', () => {
+    // The name-level check above is not the property the person looking at the
+    // PNG cares about. `materialColor` derives a colour from the material name
+    // by FNV-1a, so two different names can still come out as one colour — and
+    // the obvious names for this field do exactly that, which the test below
+    // pins. This is the one that says the pillars are visible.
+    for (const place of PLACE_TYPES) {
+      const profile = profileFor(place);
+      const others = [
+        ...profile.floorMaterials,
+        ...Object.values(profile.wallMaterials),
+        profile.defaultWallMaterial,
+      ];
+      for (const material of others) {
+        for (const shade of shadesOf(material)) {
+          for (const pillarShade of shadesOf(profile.pillarMaterial)) {
+            const apart = channelDistance(pillarShade, shade) >= READS_AS_DIFFERENT;
+            expect(`${place.building}/${place.room} ${profile.pillarMaterial} vs ${material}: ${apart}`)
+              .toBe(`${place.building}/${place.room} ${profile.pillarMaterial} vs ${material}: true`);
+          }
+        }
+      }
+    }
+  });
+
+  it('would not have been distinct under the names this field invites', () => {
+    // `stone_pillar` measures 16.6 against `timber_wall` variant 1, and
+    // `timber_pillar` 12.9 against `flagstone` variant 1 — the second below
+    // even the noise floor above. Pinned so that the two names in use are
+    // visibly a measurement and not a preference, and so that renaming them
+    // back to the obvious thing fails here rather than on someone's screen.
+    expect(channelDistance(materialColor('stone_pillar', 0), materialColor('timber_wall', 1)))
+      .toBeLessThan(READS_AS_DIFFERENT);
+    expect(channelDistance(materialColor('timber_pillar', 0), materialColor('flagstone', 1)))
+      .toBeLessThan(READS_AS_DIFFERENT);
   });
 
   it('costs a pillar cell exactly the draws a wall cell already cost', () => {
