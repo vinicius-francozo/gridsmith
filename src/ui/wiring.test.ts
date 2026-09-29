@@ -271,16 +271,16 @@ function lendLocalStorage(store: KeyStore): void {
 }
 
 /**
- * The three kinds of place, exhaustively.
- *
- * Written as the keys of a `Record<Place, true>` so that a fourth kind
- * added to the frozen vocabulary stops this file compiling instead of quietly
- * going untested.
+ * The six building/room pairs in the approved vocabulary.
+ * Keep this list in step with the pair matrix when it grows.
  */
 const PLACE_TYPES: Place[] = [
   { building: 'tavern', room: 'hall' },
   { building: 'tavern', room: 'room' },
   { building: 'tavern', room: 'storeroom' },
+  { building: 'dungeon', room: 'hall' },
+  { building: 'dungeon', room: 'room' },
+  { building: 'dungeon', room: 'storeroom' },
 ];
 
 /** A scene of `place` at `seed`, asking for everything that place can hold. */
@@ -489,20 +489,30 @@ describe('what the page is wired to when nobody stands in for anything', () => {
     const missing = new Set<string>();
     let placed = 0;
     for (const place of PLACE_TYPES) {
+      let placedForPair = 0;
       for (let seed = 1; seed <= 25; seed += 1) {
         for (const prop of sceneFor(place, seed).props) {
           placed += 1;
-          if (library.get(prop.assetId) === undefined) {
+          placedForPair += 1;
+          const asset = library.get(prop.assetId);
+          if (asset === undefined) {
             missing.add(prop.assetId);
+            continue;
           }
+          expect(asset.kind).toBe(prop.layer);
+          const footprint = prop.rotation === 90 || prop.rotation === 270
+            ? { w: asset.footprint.h, h: asset.footprint.w }
+            : asset.footprint;
+          expect(prop.footprint).toEqual(footprint);
         }
       }
+      expect(placedForPair).toBeGreaterThan(0);
     }
 
     expect(placed).toBeGreaterThan(0);
     expect([...missing]).toEqual([]);
 
-    // The three kinds it does carry, and the fourth it leaves out on purpose:
+    // The three asset kinds it does carry, and the fourth it leaves out on purpose:
     // floors are flat colour by design, so `tile/...` resolving to nothing is
     // the plan working rather than the same gap in a fourth place.
     for (const kind of ['anchor', 'group', 'scatter'] as const) {
