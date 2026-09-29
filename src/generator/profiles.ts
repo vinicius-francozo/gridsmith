@@ -59,6 +59,15 @@ export const MATERIALS: Record<string, MaterialDef> = {
   stone_wall: { variants: 3, rotatable: false },
   plaster_wall: { variants: 2, rotatable: false },
   timber_wall: { variants: 2, rotatable: false },
+  // The two pillar materials — see `PlaceProfile.pillarMaterial` for why they
+  // are named the way they are. One variant each, and not rotatable: the
+  // variant ladder exists so that a floor of two hundred cells does not read
+  // as one flat sheet, and a room has four pillars. Declaring one variant
+  // also keeps the draw count per cell exactly what a wall cell already cost,
+  // so painting a pillar differently does not move the rng sequence and no
+  // map that reproduced before this change stops reproducing.
+  stone_column: { variants: 1, rotatable: false },
+  timber_column: { variants: 1, rotatable: false },
 };
 
 /**
@@ -204,6 +213,29 @@ export type PlaceProfile = {
   wallMaterials: Record<string, string>;
   /** Used for a wall whose floor material declares no counterpart. */
   defaultWallMaterial: string;
+  /**
+   * The material a free-standing pillar is painted in.
+   *
+   * Pillars were being drawn already and nobody could see them: stage one
+   * grows them as cells, `deriveWalls` makes them `'wall'`, and stage two then
+   * gave them the wall material of the zone they border — the perimeter's own
+   * colour, exactly. So a pillar needs a material of its own, and it needs one
+   * that reads as different.
+   *
+   * The colour is not authored anywhere. `materialColor` derives it from the
+   * name by FNV-1a (`assets/palette.ts`), so the **name is the only lever**,
+   * and these two were chosen by measuring rather than by taste. In sRGB
+   * channel distance the worst separation between two different materials
+   * already in the vocabulary is 13.7 — `dirt_floor` variant 0 against
+   * `plaster_wall` variant 1 — and at that distance two materials are one
+   * colour on the map. The obvious names land there: `stone_pillar` measures
+   * 16.6 and `timber_pillar` 12.9 against their nearest neighbour, which is
+   * the defect this field exists to fix, wearing a new name. `stone_column`
+   * measures 35.3 and `timber_column` 31.5 against the whole vocabulary, and
+   * 55.1 and 55.6 against the wall material each one actually stands beside.
+   * `placeholder.test.ts` holds the floor at 30.
+   */
+  pillarMaterial: string;
   /** How many anchors to aim for, before availability is taken into account. */
   anchorRange: { min: number; max: number };
   anchors: AnchorSpec[];
@@ -225,6 +257,7 @@ const TAVERN_HALL: PlaceProfile = {
   floorMaterials: ['wood_plank', 'flagstone'],
   wallMaterials: { wood_plank: 'timber_wall', flagstone: 'stone_wall' },
   defaultWallMaterial: 'stone_wall',
+  pillarMaterial: 'timber_column',
   anchorRange: { min: 2, max: 3 },
   anchors: [
     { assetId: 'bar_counter', footprint: { w: 5, h: 2 }, placement: 'wall', feature: 'bar' },
@@ -279,6 +312,7 @@ const TAVERN_ROOM: PlaceProfile = {
   floorMaterials: ['wood_plank'],
   wallMaterials: { wood_plank: 'plaster_wall' },
   defaultWallMaterial: 'plaster_wall',
+  pillarMaterial: 'timber_column',
   anchorRange: { min: 1, max: 2 },
   anchors: [
     { assetId: 'bed', footprint: { w: 2, h: 3 }, placement: 'wall' },
@@ -322,6 +356,7 @@ const TAVERN_STOREROOM: PlaceProfile = {
   floorMaterials: ['stone_floor', 'dirt_floor'],
   wallMaterials: { stone_floor: 'stone_wall', dirt_floor: 'stone_wall' },
   defaultWallMaterial: 'stone_wall',
+  pillarMaterial: 'timber_column',
   anchorRange: { min: 1, max: 2 },
   anchors: [
     { assetId: 'shelf_row', footprint: { w: 4, h: 1 }, placement: 'wall', feature: 'shelving' },
@@ -363,7 +398,8 @@ type RoomGeometry = Pick<PlaceProfile,
     scatter: Pick<ScatterSpec, 'weight'>[];
   };
 
-type SlotFilling = Pick<PlaceProfile, 'floorMaterials' | 'wallMaterials' | 'defaultWallMaterial'> & {
+type SlotFilling = Pick<PlaceProfile,
+  'floorMaterials' | 'wallMaterials' | 'defaultWallMaterial' | 'pillarMaterial'> & {
   anchors: Pick<AnchorSpec, 'assetId' | 'feature' | 'light'>[];
   groups: string[][];
   scatter: string[];
@@ -393,6 +429,7 @@ function fillingOf(profile: PlaceProfile): SlotFilling {
     floorMaterials: profile.floorMaterials,
     wallMaterials: profile.wallMaterials,
     defaultWallMaterial: profile.defaultWallMaterial,
+    pillarMaterial: profile.pillarMaterial,
     anchors: profile.anchors.map(({ assetId, feature, light }) => ({ assetId, feature, light })),
     groups: profile.groups.map((group) => group.parts.map((slot) => slot.assetId)),
     scatter: profile.scatter.map((slot) => slot.assetId),
@@ -421,6 +458,7 @@ export const BUILDINGS: Record<Building, BuildingPalette> = {
         floorMaterials: ['flagstone', 'stone_floor'],
         wallMaterials: { flagstone: 'stone_wall', stone_floor: 'stone_wall' },
         defaultWallMaterial: 'stone_wall',
+        pillarMaterial: 'stone_column',
         anchors: [
           { assetId: 'weapon_rack' },
           { assetId: 'stone_hearth', feature: 'hearth', light: { radiusCells: 6, colorHex: '#ffb46b' } },
@@ -436,6 +474,7 @@ export const BUILDINGS: Record<Building, BuildingPalette> = {
         floorMaterials: ['flagstone', 'stone_floor'],
         wallMaterials: { flagstone: 'stone_wall', stone_floor: 'stone_wall' },
         defaultWallMaterial: 'stone_wall',
+        pillarMaterial: 'stone_column',
         anchors: [
           { assetId: 'cot' },
           { assetId: 'iron_bunks', feature: 'bunks' },
@@ -450,6 +489,7 @@ export const BUILDINGS: Record<Building, BuildingPalette> = {
         floorMaterials: ['flagstone', 'stone_floor'],
         wallMaterials: { flagstone: 'stone_wall', stone_floor: 'stone_wall' },
         defaultWallMaterial: 'stone_wall',
+        pillarMaterial: 'stone_column',
         anchors: [{ assetId: 'armory_rack', feature: 'shelving' }, { assetId: 'stone_stairs', feature: 'stairs' }],
         groups: [['supply_crate', 'small_crate', 'weapon_bundle'], ['weapon_bundle', 'weapon_bundle']],
         scatter: ['loose_arrow', 'rubble', 'dust'],
@@ -505,6 +545,7 @@ export function profileFor(place: Place): PlaceProfile {
     floorMaterials: filling.floorMaterials,
     wallMaterials: filling.wallMaterials,
     defaultWallMaterial: filling.defaultWallMaterial,
+    pillarMaterial: filling.pillarMaterial,
     anchors: geometry.anchors.map((slot, index) => ({ ...slot, ...filling.anchors[index] })),
     groups: geometry.groups.map((group, groupIndex) => ({
       ...group,

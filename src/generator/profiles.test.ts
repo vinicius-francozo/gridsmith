@@ -102,10 +102,40 @@ describe('profile material vocabulary', () => {
         ...profile.floorMaterials,
         ...Object.values(profile.wallMaterials),
         profile.defaultWallMaterial,
+        profile.pillarMaterial,
       ];
       for (const material of named) {
         expect(Object.keys(MATERIALS)).toContain(material);
       }
+    }
+  });
+
+  it('gives every profile a pillar material that is none of its other materials', () => {
+    // The whole of the pillar defect was that a pillar took the material of
+    // the wall beside it. A profile that named its wall here would put it
+    // straight back, and would do it silently, because every other check in
+    // this file would still pass.
+    for (const place of PLACE_TYPES) {
+      const profile = profileFor(place);
+      const others = [
+        ...profile.floorMaterials,
+        ...Object.values(profile.wallMaterials),
+        profile.defaultWallMaterial,
+      ];
+      expect(`${place.building}/${place.room}: ${others.includes(profile.pillarMaterial)}`)
+        .toBe(`${place.building}/${place.room}: false`);
+    }
+  });
+
+  it('costs a pillar cell exactly the draws a wall cell already cost', () => {
+    // `tileOf` draws a variant for every cell and a rotation only for a
+    // rotatable material, and `Rng.int` takes one number whatever its range.
+    // So one variant and no rotation means painting a pillar differently
+    // moves nothing in the rng sequence: the only thing that changes about a
+    // map generated before this field existed is the colour of four cells.
+    for (const place of PLACE_TYPES) {
+      const def = materialDef(profileFor(place).pillarMaterial);
+      expect(def).toEqual({ variants: 1, rotatable: false });
     }
   });
 
