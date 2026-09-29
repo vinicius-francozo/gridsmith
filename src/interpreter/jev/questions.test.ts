@@ -76,10 +76,18 @@ describe('the choice question', () => {
     // would answer one of those, confidently — and `read.ts` checks the answer
     // against `roomsFor`, where the unasked room still is. The map would come
     // back a different kind of place with nothing anywhere saying so.
+    //
+    // **The room that used to reach this guard cannot any more, and the cast
+    // below is the measure of that.** The criteria used to be a table of their
+    // own in `questions.ts`; a room added to `BUILDINGS` and forgotten there
+    // compiled, and this test used to be written as exactly that — a stray room
+    // with a real filling behind it. The wording now lives on the filling, so
+    // the only room without a criterion is one whose filling has no `words` at
+    // all, which the type forbids and a hand-edited object can still be.
     const rooms = BUILDINGS.dungeon.rooms;
-    BUILDINGS.dungeon.rooms = { ...rooms, storeroom: rooms.storeroom, room: rooms.room };
     const stray = 'bunkhouse' as RoomKind;
-    BUILDINGS.dungeon.rooms[stray] = rooms.hall;
+    const wordless = { ...rooms.hall!, words: undefined } as unknown as typeof rooms.hall;
+    BUILDINGS.dungeon.rooms = { ...rooms, [stray]: wordless };
     try {
       expect(() => roomQuestionFor('dungeon')).toThrow("no room criterion for 'dungeon_bunkhouse'");
     } finally {

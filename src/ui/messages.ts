@@ -24,7 +24,8 @@
  * nothing after the colon is an entry that can actually arrive.
  */
 
-import type { Building, Params, RoomKind } from '../core/types';
+import type { Params } from '../core/types';
+import { placeWords } from '../generator/profiles';
 import type { SceneIssueKind } from '../generator/validate';
 import { SceneValidationError } from '../generator/validate';
 import {
@@ -107,14 +108,14 @@ function featureWord(detail: string): string {
 /**
  * The kind of place `detail` names, in the wording the rest of the page uses.
  *
- * Reads `PLACE_NAMES` rather than spelling the three names again, so the notice
+ * Reads the registry rather than spelling the three names again, so the notice
  * above the map and the line beneath it call the place the same thing. The
  * detail of `PLACE_NOT_IN_VOCABULARY` is the `building_room` identifier the generator settled
  * on, written by this project rather than by a model — but it still arrives as
  * a string, so an unrecognised one is shown as it came instead of dropped, the
  * same way `featureWord` does.
  *
- * The detail is one string and `PLACE_NAMES` is nested, so it has to be cut in
+ * The detail is one string and the registry is nested, so it has to be cut in
  * two. It is cut at the **first** underscore because the building is the axis
  * that is closed and exact, so it is the half worth reading first — **not**
  * because the last would be wrong today: no building and no room contains an
@@ -132,8 +133,8 @@ function placeWord(detail: string): string {
 /**
  * Every code this interface can be handed, and how it reads.
  *
- * The `Record<Code, CodePhrase>` is exact, like `FEATURE_WORDS`, `SCENE_ISSUES`
- * and `PLACE_NAMES` below it: a code added upstream stops this file compiling
+ * The `Record<Code, CodePhrase>` is exact, like `FEATURE_WORDS` and
+ * `SCENE_ISSUES`: a code added upstream stops this file compiling
  * instead of reaching the screen as a bare identifier. `messages.test.ts` still
  * holds the table against `CONFLICT_CODES` and `UNRESOLVED_CODES` in both
  * directions, because the compiler checks the keys and the test checks that
@@ -548,52 +549,25 @@ export function describeModelProgress(progress: ModelProgress): string {
 }
 
 /**
- * The seven supported building and room pairs, in Portuguese.
- *
- * **Exact in the building, sparse in the room**, which is the shape the matrix
- * actually has: every building is declared, and each declares only the rooms it
- * holds. A dungeon has a crypt and a tavern does not, so a flat key of every
- * building crossed with every room stopped describing this table the moment
- * `crypt` existed — kept exact, it would have demanded a name for
- * `tavern_crypt`, a place nothing can produce, in the one table a person reads
- * from.
- *
- * Nesting is what keeps both properties instead of trading one for the other.
- * A **building** added upstream still stops this file compiling, the way the
- * flat key used to, and it is the same shape `ROOM_CRITERIA` in
- * `jev/questions.ts` and `ROOM_TEMPLATES` in `local/templates.ts` are written
- * in — three tables keyed on a building and a room, one form between them.
- * Only the **room** axis gives up its compile-time check, because only that
- * axis is sparse, and `describeResult` throws in its place.
- */
-const PLACE_NAMES: Readonly<Record<Building, Readonly<Partial<Record<RoomKind, string>>>>> = {
-  tavern: {
-    hall: 'Salão de taverna',
-    room: 'Quarto de taverna',
-    storeroom: 'Depósito de taverna',
-  },
-  dungeon: {
-    hall: 'Salão da masmorra',
-    room: 'Cela da masmorra',
-    storeroom: 'Arsenal da masmorra',
-    crypt: 'Cripta da masmorra',
-  },
-};
-
-/**
  * The Portuguese name for a pair, or nothing.
  *
- * `Object.hasOwn` on **both** axes, for the reason `isKnownCode` states: these
- * are object literals, so `PLACE_NAMES['toString']` is a function rather than
- * `undefined` and `PLACE_NAMES.tavern['__proto__']` is an object. Both walk
- * past a `??`, and the first would be concatenated into a notice.
+ * **The names are not written here any more.** They live on the room's own
+ * entry in the registry (`BUILDINGS` in `generator/profiles.ts`), beside the
+ * Jev criterion and the entailment label, because all three used to be
+ * separate tables keyed on a building and a room and all three were *sparse* on
+ * the room axis — a dungeon has a crypt and a tavern does not, so a flat key of
+ * every building crossed with every room would have demanded a name for
+ * `tavern_crypt`, a place nothing can produce. Sparse, they compiled happily
+ * with a room missing, and each answered the gap with a throw discovered by
+ * whoever reached it first. Carried on the filling, a room a building declares
+ * is an object with no `words`, and that does not compile.
+ *
+ * The throw below stays, and so does `placeWords`'s `Object.hasOwn` on both
+ * axes: the pair reaching this function has come out of a conflict code as a
+ * string, where no type has ever been.
  */
 function placeName(building: string, room: string): string | undefined {
-  if (!Object.hasOwn(PLACE_NAMES, building)) {
-    return undefined;
-  }
-  const rooms = PLACE_NAMES[building as Building];
-  return Object.hasOwn(rooms, room) ? rooms[room as RoomKind] : undefined;
+  return placeWords(building, room)?.name;
 }
 
 /**
@@ -603,10 +577,10 @@ function placeName(building: string, room: string): string | undefined {
  * size is in cells because cells are the unit the map is played in — the pixel
  * dimensions are the renderer's business and mean nothing at a table.
  *
- * @throws {TypeError} if `PLACE_NAMES` has no name for the pair. This is the
- *                     guard standing in for the room axis's compile-time check
- *                     — see `PLACE_NAMES`, which keeps the building axis's.
- *                     Without it the line reads "undefined, 17×15 casas", which
+ * @throws {TypeError} if the registry has no name for the pair. This is the
+ *                     guard standing in for the type the `building_room` string
+ *                     never had — see `placeName`. Without it the line reads
+ *                     "undefined, 17×15 casas", which
  *                     is a place name a person cannot tell from a rendering
  *                     bug, under a map that is otherwise correct.
  */

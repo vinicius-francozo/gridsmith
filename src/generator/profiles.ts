@@ -227,7 +227,7 @@ export type GroupSpec = {
 /** A layer-three prop: loose debris, drawn per cell. */
 export type ScatterSpec = { assetId: string; weight: number };
 
-// --- Profiles --------------------------------------------------------------
+// --- The registry ----------------------------------------------------------
 
 export type PlaceProfile = {
   place: Place;
@@ -256,351 +256,387 @@ export type PlaceProfile = {
   scatter: ScatterSpec[];
 };
 
-const TAVERN_HALL: PlaceProfile = {
-  place: { building: 'tavern', room: 'hall' },
-  minSize: { w: 12, h: 10 },
-  maxSize: { w: 20, h: 18 },
-  doorRange: { min: 1, max: 3 },
-  shapes: ['rectangle', 'l_shape', 't_shape', 'alcove'],
-  allowPillars: true,
-  floorMaterials: ['wood_plank', 'flagstone'],
-  wallMaterials: { wood_plank: 'timber_wall', flagstone: 'stone_wall' },
-  defaultWallMaterial: 'stone_wall',
-  anchorRange: { min: 2, max: 3 },
-  anchors: [
-    { assetId: 'bar_counter', footprint: { w: 5, h: 2 }, placement: 'wall', feature: 'bar' },
-    {
-      assetId: 'hearth',
-      footprint: { w: 3, h: 2 },
-      placement: 'wall',
-      feature: 'hearth',
-      light: { radiusCells: 6, colorHex: '#ffb46b' },
-    },
-    { assetId: 'stairs_up', footprint: { w: 2, h: 3 }, placement: 'corner', feature: 'stairs' },
-  ],
-  groupsPerHundredCells: { min: 2, max: 5 },
-  groups: [
-    {
-      id: 'round_table',
-      size: { w: 4, h: 4 },
-      parts: [
-        { assetId: 'table_round', offset: { x: 1, y: 1 }, footprint: { w: 2, h: 2 } },
-        { assetId: 'chair', offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
-        { assetId: 'chair', offset: { x: 3, y: 1 }, footprint: { w: 1, h: 1 } },
-        { assetId: 'chair', offset: { x: 2, y: 3 }, footprint: { w: 1, h: 1 } },
-        { assetId: 'chair', offset: { x: 0, y: 2 }, footprint: { w: 1, h: 1 } },
-      ],
-    },
-    {
-      id: 'long_table',
-      size: { w: 3, h: 3 },
-      parts: [
-        { assetId: 'bench', offset: { x: 0, y: 0 }, footprint: { w: 3, h: 1 } },
-        { assetId: 'table_long', offset: { x: 0, y: 1 }, footprint: { w: 3, h: 1 } },
-        { assetId: 'bench', offset: { x: 0, y: 2 }, footprint: { w: 3, h: 1 } },
-      ],
-    },
-  ],
-  scatterChance: 0.16,
-  scatter: [
-    { assetId: 'mug', weight: 4 },
-    { assetId: 'stool', weight: 2 },
-    { assetId: 'bottle', weight: 2 },
-    { assetId: 'straw', weight: 1 },
-  ],
-};
-
-const TAVERN_ROOM: PlaceProfile = {
-  place: { building: 'tavern', room: 'room' },
-  minSize: { w: 6, h: 6 },
-  maxSize: { w: 11, h: 10 },
-  doorRange: { min: 1, max: 2 },
-  shapes: ['rectangle', 'alcove'],
-  allowPillars: false,
-  floorMaterials: ['wood_plank'],
-  wallMaterials: { wood_plank: 'plaster_wall' },
-  defaultWallMaterial: 'plaster_wall',
-  anchorRange: { min: 1, max: 2 },
-  anchors: [
-    { assetId: 'bed', footprint: { w: 2, h: 3 }, placement: 'wall' },
-    { assetId: 'bunk_beds', footprint: { w: 2, h: 3 }, placement: 'wall', feature: 'bunks' },
-    { assetId: 'wardrobe', footprint: { w: 2, h: 1 }, placement: 'wall' },
-    { assetId: 'shelf_row_short', footprint: { w: 3, h: 1 }, placement: 'wall', feature: 'shelving' },
-    {
-      assetId: 'hearth_small',
-      footprint: { w: 2, h: 1 },
-      placement: 'wall',
-      feature: 'hearth',
-      light: { radiusCells: 4, colorHex: '#ffb46b' },
-    },
-  ],
-  groupsPerHundredCells: { min: 2, max: 6 },
-  groups: [
-    {
-      id: 'writing_desk',
-      size: { w: 2, h: 1 },
-      parts: [
-        { assetId: 'table_small', offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
-        { assetId: 'chair', offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
-      ],
-    },
-  ],
-  scatterChance: 0.12,
-  scatter: [
-    { assetId: 'mug', weight: 3 },
-    { assetId: 'bottle', weight: 2 },
-    { assetId: 'straw', weight: 1 },
-  ],
-};
-
-const TAVERN_STOREROOM: PlaceProfile = {
-  place: { building: 'tavern', room: 'storeroom' },
-  minSize: { w: 8, h: 6 },
-  maxSize: { w: 14, h: 12 },
-  doorRange: { min: 1, max: 2 },
-  shapes: ['rectangle', 'l_shape'],
-  allowPillars: false,
-  floorMaterials: ['stone_floor', 'dirt_floor'],
-  wallMaterials: { stone_floor: 'stone_wall', dirt_floor: 'stone_wall' },
-  defaultWallMaterial: 'stone_wall',
-  anchorRange: { min: 1, max: 2 },
-  anchors: [
-    { assetId: 'shelf_row', footprint: { w: 4, h: 1 }, placement: 'wall', feature: 'shelving' },
-    { assetId: 'stairs_up', footprint: { w: 2, h: 3 }, placement: 'corner', feature: 'stairs' },
-  ],
-  groupsPerHundredCells: { min: 3, max: 8 },
-  groups: [
-    {
-      id: 'crate_stack',
-      size: { w: 2, h: 2 },
-      parts: [
-        { assetId: 'crate', offset: { x: 0, y: 0 }, footprint: { w: 2, h: 1 } },
-        { assetId: 'crate_small', offset: { x: 0, y: 1 }, footprint: { w: 1, h: 1 } },
-        { assetId: 'barrel', offset: { x: 1, y: 1 }, footprint: { w: 1, h: 1 } },
-      ],
-    },
-    {
-      id: 'barrel_pair',
-      size: { w: 2, h: 1 },
-      parts: [
-        { assetId: 'barrel', offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
-        { assetId: 'barrel', offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
-      ],
-    },
-  ],
-  scatterChance: 0.18,
-  scatter: [
-    { assetId: 'sack', weight: 3 },
-    { assetId: 'shard', weight: 2 },
-    { assetId: 'straw', weight: 3 },
-  ],
+/**
+ * The half of a room that does not change between buildings: its shape, its
+ * bounds, and the slots its furniture stands in.
+ *
+ * A slot is a footprint and a placement rule with no asset named in it. What
+ * fills it is the building's business, and `profileFor` pairs the two lists by
+ * index — which is why a room's geometry and every filling of it have to
+ * declare the same number of slots, and why `profileFor` says so rather than
+ * handing on an `undefined` id.
+ */
+type RoomGeometry = {
+  minSize: Size;
+  maxSize: Size;
+  doorRange: { min: number; max: number };
+  shapes: ShapeName[];
+  allowPillars: boolean;
+  anchorRange: { min: number; max: number };
+  anchors: Pick<AnchorSpec, 'footprint' | 'placement'>[];
+  groupsPerHundredCells: { min: number; max: number };
+  groups: (Omit<GroupSpec, 'parts'> & { parts: Omit<GroupPart, 'assetId'>[] })[];
+  scatterChance: number;
+  scatter: Pick<ScatterSpec, 'weight'>[];
 };
 
 /**
- * The burial chamber. A dungeon has one; a tavern does not.
+ * The Portuguese a pair is spoken about in, everywhere a person or a model
+ * reads it.
  *
- * **It carries its own geometry rather than borrowing the hall's, and this is
- * the first room ever added to this project, so the choice is the pattern the
- * next one will copy.** The three geometries above are all derived from a
- * tavern profile — `ROOM_KINDS` says so — and that is history, not design: the
- * dungeon was fitted into shapes drawn for an inn, and every dungeon room has
- * since had to fill a tavern's slot list. Three reasons not to extend that:
+ * **These three words used to live in three files that no compiler held to the
+ * room list**, and that is why they are here. `ROOM_CRITERIA`
+ * (`jev/questions.ts`), `ROOM_TEMPLATES` (`local/templates.ts`) and
+ * `PLACE_NAMES` (`ui/messages.ts`) are all keyed on a building and a room, and
+ * all three are *sparse* on the room axis for a reason that is not going away:
+ * a dungeon has a crypt and a tavern does not, so an exact key would demand a
+ * name for `tavern_crypt`, a place nothing can produce. Sparse, they compiled
+ * happily with a room missing from them, and each one answered a missing room
+ * with a runtime throw discovered by whoever got there first.
  *
- * 1. **The hall's floor is 2 groups per hundred cells, and a crypt needs to be
- *    able to be empty.** That `min` is a floor the furnishing dial cannot get
- *    under: at `furnishing: 0` a hall of 195 cells still comes back with about
- *    four groups (`groupsPerHundredCells`, read by `groupTarget` in
- *    `props.ts`). For a common room that is right — a taproom with no tables in
- *    it is not a taproom. For a crypt it is wrong, and "poucos móveis" was half
- *    of what the person asked for. The `min: 0` below is where that decision
- *    belongs; `props.ts` has no business knowing which rooms may be bare.
- * 2. **The anchor footprints would have to be the tavern hall's** — 5x2 against
- *    a wall, 3x2 against a wall, 2x3 in a corner — because `profileFor` pairs a
- *    filling slot with a geometry slot by index. A sarcophagus would have been
- *    sized by a bar counter.
- * 3. **The pillars.** `growPillars` needs an interior of 9x9, so a room is only
- *    ever columned from 11x11 up (`floorplan.ts`). The `minSize` below starts
- *    there on purpose, so that a crypt asked for with pillars always has room
- *    for them. The hall's 12x10 does not: it is a cell short on height, and the
- *    cost is bigger than its floor. `jitterSize` moves each side by a cell, so
- *    a **small** dungeon hall that asks for pillars comes back with none on
- *    **205 of 600 seeds — 34%** — every one of them a seed that landed on
- *    height 10, and nothing anywhere says so. Out of scope for this front by
- *    agreement, and measured here so that whoever picks it up starts with the
- *    number.
- *
- * No stairs, and that is a statement rather than an omission. Every other room
- * in this project that a person walks down into offers a staircase; a crypt is
- * reached along a passage, and its anchors are what it holds, not how it is
- * entered. `FEATURE_PLACES` in `interpreter/vocabulary.ts` agrees, so a
- * description that asks for steps in a crypt is answered the way this project
- * answers a bar in a bedroom — left out, and recorded in `conflicts`.
+ * Carried on the filling itself, the room axis gets its compile-time check
+ * back without the building axis having to lie: a room a building declares is
+ * an object, and an object with no `words` does not compile. The three throws
+ * downstream stay where they are — they still guard a pair arriving from a
+ * language model through JSON, which no type reaches.
  */
-const DUNGEON_CRYPT: PlaceProfile = {
-  place: { building: 'dungeon', room: 'crypt' },
-  minSize: { w: 11, h: 11 },
-  maxSize: { w: 18, h: 16 },
-  // Sealed rather than walked through: the way in, and at most a second one
-  // that was broken open later.
-  doorRange: { min: 1, max: 2 },
-  shapes: ['rectangle', 'l_shape', 't_shape', 'alcove'],
-  allowPillars: true,
-  floorMaterials: ['stone_floor', 'flagstone'],
-  wallMaterials: { stone_floor: 'stone_wall', flagstone: 'stone_wall' },
-  defaultWallMaterial: 'stone_wall',
-  // Two rather than one, and it buys exactly one thing: with all three anchors
-  // in the draw, `min: 1` leaves one crypt in nine holding nothing but its
-  // votive brazier — a lit sconce on a wall, which reads as no particular room.
-  //
-  // **It is not what keeps the room from coming back bare.** That is the
-  // sarcophagus carrying no feature word, below, and the difference matters
-  // because the arithmetic here is about a set of three that the ordinary case
-  // does not have: `anchorOrder` drops an anchor whose feature is in
-  // `excluded`, and the archetypal description of a crypt is a dark one, which
-  // scores the `hearth` noul low enough to be read as a refusal. The brazier is
-  // then out of the draw before `min` is consulted at all.
-  //
-  // The "few pieces of furniture" half of what the person asked for is not
-  // bought here either; it is bought by `groupsPerHundredCells` below, which is
-  // where furniture is counted.
-  anchorRange: { min: 2, max: 3 },
-  anchors: [
-    // **No feature word, and that is the net.** `anchorOrder` refuses an anchor
-    // whose feature is in `excluded`, and a featureless anchor can never be in
-    // `excluded`, so this is the one piece of the room that no description can
-    // take away — the same job `weapon_rack` does in the dungeon hall. It is
-    // also what actually carried the map this front exists for: that
-    // description excluded `hearth` along with `stairs`, so the brazier never
-    // entered the draw and the crypt came back as a sarcophagus and a bone
-    // niche.
-    { assetId: 'sarcophagus', footprint: { w: 3, h: 2 }, placement: 'wall' },
-    { assetId: 'bone_niche', footprint: { w: 4, h: 1 }, placement: 'wall', feature: 'shelving' },
-    {
-      // The only light this room has, and it is worth saying that the room
-      // usually has none: a crypt described the archetypal way is described as
-      // dark, `hearth` is read as refused, and the brazier is dropped — so
-      // `Scene.lights` comes back empty. That is the honest reading of the
-      // sentence and not a fault; the v1 renderer draws no light anyway.
-      assetId: 'votive_brazier',
-      footprint: { w: 2, h: 1 },
-      placement: 'wall',
-      feature: 'hearth',
-      light: { radiusCells: 3, colorHex: '#ffb46b' },
-    },
-  ],
-  // See the header: `min: 0` is the whole point of this room having its own
-  // geometry. A crypt asked for with no furniture comes back with none.
-  groupsPerHundredCells: { min: 0, max: 3 },
-  groups: [
-    {
-      id: 'tomb_slab',
-      size: { w: 3, h: 2 },
-      parts: [
-        { assetId: 'grave_slab', offset: { x: 0, y: 0 }, footprint: { w: 3, h: 1 } },
-        // Shifted off the slab by a cell, which is what makes it read as opened
-        // rather than as a second slab.
-        { assetId: 'slab_lid', offset: { x: 0, y: 1 }, footprint: { w: 2, h: 1 } },
-        { assetId: 'grave_marker', offset: { x: 2, y: 1 }, footprint: { w: 1, h: 1 } },
-      ],
-    },
-    {
-      id: 'urn_cluster',
-      size: { w: 2, h: 1 },
-      parts: [
-        { assetId: 'funerary_urn', offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
-        { assetId: 'funerary_urn', offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
-      ],
-    },
-  ],
-  // Above the hall's 0.16: dust and bone underfoot is what a catacomb is, and
-  // `shard` is there because "cacos de piso quebrado" is what the description
-  // that started this asked for and there was nowhere for it to land.
-  scatterChance: 0.2,
-  scatter: [
-    { assetId: 'bone', weight: 4 },
-    { assetId: 'skull', weight: 2 },
-    { assetId: 'rubble', weight: 3 },
-    { assetId: 'shard', weight: 2 },
-    { assetId: 'dust', weight: 2 },
-  ],
+type RoomWords = {
+  /** The line under a finished map, capitalised. Read by `ui/messages.ts`. */
+  name: string;
+  /** The criterion Jev is asked to choose rooms by. Read by `jev/questions.ts`. */
+  criterion: string;
+  /** The entailment label the local classifier scores. Read by `local/templates.ts`. */
+  label: string;
 };
 
-type RoomGeometry = Pick<PlaceProfile,
-  'minSize' | 'maxSize' | 'doorRange' | 'shapes' | 'allowPillars' |
-  'anchorRange' | 'groupsPerHundredCells' | 'scatterChance'> & {
-    anchors: Pick<AnchorSpec, 'footprint' | 'placement'>[];
-    groups: (Omit<GroupSpec, 'parts'> & { parts: Omit<GroupPart, 'assetId'>[] })[];
-    scatter: Pick<ScatterSpec, 'weight'>[];
-  };
-
-type SlotFilling = Pick<PlaceProfile, 'floorMaterials' | 'wallMaterials' | 'defaultWallMaterial'> & {
+/**
+ * What one building puts in one of its rooms: the materials, the assets that
+ * fill the geometry's slots, and the words the room is spoken about in.
+ */
+type RoomFilling = {
+  floorMaterials: string[];
+  wallMaterials: Record<string, string>;
+  defaultWallMaterial: string;
   anchors: Pick<AnchorSpec, 'assetId' | 'feature' | 'light'>[];
   groups: string[][];
   scatter: string[];
+  words: RoomWords;
 };
 
 /**
- * What one building puts in each room it has.
+ * What one building has.
  *
- * `Partial`, and the sparseness is the design rather than a gap left open: a
- * dungeon has a crypt and a tavern does not, so the matrix of buildings against
- * rooms has a hole in it. `roomsFor` is what reads the hole — it lists the
- * rooms a building declares, and every table keyed on a building and a room
- * elsewhere in the project is built from that list rather than from `RoomKind`.
- * `profileFor` turns a missing pair into a named throw, which is what the exact
- * `Record` on `ROOM_KINDS` buys at compile time and this one cannot.
+ * `Partial` in the room, and the sparseness is the design rather than a gap
+ * left open: a dungeon has a crypt and a tavern does not, so the matrix of
+ * buildings against rooms has a hole in it. `roomsFor` is what reads the hole —
+ * it lists the rooms a building declares, and every table keyed on a building
+ * and a room elsewhere in the project is built from that list rather than from
+ * `RoomKind`. `profileFor` turns a missing pair into a named throw, which is
+ * what the exact `Record` on `ROOMS` buys at compile time and this one cannot.
  */
 type BuildingPalette = {
-  rooms: Partial<Record<RoomKind, SlotFilling>>;
+  rooms: Partial<Record<RoomKind, RoomFilling>>;
 };
 
-function geometryOf(profile: PlaceProfile): RoomGeometry {
-  return {
-    minSize: profile.minSize, maxSize: profile.maxSize, doorRange: profile.doorRange,
-    shapes: profile.shapes, allowPillars: profile.allowPillars,
-    anchorRange: profile.anchorRange,
-    anchors: profile.anchors.map(({ footprint, placement }) => ({ footprint, placement })),
-    groupsPerHundredCells: profile.groupsPerHundredCells,
-    groups: profile.groups.map(({ parts, ...group }) => ({
-      ...group, parts: parts.map(({ assetId: _assetId, ...slot }) => slot),
-    })),
-    scatterChance: profile.scatterChance,
-    scatter: profile.scatter.map(({ assetId: _assetId, ...slot }) => slot),
-  };
-}
+/**
+ * Every kind of room this project can build, and the shape of each.
+ *
+ * **`RoomKind` is derived from these keys** (`core/types.ts`), so this object
+ * is the vocabulary rather than a table that has to agree with one. Adding a
+ * room is adding an entry here; every exact `Record<RoomKind, …>` in the
+ * project — `PROFILES` in `interpreter/resolve.ts`, `GENERATOR_BOUNDS` in its
+ * test — then stops compiling until it has been answered, which is the net
+ * that caught the hole in `CODE_PHRASES` and is the one thing this collapse
+ * was not allowed to cost.
+ *
+ * The first three shapes are shared by every building and these values are the
+ * tavern's, which is history rather than design: the dungeon was fitted into
+ * shapes drawn for an inn. `crypt` is not shared — no tavern has one — and it
+ * carries a geometry of its own for the three reasons written above it, which
+ * is the pattern the next room should copy.
+ */
+export const ROOM_REGISTRY = {
+  hall: {
+    minSize: { w: 12, h: 10 },
+    maxSize: { w: 20, h: 18 },
+    doorRange: { min: 1, max: 3 },
+    shapes: ['rectangle', 'l_shape', 't_shape', 'alcove'],
+    allowPillars: true,
+    anchorRange: { min: 2, max: 3 },
+    anchors: [
+      { footprint: { w: 5, h: 2 }, placement: 'wall' },
+      { footprint: { w: 3, h: 2 }, placement: 'wall' },
+      { footprint: { w: 2, h: 3 }, placement: 'corner' },
+    ],
+    groupsPerHundredCells: { min: 2, max: 5 },
+    groups: [
+      {
+        id: 'round_table',
+        size: { w: 4, h: 4 },
+        parts: [
+          { offset: { x: 1, y: 1 }, footprint: { w: 2, h: 2 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 3, y: 1 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 2, y: 3 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 0, y: 2 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+      {
+        id: 'long_table',
+        size: { w: 3, h: 3 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 3, h: 1 } },
+          { offset: { x: 0, y: 1 }, footprint: { w: 3, h: 1 } },
+          { offset: { x: 0, y: 2 }, footprint: { w: 3, h: 1 } },
+        ],
+      },
+    ],
+    scatterChance: 0.16,
+    scatter: [{ weight: 4 }, { weight: 2 }, { weight: 2 }, { weight: 1 }],
+  },
+  room: {
+    minSize: { w: 6, h: 6 },
+    maxSize: { w: 11, h: 10 },
+    doorRange: { min: 1, max: 2 },
+    shapes: ['rectangle', 'alcove'],
+    allowPillars: false,
+    anchorRange: { min: 1, max: 2 },
+    anchors: [
+      { footprint: { w: 2, h: 3 }, placement: 'wall' },
+      { footprint: { w: 2, h: 3 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+      { footprint: { w: 3, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+    ],
+    groupsPerHundredCells: { min: 2, max: 6 },
+    groups: [
+      {
+        id: 'writing_desk',
+        size: { w: 2, h: 1 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    scatterChance: 0.12,
+    scatter: [{ weight: 3 }, { weight: 2 }, { weight: 1 }],
+  },
+  storeroom: {
+    minSize: { w: 8, h: 6 },
+    maxSize: { w: 14, h: 12 },
+    doorRange: { min: 1, max: 2 },
+    shapes: ['rectangle', 'l_shape'],
+    allowPillars: false,
+    anchorRange: { min: 1, max: 2 },
+    anchors: [
+      { footprint: { w: 4, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 3 }, placement: 'corner' },
+    ],
+    groupsPerHundredCells: { min: 3, max: 8 },
+    groups: [
+      {
+        id: 'crate_stack',
+        size: { w: 2, h: 2 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 2, h: 1 } },
+          { offset: { x: 0, y: 1 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 1 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+      {
+        id: 'barrel_pair',
+        size: { w: 2, h: 1 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    scatterChance: 0.18,
+    scatter: [{ weight: 3 }, { weight: 2 }, { weight: 3 }],
+  },
+  /**
+   * The burial chamber. A dungeon has one; a tavern does not.
+   *
+   * **It carries its own geometry rather than borrowing the hall's, and this is
+   * the first room ever added to this project, so the choice is the pattern the
+   * next one will copy.** Three reasons not to extend the tavern's:
+   *
+   * 1. **The hall's floor is 2 groups per hundred cells, and a crypt needs to be
+   *    able to be empty.** That `min` is a floor the furnishing dial cannot get
+   *    under: at `furnishing: 0` a hall of 195 cells still comes back with about
+   *    four groups (`groupsPerHundredCells`, read by `groupTarget` in
+   *    `props.ts`). For a common room that is right — a taproom with no tables in
+   *    it is not a taproom. For a crypt it is wrong, and "poucos móveis" was half
+   *    of what the person asked for. The `min: 0` below is where that decision
+   *    belongs; `props.ts` has no business knowing which rooms may be bare.
+   * 2. **The anchor footprints would have to be the tavern hall's** — 5x2 against
+   *    a wall, 3x2 against a wall, 2x3 in a corner — because `profileFor` pairs a
+   *    filling slot with a geometry slot by index. A sarcophagus would have been
+   *    sized by a bar counter.
+   * 3. **The pillars.** `growPillars` needs an interior of 9x9, so a room is only
+   *    ever columned from 11x11 up (`floorplan.ts`). The `minSize` below starts
+   *    there on purpose, so that a crypt asked for with pillars always has room
+   *    for them. The hall's 12x10 does not: it is a cell short on height, and the
+   *    cost is bigger than its floor. `jitterSize` moves each side by a cell, so
+   *    a **small** dungeon hall that asks for pillars comes back with none on
+   *    **205 of 600 seeds — 34%** — every one of them a seed that landed on
+   *    height 10, and nothing anywhere says so. Out of scope for this front by
+   *    agreement, and measured here so that whoever picks it up starts with the
+   *    number.
+   *
+   * No stairs, and that is a statement rather than an omission. Every other room
+   * in this project that a person walks down into offers a staircase; a crypt is
+   * reached along a passage, and its anchors are what it holds, not how it is
+   * entered. `FEATURE_PLACES` in `interpreter/vocabulary.ts` agrees, so a
+   * description that asks for steps in a crypt is answered the way this project
+   * answers a bar in a bedroom — left out, and recorded in `conflicts`.
+   */
+  crypt: {
+    minSize: { w: 11, h: 11 },
+    maxSize: { w: 18, h: 16 },
+    // Sealed rather than walked through: the way in, and at most a second one
+    // that was broken open later.
+    doorRange: { min: 1, max: 2 },
+    shapes: ['rectangle', 'l_shape', 't_shape', 'alcove'],
+    allowPillars: true,
+    // Two rather than one, and it buys exactly one thing: with all three anchors
+    // in the draw, `min: 1` leaves one crypt in nine holding nothing but its
+    // votive brazier — a lit sconce on a wall, which reads as no particular room.
+    //
+    // **It is not what keeps the room from coming back bare.** That is the
+    // sarcophagus carrying no feature word, in the dungeon's filling below, and
+    // the difference matters because the arithmetic here is about a set of three
+    // that the ordinary case does not have: `anchorOrder` drops an anchor whose
+    // feature is in `excluded`, and the archetypal description of a crypt is a
+    // dark one, which scores the `hearth` noul low enough to be read as a
+    // refusal. The brazier is then out of the draw before `min` is consulted at
+    // all.
+    //
+    // The "few pieces of furniture" half of what the person asked for is not
+    // bought here either; it is bought by `groupsPerHundredCells` below, which is
+    // where furniture is counted.
+    anchorRange: { min: 2, max: 3 },
+    anchors: [
+      { footprint: { w: 3, h: 2 }, placement: 'wall' },
+      { footprint: { w: 4, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+    ],
+    // See the header: `min: 0` is the whole point of this room having its own
+    // geometry. A crypt asked for with no furniture comes back with none.
+    groupsPerHundredCells: { min: 0, max: 3 },
+    groups: [
+      {
+        id: 'tomb_slab',
+        size: { w: 3, h: 2 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 3, h: 1 } },
+          // Shifted off the slab by a cell, which is what makes it read as
+          // opened rather than as a second slab.
+          { offset: { x: 0, y: 1 }, footprint: { w: 2, h: 1 } },
+          { offset: { x: 2, y: 1 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+      {
+        id: 'urn_cluster',
+        size: { w: 2, h: 1 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    // Above the hall's 0.16: dust and bone underfoot is what a catacomb is, and
+    // `shard` is in the dungeon's filling because "cacos de piso quebrado" is
+    // what the description that started this asked for and there was nowhere for
+    // it to land.
+    scatterChance: 0.2,
+    scatter: [{ weight: 4 }, { weight: 2 }, { weight: 3 }, { weight: 2 }, { weight: 2 }],
+  },
+} satisfies Record<string, RoomGeometry>;
 
-function fillingOf(profile: PlaceProfile): SlotFilling {
-  return {
-    floorMaterials: profile.floorMaterials,
-    wallMaterials: profile.wallMaterials,
-    defaultWallMaterial: profile.defaultWallMaterial,
-    anchors: profile.anchors.map(({ assetId, feature, light }) => ({ assetId, feature, light })),
-    groups: profile.groups.map((group) => group.parts.map((slot) => slot.assetId)),
-    scatter: profile.scatter.map((slot) => slot.assetId),
-  };
-}
+/**
+ * The room registry, in the shape a caller indexes.
+ *
+ * Two names for one object, and the reason is that no single binding can carry
+ * both types. `RoomKind` is `keyof typeof ROOM_REGISTRY`, so annotating that
+ * constant `Record<RoomKind, RoomGeometry>` would define the type in terms of
+ * itself; left unannotated it keeps its literal key types, which is what makes
+ * the derivation possible and what makes `ROOM_REGISTRY[room]` unindexable by a
+ * `RoomKind`. Everything reads `ROOMS`; `ROOM_REGISTRY` exists for the
+ * compiler, and for `core/types.ts`.
+ */
+export const ROOMS: Record<RoomKind, RoomGeometry> = ROOM_REGISTRY;
 
-// The first three geometries are shared by every building; only the slot
-// fillings and material palette differ. These legacy values preserve tavern
-// prop order. `crypt` is not shared — no tavern has one — so it carries a
-// geometry of its own, and `DUNGEON_CRYPT` says why that is the pattern to
-// copy rather than an exception to it.
-//
-// The `Record` is exact, and deliberately: a word added to `RoomKind` does not
-// compile until it has a geometry here.
-export const ROOM_KINDS: Record<RoomKind, RoomGeometry> = {
-  hall: geometryOf(TAVERN_HALL),
-  room: geometryOf(TAVERN_ROOM),
-  storeroom: geometryOf(TAVERN_STOREROOM),
-  crypt: geometryOf(DUNGEON_CRYPT),
-};
-
-export const BUILDINGS: Record<Building, BuildingPalette> = {
+/**
+ * Every building this project can build, and what each puts in its rooms.
+ *
+ * **`Building` is derived from these keys** (`core/types.ts`), the same way
+ * `RoomKind` is derived from `ROOMS`.
+ */
+export const BUILDING_REGISTRY = {
   tavern: {
     rooms: {
-      hall: fillingOf(TAVERN_HALL),
-      room: fillingOf(TAVERN_ROOM),
-      storeroom: fillingOf(TAVERN_STOREROOM),
+      hall: {
+        floorMaterials: ['wood_plank', 'flagstone'],
+        wallMaterials: { wood_plank: 'timber_wall', flagstone: 'stone_wall' },
+        defaultWallMaterial: 'stone_wall',
+        anchors: [
+          { assetId: 'bar_counter', feature: 'bar' },
+          { assetId: 'hearth', feature: 'hearth', light: { radiusCells: 6, colorHex: '#ffb46b' } },
+          { assetId: 'stairs_up', feature: 'stairs' },
+        ],
+        groups: [
+          ['table_round', 'chair', 'chair', 'chair', 'chair'],
+          ['bench', 'table_long', 'bench'],
+        ],
+        scatter: ['mug', 'stool', 'bottle', 'straw'],
+        words: {
+          name: 'Salão de taverna',
+          criterion: 'Salão comum da taverna, com mesas, balcão e fregueses',
+          label: 'salão de taverna',
+        },
+      },
+      room: {
+        floorMaterials: ['wood_plank'],
+        wallMaterials: { wood_plank: 'plaster_wall' },
+        defaultWallMaterial: 'plaster_wall',
+        anchors: [
+          { assetId: 'bed' },
+          { assetId: 'bunk_beds', feature: 'bunks' },
+          { assetId: 'wardrobe' },
+          { assetId: 'shelf_row_short', feature: 'shelving' },
+          { assetId: 'hearth_small', feature: 'hearth', light: { radiusCells: 4, colorHex: '#ffb46b' } },
+        ],
+        groups: [['table_small', 'chair']],
+        scatter: ['mug', 'bottle', 'straw'],
+        words: {
+          name: 'Quarto de taverna',
+          criterion: 'Quarto de hóspedes da taverna, com cama',
+          label: 'quarto de taverna',
+        },
+      },
+      storeroom: {
+        floorMaterials: ['stone_floor', 'dirt_floor'],
+        wallMaterials: { stone_floor: 'stone_wall', dirt_floor: 'stone_wall' },
+        defaultWallMaterial: 'stone_wall',
+        anchors: [
+          { assetId: 'shelf_row', feature: 'shelving' },
+          { assetId: 'stairs_up', feature: 'stairs' },
+        ],
+        groups: [['crate', 'crate_small', 'barrel'], ['barrel', 'barrel']],
+        scatter: ['sack', 'shard', 'straw'],
+        words: {
+          name: 'Depósito de taverna',
+          criterion: 'Depósito, porão ou adega da taverna, com barris e mantimentos',
+          // `synonyms.ts` steers "porão" and "adega" toward `STOREROOM_WORD` in
+          // `local/templates.ts`, and this label has to start with that same
+          // word or the rule pushes the description at a label that does not
+          // exist. `templates.test.ts` holds the two together.
+          label: 'depósito de taverna',
+        },
+      },
     },
   },
   dungeon: {
@@ -619,6 +655,11 @@ export const BUILDINGS: Record<Building, BuildingPalette> = {
           ['stone_bench', 'war_table_long', 'stone_bench'],
         ],
         scatter: ['bone', 'broken_chain', 'rubble', 'dust'],
+        words: {
+          name: 'Salão da masmorra',
+          criterion: 'Sala comum ou da guarda da masmorra',
+          label: 'salão da masmorra',
+        },
       },
       room: {
         floorMaterials: ['flagstone', 'stone_floor'],
@@ -633,6 +674,11 @@ export const BUILDINGS: Record<Building, BuildingPalette> = {
         ],
         groups: [['prison_desk', 'guard_stool']],
         scatter: ['bone', 'broken_chain', 'dust'],
+        words: {
+          name: 'Cela da masmorra',
+          criterion: 'Cela ou quarto da masmorra, com catre',
+          label: 'cela da masmorra',
+        },
       },
       storeroom: {
         floorMaterials: ['flagstone', 'stone_floor'],
@@ -641,11 +687,89 @@ export const BUILDINGS: Record<Building, BuildingPalette> = {
         anchors: [{ assetId: 'armory_rack', feature: 'shelving' }, { assetId: 'stone_stairs', feature: 'stairs' }],
         groups: [['supply_crate', 'small_crate', 'weapon_bundle'], ['weapon_bundle', 'weapon_bundle']],
         scatter: ['loose_arrow', 'rubble', 'dust'],
+        words: {
+          name: 'Arsenal da masmorra',
+          criterion: 'Arsenal ou depósito da masmorra, com armas e caixotes',
+          label: 'arsenal da masmorra',
+        },
       },
-      crypt: fillingOf(DUNGEON_CRYPT),
+      crypt: {
+        floorMaterials: ['stone_floor', 'flagstone'],
+        wallMaterials: { stone_floor: 'stone_wall', flagstone: 'stone_wall' },
+        defaultWallMaterial: 'stone_wall',
+        anchors: [
+          // **No feature word, and that is the net.** `anchorOrder` refuses an
+          // anchor whose feature is in `excluded`, and a featureless anchor can
+          // never be in `excluded`, so this is the one piece of the room that no
+          // description can take away — the same job `weapon_rack` does in the
+          // dungeon hall. It is also what actually carried the map this front
+          // exists for: that description excluded `hearth` along with `stairs`,
+          // so the brazier never entered the draw and the crypt came back as a
+          // sarcophagus and a bone niche.
+          { assetId: 'sarcophagus' },
+          { assetId: 'bone_niche', feature: 'shelving' },
+          // The only light this room has, and it is worth saying that the room
+          // usually has none: a crypt described the archetypal way is described
+          // as dark, `hearth` is read as refused, and the brazier is dropped —
+          // so `Scene.lights` comes back empty. That is the honest reading of
+          // the sentence and not a fault; the v1 renderer draws no light anyway.
+          { assetId: 'votive_brazier', feature: 'hearth', light: { radiusCells: 3, colorHex: '#ffb46b' } },
+        ],
+        groups: [
+          ['grave_slab', 'slab_lid', 'grave_marker'],
+          ['funerary_urn', 'funerary_urn'],
+        ],
+        scatter: ['bone', 'skull', 'rubble', 'shard', 'dust'],
+        words: {
+          name: 'Cripta da masmorra',
+          // **Measured, and the other three criteria were left alone because
+          // measuring said to.** The corpus is 15 sentences — six of a crypt,
+          // nine controls of the other three rooms — in `corpus-cripta-jev.md`,
+          // beside the canonical ruler outside this repository for the reason
+          // that one gives. On the three criteria as they stood, all six crypt
+          // sentences missed, and the instructive part is where they went: four
+          // of the six landed in `room`, the cell. The description that started
+          // that front is the exception and landed in `hall` at 0.78, which is
+          // the guard room the person was handed.
+          //
+          // With this line the six come back `crypt` at 0.99 or better, the nine
+          // controls are unmoved, and the two traps hold: a guard room with
+          // bones on its floor keeps `hall` at 0.96 with `crypt` at 0.04, and a
+          // dungeon room with stone pillars at 0.96 against 0.02. Bone and
+          // pillar on their own do not move the choice.
+          //
+          // A longer wording was tried alongside a reworded `hall` ("onde os
+          // vivos se reúnem"), and it scored the same 14/15 while taking `hall`
+          // down to 0.83 and 0.82 on those same two traps. It is the lesson
+          // `FEATURE_THRESHOLD`'s neighbours already record: enriching the
+          // wording redistributes probability mass instead of adding coverage.
+          // The crypt sentences were already at 0.99, so there was nothing to
+          // buy and only neighbours to spend.
+          criterion: 'Cripta, catacumba ou tumba: câmara funerária com sarcófagos, ossadas e nichos',
+          // A short Portuguese noun phrase with no alternative inside it, which
+          // is the shape the bench found works for the other labels. **No
+          // accuracy measurement**, like every label here except the seven
+          // features: that front had no gold for the room choice. The word was
+          // measured on the Jev engine, where a criterion can carry synonyms
+          // without making them compete (the `criterion` above), and that
+          // measurement does not transfer to an entailment premise.
+          label: 'cripta da masmorra',
+        },
+      },
     },
   },
-};
+} satisfies Record<string, BuildingPalette>;
+
+/**
+ * The building registry, in the shape a caller indexes — the same pair of names
+ * as `ROOMS` above, for the same reason.
+ *
+ * The widening matters twice here rather than once. `Building` comes off
+ * `BUILDING_REGISTRY`'s keys, and the *room* axis widens to the
+ * `Partial<Record<RoomKind, …>>` the sparse matrix actually is, which is what
+ * lets a caller ask a building for a room it may not have.
+ */
+export const BUILDINGS: Record<Building, BuildingPalette> = BUILDING_REGISTRY;
 
 export function roomsFor(building: Building): readonly RoomKind[] {
   if (!Object.hasOwn(BUILDINGS, building)) {
@@ -654,6 +778,29 @@ export function roomsFor(building: Building): readonly RoomKind[] {
   return (Object.keys(BUILDINGS[building].rooms) as RoomKind[]).filter(
     (room) => BUILDINGS[building].rooms[room] !== undefined,
   );
+}
+
+/**
+ * The Portuguese `building` speaks about `room` in, or nothing.
+ *
+ * Both arguments are bare strings, because the three callers are all answering
+ * a pair that arrived from outside the type system — a model's JSON, or the
+ * `building_room` identifier carried in a conflict code — and each turns the
+ * absence into its own message.
+ *
+ * `Object.hasOwn` on **both** axes. These are object literals, so
+ * `BUILDINGS['toString']` is a function rather than `undefined` and
+ * `BUILDINGS.tavern.rooms['__proto__']` is an object; both walk past a `??`,
+ * and the first would be concatenated into a notice. Closing a vocabulary means
+ * asking whether the table declared the key, not whether the lookup happened to
+ * come back empty.
+ */
+export function placeWords(building: string, room: string): RoomWords | undefined {
+  if (!Object.hasOwn(BUILDINGS, building)) {
+    return undefined;
+  }
+  const rooms = BUILDINGS[building as Building].rooms;
+  return Object.hasOwn(rooms, room) ? rooms[room as RoomKind]?.words : undefined;
 }
 
 /**
@@ -672,12 +819,12 @@ export function roomsFor(building: Building): readonly RoomKind[] {
  */
 export function profileFor(place: Place): PlaceProfile {
   if (!place || !Object.hasOwn(BUILDINGS, place.building) ||
-      !Object.hasOwn(ROOM_KINDS, place.room) ||
+      !Object.hasOwn(ROOMS, place.room) ||
       !Object.hasOwn(BUILDINGS[place.building].rooms, place.room) ||
       BUILDINGS[place.building].rooms[place.room] === undefined) {
     throw new Error(`unknown place '${String(place?.building)}_${String(place?.room)}'`);
   }
-  const geometry = ROOM_KINDS[place.room];
+  const geometry: RoomGeometry = ROOMS[place.room];
   const building = BUILDINGS[place.building];
   const filling = building.rooms[place.room]!;
   if (filling.anchors.length !== geometry.anchors.length ||
@@ -704,6 +851,7 @@ export function profileFor(place: Place): PlaceProfile {
     scatter: geometry.scatter.map((slot, index) => ({ ...slot, assetId: filling.scatter[index] })),
   };
 }
+
 
 /**
  * `size` held inside the profile's bounds.

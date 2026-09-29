@@ -13,6 +13,7 @@
  */
 
 import type { Building, Condition, Light, RoomKind } from '../../core/types';
+import { placeWords, roomsFor } from '../../generator/profiles';
 import type { Feature } from '../vocabulary';
 
 /**
@@ -90,31 +91,57 @@ export type RoomTemplateSource = {
   readonly labels: Readonly<Partial<Record<RoomKind, string>>>;
 };
 
+/**
+ * The premise both buildings' room choices are scored against.
+ *
+ * One string rather than one per building, because it is the same question:
+ * the labels carry the building, so the hypothesis does not have to.
+ */
+const ROOM_HYPOTHESIS: Hypothesis = 'O cômodo é {}.';
+
+/**
+ * The room labels, read off the registry rather than written here.
+ *
+ * **The words moved, the shape did not.** Each label lives on the room's own
+ * entry in `BUILDINGS` (`generator/profiles.ts`), beside the criterion the Jev
+ * engine is asked and the name the interface prints — three tables that were
+ * all keyed on a building and a room, and all *sparse* on the room axis for the
+ * same reason a tavern has no crypt. Sparse, each compiled with a room missing
+ * from it and answered the gap with a throw at run time; carried on the
+ * filling, a room a building declares is an object with no `words`, and that
+ * does not compile.
+ *
+ * `synonyms.ts` steers "porão" and "adega" toward `STOREROOM_WORD`, and the
+ * tavern storeroom label has to begin with that same word or the rule pushes a
+ * description at a label that is not on offer. That used to be true by
+ * construction — the label was built out of the constant — which made
+ * `templates.test.ts`'s check of it a restatement. Read off the registry the
+ * two are genuinely separate, and the test is now a test.
+ */
+function labelsOf(building: Building): Readonly<Partial<Record<RoomKind, string>>> {
+  const labels: Partial<Record<RoomKind, string>> = {};
+  for (const room of roomsFor(building)) {
+    labels[room] = placeWords(building, room)?.label;
+  }
+  return labels;
+}
+
+/**
+ * The two room choices, read off the registry each time rather than snapshotted
+ * at load.
+ *
+ * `labels` is a getter on purpose. Built once into a plain property it would be
+ * a copy of the registry as it stood when this module was first imported, and a
+ * copy is exactly the thing this front is removing: the value would go on
+ * reading correctly while the registry said something else, which is the
+ * failure mode that every table keyed on a building and a room here already
+ * had. It also matters to what the tests below it can prove — a snapshot
+ * answers a changed registry with the old labels, so a test that changes one
+ * and checks the answer would be reading its own setup back.
+ */
 export const ROOM_TEMPLATES: Readonly<Record<Building, RoomTemplateSource>> = {
-  tavern: {
-    hypothesis: 'O cômodo é {}.',
-    labels: {
-      hall: 'salão de taverna',
-      room: 'quarto de taverna',
-      storeroom: `${STOREROOM_WORD} de taverna`,
-    },
-  },
-  dungeon: {
-    hypothesis: 'O cômodo é {}.',
-    labels: {
-      hall: 'salão da masmorra',
-      room: 'cela da masmorra',
-      storeroom: 'arsenal da masmorra',
-      // A short Portuguese noun phrase with no alternative inside it, which is
-      // the shape the bench found works for the other labels in this file.
-      // **No accuracy measurement**, like every other label here except the
-      // seven features: this front has no gold for the room choice. The word
-      // was measured on the Jev engine, where a criterion can carry synonyms
-      // without making them compete (`jev/questions.ts`, `ROOM_CRITERIA`), and
-      // that measurement does not transfer to an entailment premise.
-      crypt: 'cripta da masmorra',
-    },
-  },
+  tavern: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('tavern'); } },
+  dungeon: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('dungeon'); } },
 };
 
 /** How lit the place is. */

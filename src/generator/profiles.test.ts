@@ -1,3 +1,9 @@
+import { spawnSync } from 'node:child_process';
+import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { createRng } from '../core/prng';
@@ -22,7 +28,7 @@ import {
   profileFor,
   roomsFor,
   BUILDINGS,
-  ROOM_KINDS,
+  ROOMS,
   ROTATIONS,
   wallMaterialFor,
 } from './profiles';
@@ -58,7 +64,7 @@ describe('building and room composition', () => {
       expect(tavern.anchors.map((anchor) => anchor.assetId)).not.toEqual(
         dungeon.anchors.map((anchor) => anchor.assetId),
       );
-      expect(ROOM_KINDS[room].groupsPerHundredCells).toEqual(tavern.groupsPerHundredCells);
+      expect(ROOMS[room].groupsPerHundredCells).toEqual(tavern.groupsPerHundredCells);
     }
   });
 
@@ -744,5 +750,147 @@ describe('the asset vocabulary the profiles declare', () => {
       expect(kind, assetId).toBeDefined();
       expect(catalog.get(kind!.id)?.footprint).toEqual(footprint);
     }
+  });
+});
+
+/**
+ * The project root, found from this file rather than from the working
+ * directory, which vitest does not promise.
+ */
+const ROOT = resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/** The line `ROOM_REGISTRY` is closed with, and so where a room is inserted. */
+const REGISTRY_END = '} satisfies Record<string, RoomGeometry>;';
+
+/** A room with a legal geometry and nothing else — the cheapest one that compiles. */
+const EXTRA_ROOM = `  bunkhouse: {
+    minSize: { w: 6, h: 6 }, maxSize: { w: 8, h: 8 },
+    doorRange: { min: 1, max: 1 }, shapes: ['rectangle'], allowPillars: false,
+    anchorRange: { min: 0, max: 0 }, anchors: [],
+    groupsPerHundredCells: { min: 0, max: 0 }, groups: [],
+    scatterChance: 0, scatter: [],
+  },
+`;
+
+/**
+ * Every file that stops compiling when `bunkhouse` is added to the registry.
+ *
+ * Four tables, and the point of naming them one by one rather than counting
+ * them is that the list is the guarantee. `PROFILES` is the only one in
+ * production code; the other three are tests, and they are no less the net for
+ * it — `GENERATOR_BOUNDS` is what holds the resolver's size bands to the
+ * geometry the generator will actually build, the two in `interpret.test.ts`
+ * are the scores a room choice is stubbed with, and `schema.test.ts` is the
+ * mutual assignability that ties `constraintsSchema`'s own room enum, which is
+ * written out by hand in `schema.ts`, to `RoomKind`.
+ */
+const EXACT_ON_ROOM_KIND = [
+  'src/interpreter/local/interpret.test.ts',
+  'src/interpreter/resolve.test.ts',
+  'src/interpreter/resolve.ts',
+  'src/interpreter/schema.test.ts',
+];
+
+/**
+ * `npm run typecheck` over a copy of the project with one more room in the
+ * registry, and the files it refuses.
+ *
+ * The copy is what makes this safe to run beside the rest of the suite: the
+ * checkout is never written to, so a crash here cannot leave a broken
+ * `profiles.ts` behind for the next test file. `node_modules` is linked rather
+ * than copied, because it is the one part that is large and the one part the
+ * patch does not touch.
+ */
+function filesRefusingAnExtraRoom(): string[] {
+  const root = mkdtempSync(join(tmpdir(), 'gridsmith-exhaustiveness-'));
+  try {
+    for (const entry of ['src', 'api']) {
+      cpSync(join(ROOT, entry), join(root, entry), { recursive: true });
+    }
+    for (const entry of ['tsconfig.json', 'vite.config.ts']) {
+      cpSync(join(ROOT, entry), join(root, entry));
+    }
+    symlinkSync(join(ROOT, 'node_modules'), join(root, 'node_modules'));
+
+    const profiles = join(root, 'src', 'generator', 'profiles.ts');
+    const source = readFileSync(profiles, 'utf8');
+    // The insertion point has to be there and be unique, or the patch would be
+    // a no-op and this test would report a compiling project as proof that
+    // nothing needs an entry.
+    expect(source.split(REGISTRY_END)).toHaveLength(2);
+    writeFileSync(profiles, source.replace(REGISTRY_END, EXTRA_ROOM + REGISTRY_END));
+
+    const run = spawnSync(
+      process.execPath,
+      [join(ROOT, 'node_modules', 'typescript', 'lib', 'tsc.js'), '--noEmit', '-p', join(root, 'tsconfig.json')],
+      { cwd: root, encoding: 'utf8' },
+    );
+    // Read as blocks rather than as lines: `tsc` puts the detail of a nested
+    // mismatch on indented continuation lines, and for `schema.test.ts` the new
+    // room is named only down there.
+    const reported = new Set<string>();
+    let file: string | undefined;
+    let block = '';
+    const close = (): void => {
+      if (file === undefined) {
+        return;
+      }
+      // Every refusal has to be about the new room. One that is not would be a
+      // project that does not compile for some other reason, and this test
+      // would read it as the net biting.
+      expect(block).toContain('bunkhouse');
+      reported.add(file);
+    };
+    for (const line of `${run.stdout}${run.stderr}`.split('\n')) {
+      const match = /^(\S+?)\(\d+,\d+\): error/.exec(line);
+      if (match !== null) {
+        close();
+        file = match[1];
+        block = line;
+        continue;
+      }
+      block += line;
+    }
+    close();
+    return [...reported].sort();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+describe('the exhaustiveness the registry is derived for', () => {
+  it('stops every exact table compiling until a new room has an entry', () => {
+    // **This is what the collapse was not allowed to cost.** `RoomKind` used to
+    // be a union written out in `core/types.ts`; it is now `keyof typeof
+    // ROOM_REGISTRY`, and the fear with deriving a type from data is that the
+    // data stops being checked. It does not: a room added to the registry
+    // widens `RoomKind`, and every `Record<RoomKind, …>` that is exact rather
+    // than `Partial` refuses to compile until it has been answered. That is the
+    // net that caught the hole in `CODE_PHRASES` and the one that forced the
+    // crypt front to touch everything it needed to.
+    //
+    // It is checked by compiling rather than by reading the types, because the
+    // property is the compiler's answer and nothing else can stand in for it.
+    // `typescript@7` ships no JS compiler API — `import ts from 'typescript'`
+    // hands back `{ version, versionMajorMinor }` — so this runs the same `tsc`
+    // `npm run typecheck` runs, over a copy of the project.
+    expect(filesRefusingAnExtraRoom()).toEqual(EXACT_ON_ROOM_KIND);
+  });
+
+  it('leaves the sparse tables alone, because a tavern has no crypt', () => {
+    // The other half, and it is a decision rather than an oversight.
+    // `BUILDINGS.rooms` is `Partial`, and so were the three tables of words
+    // this front folded into it: the matrix of buildings against rooms has a
+    // hole in it, and an exact key would have demanded wording for
+    // `tavern_crypt`, a place nothing can produce. So the *room* axis of a
+    // building cannot be checked by the compiler and is checked by `profileFor`
+    // and by the throws in `roomQuestionFor` and `roomTemplateFor` instead —
+    // which is why none of those files is in the list above, and why the words
+    // moving onto the filling was worth doing: a room a building declares now
+    // carries its wording or is not an object at all.
+    for (const file of EXACT_ON_ROOM_KIND) {
+      expect(file.startsWith('src/interpreter/')).toBe(true);
+    }
+    expect(EXACT_ON_ROOM_KIND).not.toContain('src/generator/profiles.ts');
   });
 });
