@@ -138,6 +138,12 @@ export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   { id: 'anchor/wall_rack', kind: 'anchor', footprint: { w: 3, h: 1 }, tags: ['shelving', 'dungeon'], againstWall: true },
   { id: 'anchor/wall_torch', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['hearth', 'light', 'dungeon'], againstWall: true },
   { id: 'anchor/armory_rack', kind: 'anchor', footprint: { w: 4, h: 1 }, tags: ['shelving', 'weapons'], againstWall: true },
+  // The crypt. Its three anchors are what makes the marker map read as a burial
+  // chamber instead of a guard room at a glance — the label in each box is the
+  // whole of the contrast the person will see.
+  { id: 'anchor/sarcophagus', kind: 'anchor', footprint: { w: 3, h: 2 }, tags: ['tomb', 'stone', 'dungeon'], againstWall: true },
+  { id: 'anchor/bone_niche', kind: 'anchor', footprint: { w: 4, h: 1 }, tags: ['shelving', 'tomb', 'dungeon'], againstWall: true },
+  { id: 'anchor/votive_brazier', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['hearth', 'light', 'tomb'], againstWall: true },
 
   // Groups: arrangements placed in the open, with room around them.
   { id: 'group/table_round', kind: 'group', footprint: { w: 2, h: 2 }, tags: ['table', 'seating', 'wood'], againstWall: false },
@@ -156,6 +162,10 @@ export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   { id: 'group/supply_crate', kind: 'group', footprint: { w: 2, h: 1 }, tags: ['storage', 'dungeon'], againstWall: false },
   { id: 'group/small_crate', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['storage', 'dungeon'], againstWall: false },
   { id: 'group/weapon_bundle', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['weapons', 'dungeon'], againstWall: false },
+  { id: 'group/grave_slab', kind: 'group', footprint: { w: 3, h: 1 }, tags: ['tomb', 'stone'], againstWall: false },
+  { id: 'group/slab_lid', kind: 'group', footprint: { w: 2, h: 1 }, tags: ['tomb', 'stone'], againstWall: false },
+  { id: 'group/grave_marker', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['tomb', 'stone'], againstWall: false },
+  { id: 'group/funerary_urn', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['tomb', 'storage'], againstWall: false },
 
   // Scatter: one-cell litter, strewn over the floor.
   { id: 'scatter/mug', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['tableware', 'clutter'], againstWall: false },
@@ -169,6 +179,7 @@ export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   { id: 'scatter/rubble', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['stone', 'debris'], againstWall: false },
   { id: 'scatter/dust', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['dungeon', 'debris'], againstWall: false },
   { id: 'scatter/loose_arrow', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['weapons', 'debris'], againstWall: false },
+  { id: 'scatter/skull', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['tomb', 'debris'], againstWall: false },
 ];
 
 /**

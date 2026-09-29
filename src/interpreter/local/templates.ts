@@ -75,7 +75,22 @@ export const BUILDING_TEMPLATE: ChoiceTemplate<Building> = {
   },
 };
 
-export const ROOM_TEMPLATES: Record<Building, ChoiceTemplate<RoomKind>> = {
+/**
+ * A room template as it is declared: one hypothesis and a label for each room
+ * the building has.
+ *
+ * `Partial`, because the matrix of buildings against rooms has a hole in it — a
+ * dungeon has a crypt and a tavern does not. `roomTemplateFor` is what turns
+ * one of these into the `ChoiceTemplate<RoomKind>` the classifier is asked, by
+ * taking the rooms `roomsFor` says the building really has, and it throws on a
+ * room declared over there with no label here.
+ */
+export type RoomTemplateSource = {
+  readonly hypothesis: Hypothesis;
+  readonly labels: Readonly<Partial<Record<RoomKind, string>>>;
+};
+
+export const ROOM_TEMPLATES: Readonly<Record<Building, RoomTemplateSource>> = {
   tavern: {
     hypothesis: 'O cômodo é {}.',
     labels: {
@@ -90,6 +105,14 @@ export const ROOM_TEMPLATES: Record<Building, ChoiceTemplate<RoomKind>> = {
       hall: 'salão da masmorra',
       room: 'cela da masmorra',
       storeroom: 'arsenal da masmorra',
+      // A short Portuguese noun phrase with no alternative inside it, which is
+      // the shape the bench found works for the other labels in this file.
+      // **No accuracy measurement**, like every other label here except the
+      // seven features: this front has no gold for the room choice. The word
+      // was measured on the Jev engine, where a criterion can carry synonyms
+      // without making them compete (`jev/questions.ts`, `ROOM_CRITERIA`), and
+      // that measurement does not transfer to an entailment premise.
+      crypt: 'cripta da masmorra',
     },
   },
 };

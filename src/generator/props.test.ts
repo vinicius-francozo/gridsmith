@@ -700,6 +700,88 @@ describe('the two dials over the group layer', () => {
     }
   });
 
+  it('fits the crypt furniture into the smallest crypt there is', () => {
+    // `furnished` builds at `profile.maxSize` by default, so nothing else in
+    // this file exercises a room anywhere near its floor — `minSize` does not
+    // otherwise appear in it. That matters because an anchor with no wall long
+    // enough for it does not fail, it silently drops out (`AnchorSpec.feature`
+    // says so), and a crypt is the tightest room that carries a 4x1 niche and a
+    // 3x2 sarcophagus.
+    const place: Place = { building: 'dungeon', room: 'crypt' };
+    const profile = profileFor(place);
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const { props } = furnished(place, seed, {
+        size: profile.minSize, features: [], furnishing: 0.5, clutter: 0.3,
+      });
+      const anchors = props.filter((prop) => prop.layer === 'anchor');
+      expect(`seed ${String(seed)}: ${String(anchors.length)} anchors in an ${String(profile.minSize.w)}x${String(profile.minSize.h)} crypt`)
+        .not.toBe(`seed ${String(seed)}: 0 anchors in an ${String(profile.minSize.w)}x${String(profile.minSize.h)} crypt`);
+    }
+  });
+
+  it('leaves the sarcophagus standing however much of the crypt is refused', () => {
+    // The net, and it is the featureless anchor rather than `anchorRange.min`.
+    // `anchorOrder` drops any anchor whose feature is in `excluded`; the
+    // sarcophagus has no feature, so it cannot be named and cannot be refused.
+    // This is not hypothetical — it is the map this front exists for. The live
+    // model read "catacumba **escura**" as a refusal of `hearth` and returned
+    // `excluded: ['bar', 'hearth', 'stairs', 'bunks']`, which takes the brazier
+    // out before the draw starts; `shelving` going the same way would take the
+    // bone niche too. Give the sarcophagus a feature word and the room becomes
+    // refusable down to bare walls.
+    const everyFeature = ['bar', 'hearth', 'stairs', 'pillars', 'alcove', 'shelving', 'bunks'];
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const { props } = furnished({ building: 'dungeon', room: 'crypt' }, seed, {
+        features: [], excluded: everyFeature, furnishing: 0.5, clutter: 0.3,
+      });
+      const anchors = props.filter((prop) => prop.layer === 'anchor').map((prop) => prop.assetId);
+      expect(`seed ${String(seed)}: ${anchors.join(' ')}`)
+        .toBe(`seed ${String(seed)}: ${assetIdFor('anchor', 'sarcophagus')}`);
+    }
+  });
+
+  it('never leaves a crypt with nothing but its brazier', () => {
+    // Why `anchorRange.min` is 2 in the crypt's profile. `anchorOrder` draws
+    // from the three anchors, so at a floor of one, one crypt in nine comes
+    // back holding only the votive brazier — a lit sconce on a wall, which
+    // reads as no particular room. At two, any draw takes two of three and so
+    // cannot miss both the sarcophagus and the bone niche, which are the pieces
+    // that say *crypt* on the map. The map is the only place the person checks.
+    //
+    // `features: []` is load-bearing and the mutation sweep is how that was
+    // found out. `furnished` asks for every featured anchor by default, so both
+    // the bone niche and the brazier arrive already requested, the order starts
+    // with them whatever `anchorRange.min` says, and the floor is never
+    // exercised: written that way this test passed with `min` set back to 1.
+    for (let seed = 1; seed <= 40; seed += 1) {
+      const { props } = furnished({ building: 'dungeon', room: 'crypt' }, seed, { features: [], furnishing: 0.5, clutter: 0.3 });
+      const anchors = props.filter((prop) => prop.layer === 'anchor').map((prop) => prop.assetId);
+      const speaking = anchors.filter(
+        (id) => id === assetIdFor('anchor', 'sarcophagus') || id === assetIdFor('anchor', 'bone_niche'),
+      );
+      expect(`seed ${String(seed)}: ${String(speaking.length)} of ${String(anchors.length)} say crypt`)
+        .not.toBe(`seed ${String(seed)}: 0 of ${String(anchors.length)} say crypt`);
+    }
+  });
+
+  it('empties the crypt when asked for no furniture, and never the common room', () => {
+    // `groupTarget` scales between the profile's two numbers, so the `min` is a
+    // floor the dial cannot get under: at `furnishing: 0` a hall still comes
+    // back with groups in it, because a common room with no tables is not a
+    // common room. A crypt is different — a burial chamber with nothing
+    // standing in it is an ordinary burial chamber — and that difference is a
+    // `min: 0` in `profiles.ts`, not a special case here.
+    for (const seed of [1, 7, 2985161997]) {
+      const crypt = furnished({ building: 'dungeon', room: 'crypt' }, seed, { furnishing: 0, clutter: 0.8 });
+      const hall = furnished({ building: 'dungeon', room: 'hall' }, seed, { furnishing: 0, clutter: 0.8 });
+      expect(`seed ${String(seed)}: ${String(groupCount(crypt.props))} in the crypt`)
+        .toBe(`seed ${String(seed)}: 0 in the crypt`);
+      expect(groupCount(hall.props)).toBeGreaterThan(0);
+      // And the dirt is still there, which is the whole of what was asked for.
+      expect(crypt.props.filter((prop) => prop.layer === 'scatter').length).toBeGreaterThan(0);
+    }
+  });
+
   it('leaves the scatter layer to clutter alone', () => {
     // The other half of the separation. A bare floor stays bare however much
     // furniture stands on it.

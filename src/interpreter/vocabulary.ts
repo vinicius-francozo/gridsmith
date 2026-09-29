@@ -25,21 +25,46 @@ export type Feature = (typeof FEATURES)[number];
  * The places each feature belongs to.
  *
  * Typed against `Feature`, so a word added to `FEATURES` does not compile
- * until it has been placed here too.
+ * until it has been placed here too. It is **not** typed against `RoomKind`,
+ * so a room added over in `core/types.ts` compiles straight through this file
+ * and simply holds no features — which is why every list below was walked by
+ * hand when `crypt` arrived rather than waited on.
+ *
+ * Each list has to agree with the profiles in `generator/profiles.ts`: a
+ * feature that names an anchor is only listed for a place whose profile
+ * declares that anchor, and `pillars` and `alcove` are the two answered by
+ * stage one instead, so they are listed for any place whose profile allows the
+ * shape. `profiles.test.ts` holds the two sides together for the crypt.
  */
 const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
   /** The serving counter. A tavern has one, and it is in the common room. */
   bar: [{ building: 'tavern', room: 'hall' }],
-  /** An open fire. Warms a room people sit in, not a cellar full of barrels. */
-  hearth: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }],
-  /** A flight up or down, to the rooms above or the cellar below. */
+  /**
+   * An open fire. Warms a room people sit in, not a cellar full of barrels —
+   * and, in a crypt, the votive brazier left burning for the dead.
+   */
+  hearth: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'crypt' }],
+  /**
+   * A flight up or down, to the rooms above or the cellar below.
+   *
+   * Every room in the project offers one except the crypt, which is reached
+   * along a passage rather than down a stair. That absence is the one feature
+   * decision this list makes on its own account, and it is deliberate: the
+   * description that put `crypt` in the vocabulary said "sem escadaria".
+   */
   stairs: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'storeroom' }],
-  /** Columns carrying a span too wide for bare joists. Only a hall is that wide. */
-  pillars: [{ building: 'tavern', room: 'hall' }, { building: 'dungeon', room: 'hall' }],
-  /** A recess off the main floor: a snug, or a bed nook. */
-  alcove: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'room' }],
-  /** Racks along a wall, for casks or for a guest's belongings. */
-  shelving: [{ building: 'tavern', room: 'storeroom' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'storeroom' }, { building: 'dungeon', room: 'room' }],
+  /**
+   * Columns carrying a span too wide for bare joists. A hall is that wide, and
+   * so is a crypt, whose vault is the reason it has them.
+   */
+  pillars: [{ building: 'tavern', room: 'hall' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'crypt' }],
+  /** A recess off the main floor: a snug, a bed nook, or a burial recess. */
+  alcove: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'crypt' }],
+  /**
+   * Racks along a wall, for casks or for a guest's belongings — and, in a
+   * crypt, the tiers of a bone niche, which is a shelf holding the dead.
+   */
+  shelving: [{ building: 'tavern', room: 'storeroom' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'storeroom' }, { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'crypt' }],
   /** Stacked sleeping berths. A room to sleep in, and nowhere else. */
   bunks: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
 };

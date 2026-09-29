@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { RoomKind } from '../../core/types';
 import { FEATURES } from '../vocabulary';
 import { BUILDINGS } from '../../generator/profiles';
 
@@ -18,7 +19,10 @@ import {
 } from './questions';
 
 const BUILDING_KEYS = ['tavern', 'dungeon'];
-const ROOMS = ['hall', 'room', 'storeroom'];
+// Sorted, because the assertions below sort. Two lists rather than one: the
+// matrix of buildings against rooms is sparse, and the crypt is the dungeon's.
+const TAVERN_ROOMS = ['hall', 'room', 'storeroom'];
+const DUNGEON_ROOMS = ['crypt', 'hall', 'room', 'storeroom'];
 
 describe('a score question and its levels', () => {
   it('has one level for each criterion, on all three scales', () => {
@@ -51,17 +55,35 @@ describe('the choice question', () => {
     // Jev answers a choice with one of these keys, so this is what keeps the
     // answer inside `constraintsSchema` before the schema is even reached.
     expect(Object.keys(QUESTIONS.building.criteria).sort()).toEqual([...BUILDING_KEYS].sort());
-    expect(Object.keys(roomQuestionFor('tavern').room.criteria).sort()).toEqual(ROOMS);
-    expect(Object.keys(roomQuestionFor('dungeon').room.criteria).sort()).toEqual(ROOMS);
+    expect(Object.keys(roomQuestionFor('tavern').room.criteria).sort()).toEqual(TAVERN_ROOMS);
+    expect(Object.keys(roomQuestionFor('dungeon').room.criteria).sort()).toEqual(DUNGEON_ROOMS);
   });
 
   it('removes an unavailable room from the second question', () => {
-    const filling = BUILDINGS.dungeon.rooms.room;
-    delete BUILDINGS.dungeon.rooms.room;
+    const rooms = BUILDINGS.dungeon.rooms;
+    BUILDINGS.dungeon.rooms = { hall: rooms.hall, storeroom: rooms.storeroom, crypt: rooms.crypt };
     try {
-      expect(Object.keys(roomQuestionFor('dungeon').room.criteria)).toEqual(['hall', 'storeroom']);
+      expect(Object.keys(roomQuestionFor('dungeon').room.criteria)).toEqual(['hall', 'storeroom', 'crypt']);
     } finally {
-      BUILDINGS.dungeon.rooms.room = filling;
+      BUILDINGS.dungeon.rooms = rooms;
+    }
+  });
+
+  it('refuses to ask about a room it has no criterion for', () => {
+    // The hole this closes is quiet rather than loud. An `undefined` criterion
+    // is dropped by `JSON.stringify` on the way into the request, so Jev would
+    // be asked to choose between the rooms that happen to have wording and
+    // would answer one of those, confidently — and `read.ts` checks the answer
+    // against `roomsFor`, where the unasked room still is. The map would come
+    // back a different kind of place with nothing anywhere saying so.
+    const rooms = BUILDINGS.dungeon.rooms;
+    BUILDINGS.dungeon.rooms = { ...rooms, storeroom: rooms.storeroom, room: rooms.room };
+    const stray = 'bunkhouse' as RoomKind;
+    BUILDINGS.dungeon.rooms[stray] = rooms.hall;
+    try {
+      expect(() => roomQuestionFor('dungeon')).toThrow("no room criterion for 'dungeon_bunkhouse'");
+    } finally {
+      BUILDINGS.dungeon.rooms = rooms;
     }
   });
 });

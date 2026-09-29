@@ -70,8 +70,16 @@ describe('rejecting an answer', () => {
   it('rejects a place type outside the vocabulary', () => {
     expect(constraintsSchema.safeParse({ ...valid, place: 'throne_room' }).success).toBe(false);
     expect(constraintsSchema.safeParse({ ...valid, place: { building: 'forge', room: 'hall' } }).success).toBe(false);
-    expect(constraintsSchema.safeParse({ ...valid, place: { building: 'tavern', room: 'crypt' } }).success).toBe(false);
     expect(constraintsSchema.safeParse({ ...valid, place: { building: 'toString', room: 'hall' } }).success).toBe(false);
+  });
+
+  it('takes a crypt in a dungeon and refuses the same word in a tavern', () => {
+    // The pair the sparse matrix made reachable. `crypt` is a room the enum
+    // admits and `tavern` is a building it admits, so the only thing between
+    // `tavern_crypt` and the generator is the `refine` — which, until this
+    // room existed, no pair the enums allowed could ever reach.
+    expect(constraintsSchema.safeParse({ ...valid, place: { building: 'dungeon', room: 'crypt' } }).success).toBe(true);
+    expect(constraintsSchema.safeParse({ ...valid, place: { building: 'tavern', room: 'crypt' } }).success).toBe(false);
   });
 
   it('rejects a valid room key absent from the chosen building', () => {

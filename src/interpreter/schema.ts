@@ -29,10 +29,22 @@ export const constraintsSchema = z
   .object({
     place: z.object({
       building: z.enum(['tavern', 'dungeon']),
-      room: z.enum(['hall', 'room', 'storeroom']),
+      room: z.enum(['hall', 'room', 'storeroom', 'crypt']),
     }).refine((place) => roomsFor(place.building).includes(place.room), {
       message: 'The room is unavailable in this building.',
-    }).describe('The building and its room. Choose a supported combination.'),
+    }).describe(
+      // The `refine` above has always been here and, until `crypt`, it could
+      // never fire: every building had every room, so no pair the enums admit
+      // was unsupported. The matrix is sparse now, `tavern` + `crypt` is a
+      // combination the enums admit and the refusal rejects, and a rejection
+      // here costs the whole request. So the description stops saying "choose a
+      // supported combination" and says which they are — this is the only place
+      // the model is told, since `zodOutputFormat` sends these as a hint in the
+      // JSON Schema description rather than as grammar the API enforces.
+      'The building and its room. A tavern has hall, room or storeroom. A dungeon has those three ' +
+        'and crypt, the burial chamber: a catacomb, tomb or ossuary, with sarcophagi and bone niches. ' +
+        'There is no crypt in a tavern.',
+    ),
     sizeHint: z
       .enum(['small', 'medium', 'large'])
       .optional()

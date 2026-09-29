@@ -114,11 +114,19 @@ function featureWord(detail: string): string {
  * a string, so an unrecognised one is shown as it came instead of dropped, the
  * same way `featureWord` does.
  *
- * `Object.hasOwn` for the reason `isKnownCode` states: a plain lookup would
- * answer a prototype member for `constructor` or `toString`.
+ * The detail is one string and `PLACE_NAMES` is nested, so it has to be cut in
+ * two. It is cut at the **first** underscore because the building is the axis
+ * that is closed and exact, so it is the half worth reading first — **not**
+ * because the last would be wrong today: no building and no room contains an
+ * underscore, and the mutation to `lastIndexOf` survives the whole suite. A
+ * detail with no underscore at all is not a pair and is shown as it came,
+ * which is why a bare `toString` never reaches `placeName` — though
+ * `constructor_name` does, and `placeName` is what stops it.
  */
 function placeWord(detail: string): string {
-  return Object.hasOwn(PLACE_NAMES, detail) ? PLACE_NAMES[detail as `${Building}_${RoomKind}`] : detail;
+  const cut = detail.indexOf('_');
+  const name = cut === -1 ? undefined : placeName(detail.slice(0, cut), detail.slice(cut + 1));
+  return name ?? detail;
 }
 
 /**
@@ -540,20 +548,53 @@ export function describeModelProgress(progress: ModelProgress): string {
 }
 
 /**
- * The six supported building and room pairs, in Portuguese.
+ * The seven supported building and room pairs, in Portuguese.
  *
- * Exact `Record` for the same reason as the two tables above: a fourth kind of
- * place stops this file compiling rather than reaching the screen as
- * `tavern_cellar`.
+ * **Exact in the building, sparse in the room**, which is the shape the matrix
+ * actually has: every building is declared, and each declares only the rooms it
+ * holds. A dungeon has a crypt and a tavern does not, so a flat key of every
+ * building crossed with every room stopped describing this table the moment
+ * `crypt` existed — kept exact, it would have demanded a name for
+ * `tavern_crypt`, a place nothing can produce, in the one table a person reads
+ * from.
+ *
+ * Nesting is what keeps both properties instead of trading one for the other.
+ * A **building** added upstream still stops this file compiling, the way the
+ * flat key used to, and it is the same shape `ROOM_CRITERIA` in
+ * `jev/questions.ts` and `ROOM_TEMPLATES` in `local/templates.ts` are written
+ * in — three tables keyed on a building and a room, one form between them.
+ * Only the **room** axis gives up its compile-time check, because only that
+ * axis is sparse, and `describeResult` throws in its place.
  */
-const PLACE_NAMES: Readonly<Record<`${Building}_${RoomKind}`, string>> = {
-  tavern_hall: 'Salão de taverna',
-  tavern_room: 'Quarto de taverna',
-  tavern_storeroom: 'Depósito de taverna',
-  dungeon_hall: 'Salão da masmorra',
-  dungeon_room: 'Cela da masmorra',
-  dungeon_storeroom: 'Arsenal da masmorra',
+const PLACE_NAMES: Readonly<Record<Building, Readonly<Partial<Record<RoomKind, string>>>>> = {
+  tavern: {
+    hall: 'Salão de taverna',
+    room: 'Quarto de taverna',
+    storeroom: 'Depósito de taverna',
+  },
+  dungeon: {
+    hall: 'Salão da masmorra',
+    room: 'Cela da masmorra',
+    storeroom: 'Arsenal da masmorra',
+    crypt: 'Cripta da masmorra',
+  },
 };
+
+/**
+ * The Portuguese name for a pair, or nothing.
+ *
+ * `Object.hasOwn` on **both** axes, for the reason `isKnownCode` states: these
+ * are object literals, so `PLACE_NAMES['toString']` is a function rather than
+ * `undefined` and `PLACE_NAMES.tavern['__proto__']` is an object. Both walk
+ * past a `??`, and the first would be concatenated into a notice.
+ */
+function placeName(building: string, room: string): string | undefined {
+  if (!Object.hasOwn(PLACE_NAMES, building)) {
+    return undefined;
+  }
+  const rooms = PLACE_NAMES[building as Building];
+  return Object.hasOwn(rooms, room) ? rooms[room as RoomKind] : undefined;
+}
 
 /**
  * The line under a finished map.
@@ -561,12 +602,20 @@ const PLACE_NAMES: Readonly<Record<`${Building}_${RoomKind}`, string>> = {
  * The seed is in it because the seed is the only way back to this map, and the
  * size is in cells because cells are the unit the map is played in — the pixel
  * dimensions are the renderer's business and mean nothing at a table.
+ *
+ * @throws {TypeError} if `PLACE_NAMES` has no name for the pair. This is the
+ *                     guard standing in for the room axis's compile-time check
+ *                     — see `PLACE_NAMES`, which keeps the building axis's.
+ *                     Without it the line reads "undefined, 17×15 casas", which
+ *                     is a place name a person cannot tell from a rendering
+ *                     bug, under a map that is otherwise correct.
  */
 export function describeResult(params: Params): string {
-  return (
-    `${PLACE_NAMES[`${params.place.building}_${params.place.room}`]}, ${String(params.size.w)}×${String(params.size.h)} casas, ` +
-    `semente ${String(params.seed)}.`
-  );
+  const name = placeName(params.place.building, params.place.room);
+  if (name === undefined) {
+    throw new TypeError(`no name for the place '${params.place.building}_${params.place.room}'`);
+  }
+  return `${name}, ${String(params.size.w)}×${String(params.size.h)} casas, semente ${String(params.seed)}.`;
 }
 
 /** The fixed labels and headings of the interface. */

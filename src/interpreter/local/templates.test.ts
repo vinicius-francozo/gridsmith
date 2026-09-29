@@ -28,7 +28,11 @@ import type { ChoiceTemplate } from './templates';
  * are what makes that a failing test instead.
  */
 const BUILDINGS: Building[] = ['tavern', 'dungeon'];
-const ROOMS: RoomKind[] = ['hall', 'room', 'storeroom'];
+// Two lists, because the matrix is sparse: a dungeon has a crypt and a tavern
+// does not. One list over every `RoomKind` would have asked the tavern for a
+// label it must not have.
+const TAVERN_ROOMS: RoomKind[] = ['hall', 'room', 'storeroom'];
+const DUNGEON_ROOMS: RoomKind[] = ['hall', 'room', 'storeroom', 'crypt'];
 const LIGHTS: Light[] = ['dark', 'dim', 'bright'];
 const CONDITIONS: Condition[] = ['tidy', 'lived_in', 'disordered', 'ruined'];
 const SIZE_HINTS = ['small', 'medium', 'large'];
@@ -72,10 +76,10 @@ describe('every template is askable', () => {
 });
 
 describe('every template covers its closed vocabulary', () => {
-  it('asks about each building and its three rooms', () => {
+  it('asks about each building and the rooms that building has', () => {
     expect(Object.keys(BUILDING_TEMPLATE.labels).sort()).toEqual([...BUILDINGS].sort());
-    expect(Object.keys(ROOM_TEMPLATES.tavern.labels).sort()).toEqual([...ROOMS].sort());
-    expect(Object.keys(ROOM_TEMPLATES.dungeon.labels).sort()).toEqual([...ROOMS].sort());
+    expect(Object.keys(ROOM_TEMPLATES.tavern.labels).sort()).toEqual([...TAVERN_ROOMS].sort());
+    expect(Object.keys(ROOM_TEMPLATES.dungeon.labels).sort()).toEqual([...DUNGEON_ROOMS].sort());
   });
 
   it('asks about all three lights', () => {
@@ -171,6 +175,12 @@ describe('the wording handed to the classifier', () => {
       room: 'quarto de taverna',
       storeroom: 'depósito de taverna',
     });
+    expect(ROOM_TEMPLATES.dungeon.labels).toEqual({
+      hall: 'salão da masmorra',
+      room: 'cela da masmorra',
+      storeroom: 'arsenal da masmorra',
+      crypt: 'cripta da masmorra',
+    });
     expect(LIGHT_TEMPLATE.labels).toEqual({
       dark: 'escuridão total, não há luz nenhuma',
       dim: 'luz fraca, penumbra, meia-luz',
@@ -222,7 +232,7 @@ describe('the wording handed to the classifier', () => {
     // `synonyms.ts` reads `STOREROOM_WORD`, not this label. If the two ever
     // stopped being the same word, every "porão" would be rewritten into a word
     // no hypothesis mentions.
-    expect(ROOM_TEMPLATES.tavern.labels.storeroom.split(' ')[0]).toBe(STOREROOM_WORD);
+    expect(ROOM_TEMPLATES.tavern.labels.storeroom?.split(' ')[0]).toBe(STOREROOM_WORD);
   });
 });
 

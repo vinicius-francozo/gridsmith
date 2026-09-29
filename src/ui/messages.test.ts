@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Params, Place } from '../core/types';
+import type { Building, Params, Place } from '../core/types';
+import { BUILDINGS, roomsFor } from '../generator/profiles';
 import { SceneValidationError } from '../generator/validate';
 import {
   CLUTTER_NOT_A_NUMBER,
@@ -52,11 +53,12 @@ import {
 /** Every code any layer of the interpreter can put in front of a person. */
 const EVERY_CODE: readonly Code[] = [...CONFLICT_CODES, ...UNRESOLVED_CODES];
 
-/** The three kinds of place the generator can build. */
+/** Every kind of place the generator can build. */
 const PLACE_TYPES: readonly Place[] = [
   { building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' },
   { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' },
   { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'storeroom' },
+  { building: 'dungeon', room: 'crypt' },
 ];
 
 describe('the table covers the codes, and only the codes', () => {
@@ -173,6 +175,7 @@ describe('an entry becomes a sentence', () => {
       dungeon_hall: 'Salão da masmorra',
       dungeon_room: 'Cela da masmorra',
       dungeon_storeroom: 'Arsenal da masmorra',
+      dungeon_crypt: 'Cripta da masmorra',
     };
 
     for (const place of PLACE_TYPES) {
@@ -202,7 +205,21 @@ describe('an entry becomes a sentence', () => {
     // arrive. A plain lookup would answer the prototype member, and the line
     // above the map would read `Desenhei o mais próximo: “function Object() {
     // [native code] }”`.
-    for (const key of ['constructor', '__proto__', 'toString', 'valueOf', 'hasOwnProperty']) {
+    //
+    // The two-part keys are not decoration. `PLACE_NAMES` is nested now, so a
+    // bare word never reaches the lookup at all — it has no underscore and
+    // `placeWord` returns it before splitting. Only a `building_room` shape
+    // gets as far as the table, and each of these reaches a different one of
+    // the two guards: `constructor_name` answers the string `"Object"` from
+    // `Object.name` if the building axis is unguarded, and `tavern___proto__`
+    // answers `Object.prototype` itself — printed as `[object Object]` — if the
+    // room axis is.
+    const keys = [
+      'constructor', '__proto__', 'toString', 'valueOf', 'hasOwnProperty',
+      'constructor_name', 'toString_hall', 'tavern___proto__', 'tavern_constructor',
+      'valueOf_hall', 'dungeon_hasOwnProperty',
+    ];
+    for (const key of keys) {
       expect(describeEntry(entry(PLACE_NOT_IN_VOCABULARY, key))).toBe(
         'A descrição não parece ser nenhum dos lugares que o gerador conhece. ' +
           `Desenhei o mais próximo: “${key}”.`,
@@ -451,7 +468,35 @@ describe('the line under a finished map', () => {
   it('has a different name for each kind of place', () => {
     const names = PLACE_TYPES.map((place) => describeResult({ ...params, place }));
 
-    expect(new Set(names).size).toBe(6);
+    expect(new Set(names).size).toBe(7);
+  });
+
+  it('has a name for every pair the generator declares', () => {
+    // The check standing in for the room axis's compile-time exactness in
+    // `messages.ts` — the building axis keeps its own, because `PLACE_NAMES` is
+    // nested and exact there. Both ends are read out of `BUILDINGS`: a list of
+    // buildings written out here would have gone stale the same way the flat
+    // key did, and then this test would be approximating the matrix instead of
+    // reading it.
+    const declared = (Object.keys(BUILDINGS) as Building[]).flatMap((building) =>
+      roomsFor(building).map((room) => ({ building, room })),
+    );
+    expect(declared.length).toBe(PLACE_TYPES.length);
+    for (const place of declared) {
+      const line = describeResult({ ...params, place });
+      expect(line).not.toContain(`${place.building}_${place.room}`);
+      expect(line).not.toContain('undefined');
+    }
+  });
+
+  it('refuses a place it has no name for, rather than writing "undefined" under the map', () => {
+    // The guard the exact `Record` used to make unnecessary. Without it the
+    // line reads "undefined, 12×8 casas, semente 4242" — a place name a person
+    // cannot tell from a rendering fault, under a map that is otherwise right.
+    const place = { building: 'tavern', room: 'crypt' } as Place;
+
+    expect(() => describeResult({ ...params, place })).toThrow(TypeError);
+    expect(() => describeResult({ ...params, place })).toThrow("no name for the place 'tavern_crypt'");
   });
 });
 

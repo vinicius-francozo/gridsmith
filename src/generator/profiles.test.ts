@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { createRng } from '../core/prng';
+import { buildFloorplan } from './floorplan';
+import { isPillar } from './materials';
+import { paramsFor } from './test-fixtures';
+import { featureSuits, featuresFor } from '../interpreter/vocabulary';
+import type { Feature } from '../interpreter/vocabulary';
 import { materialColor } from '../assets/palette';
 import { MATERIAL_VARIANTS, PLACEHOLDER_CATALOG } from '../assets/placeholder';
 import type { Place, Size } from '../core/types';
@@ -21,19 +26,26 @@ import {
   ROTATIONS,
   wallMaterialFor,
 } from './profiles';
+import type { ShapeName } from './profiles';
 
 const PLACE_TYPES: Place[] = [
   { building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' },
   { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' },
   { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'storeroom' },
+  { building: 'dungeon', room: 'crypt' },
 ];
 
+/** The rooms both buildings have, and so the ones whose geometry is shared. */
+const SHARED_ROOMS = ['hall', 'room', 'storeroom'] as const;
+
 describe('building and room composition', () => {
-  it('declares all six pairs and shares geometry for the same room', () => {
-    for (const building of ['tavern', 'dungeon'] as const) {
-      expect(roomsFor(building)).toEqual(['hall', 'room', 'storeroom']);
-    }
-    for (const room of ['hall', 'room', 'storeroom'] as const) {
+  it('declares all seven pairs and shares geometry for the rooms both buildings have', () => {
+    expect(roomsFor('tavern')).toEqual([...SHARED_ROOMS]);
+    // The crypt is the dungeon's alone, which is what makes the matrix sparse
+    // and is the reason every table keyed on a building and a room is read
+    // through `roomsFor` rather than over `RoomKind`.
+    expect(roomsFor('dungeon')).toEqual([...SHARED_ROOMS, 'crypt']);
+    for (const room of SHARED_ROOMS) {
       const tavern = profileFor({ building: 'tavern', room });
       const dungeon = profileFor({ building: 'dungeon', room });
       expect(tavern.minSize).toEqual(dungeon.minSize);
@@ -61,6 +73,142 @@ describe('building and room composition', () => {
     }
   });
 
+  it('furnishes the crypt with the dead and the hall with the guard', () => {
+    // The whole point of the room existing. A description of a catacomb used to
+    // resolve to the hall, and the hall's filling is what the person saw: a war
+    // table, four guard stools and a weapon rack. This is that contrast written
+    // down — the two fillings share no asset at all, so the marker map reads as
+    // a different kind of room at a glance rather than as the same room with a
+    // different label on the line underneath it.
+    //
+    // Furniture only. The two rooms do share scatter — bone, rubble and dust
+    // are litter on a dungeon floor wherever that floor is, and a crypt earns
+    // `skull` and `shard` on top of them rather than instead of them. It is the
+    // pieces that carry a label a person reads that have to differ.
+    const crypt = profileFor({ building: 'dungeon', room: 'crypt' });
+    const hall = profileFor({ building: 'dungeon', room: 'hall' });
+
+    const idsOf = (profile: typeof crypt): string[] => [
+      ...profile.anchors.map((anchor) => anchor.assetId),
+      ...profile.groups.flatMap((group) => group.parts.map((part) => part.assetId)),
+    ];
+
+    expect(crypt.anchors.map((anchor) => anchor.assetId)).toEqual([
+      'sarcophagus', 'bone_niche', 'votive_brazier',
+    ]);
+    expect(crypt.groups.map((group) => group.parts.map((part) => part.assetId))).toEqual([
+      ['grave_slab', 'slab_lid', 'grave_marker'],
+      ['funerary_urn', 'funerary_urn'],
+    ]);
+    const hallIds = new Set(idsOf(hall));
+    expect(idsOf(crypt).filter((id) => hallIds.has(id))).toEqual([]);
+    expect(crypt.scatter.map((slot) => slot.assetId)).toEqual([
+      'bone', 'skull', 'rubble', 'shard', 'dust',
+    ]);
+    // The sarcophagus carries **no feature word**, and that is the net rather
+    // than a detail of the table. `anchorOrder` drops an anchor whose feature is
+    // in `excluded`, and a featureless one can never be in `excluded`, so this
+    // is the single piece that cannot be refused. It is also what actually
+    // saved the map this front exists for: "catacumba **escura**" scores the
+    // `hearth` noul low enough to be read as a refusal, which takes the brazier
+    // out of the draw before it starts. Give it a feature and the crypt becomes
+    // refusable down to nothing.
+    expect(crypt.anchors.find((anchor) => anchor.assetId === 'sarcophagus')?.feature).toBeUndefined();
+    for (const guardRoomThing of ['war_table', 'guard_stool', 'weapon_rack', 'stone_stairs']) {
+      expect(idsOf(crypt)).not.toContain(guardRoomThing);
+    }
+  });
+
+  it('lets a crypt be asked for with no furniture at all, which a hall cannot be', () => {
+    // The limit the front before this one left on the table: `groupTarget`
+    // scales between these two numbers, so the `min` is a floor the furnishing
+    // dial cannot reach under. A common room with no tables in it is not a
+    // common room; a crypt with nothing standing in it is an ordinary crypt,
+    // and "poucos móveis" was half of what the person asked for. The decision
+    // belongs in this table and not in `props.ts`.
+    expect(profileFor({ building: 'dungeon', room: 'crypt' }).groupsPerHundredCells.min).toBe(0);
+    expect(profileFor({ building: 'dungeon', room: 'hall' }).groupsPerHundredCells.min).toBe(2);
+  });
+
+  it('grows pillars in the smallest crypt there is, and in no hall that small', () => {
+    // **Built, not asserted about the table.** Written as `minSize.h >= 11` this
+    // passed with `MIN_INTERIOR_FOR_PILLARS` moved from 9x9 to 10x10 — the very
+    // constant the crypt's floor is chosen against, and the load-bearing
+    // premise of its having a geometry of its own. So it asks stage one for the
+    // plan and counts what came out.
+    //
+    // The hall is the other half and it is a real defect, left out of scope by
+    // agreement: its floor is 12x10, an interior of 10x8, and eight is under
+    // the nine `growPillars` wants. **Every** seed of 600 builds a 12x10 hall
+    // that asked for pillars and got none, and it is not only the floor —
+    // `jitterSize` moves each side a cell, so a *small* dungeon hall asking for
+    // pillars comes back bare on **205 of 600 seeds, 34%**, every one of them
+    // the seeds that landed on height 10.
+    // Forty is chosen against the grammar rather than for comfort: the plan is
+    // one of four shapes, and both invariants below hold shape by shape, so a
+    // sweep only has to see each of them several times.
+    const seeds = Array.from({ length: 40 }, (_, i) => i + 1);
+    const counts = (place: Place): number[] => {
+      const profile = profileFor(place);
+      return seeds.map((seed) => {
+        const params = paramsFor(place, { size: profile.minSize, features: [PILLARS_FEATURE], doorCount: 1 });
+        const { floorplan } = buildFloorplan(params, profile, createRng(seed));
+        // `isPillar` rather than a rule written again here: it is the one stage
+        // two paints by, so this counts the pillars the map will actually show.
+        let grown = 0;
+        for (let y = 0; y < floorplan.size.h; y += 1) {
+          for (let x = 0; x < floorplan.size.w; x += 1) {
+            if (isPillar(floorplan.cells, floorplan.size, { x, y })) {
+              grown += 1;
+            }
+          }
+        }
+        return grown;
+      });
+    };
+
+    const crypt = counts({ building: 'dungeon', room: 'crypt' });
+    expect(`crypt at its floor, seeds with no pillar: ${String(crypt.filter((n) => n === 0).length)}`)
+      .toBe('crypt at its floor, seeds with no pillar: 0');
+    expect(profileFor({ building: 'dungeon', room: 'crypt' }).allowPillars).toBe(true);
+
+    const hall = counts({ building: 'dungeon', room: 'hall' });
+    expect(`hall at its floor, seeds with a pillar: ${String(hall.filter((n) => n > 0).length)}`)
+      .toBe('hall at its floor, seeds with a pillar: 0');
+  });
+
+  it('offers the crypt every feature it can hold, and no staircase', () => {
+    // The two sides of a feature have to agree: a word that names an anchor is
+    // only offered where that anchor is declared, and a word answered by stage
+    // one is offered where the plan can answer it. Nothing checks that but this.
+    //
+    // The second half is read off `shapes` and `allowPillars` rather than from a
+    // pair of words written out here. Written out, it said `alcove` was answered
+    // by the plan whether or not the plan offered the shape — so taking
+    // `'alcove'` out of the crypt's `shapes` left this green while every request
+    // for a burial recess vanished off the map with nothing recorded.
+    const place: Place = { building: 'dungeon', room: 'crypt' };
+    const crypt = profileFor(place);
+    const answeredByPlan = new Set<string>([
+      ...(crypt.allowPillars ? [PILLARS_FEATURE] : []),
+      ...(crypt.shapes.includes(ALCOVE_FEATURE as ShapeName) ? [ALCOVE_FEATURE] : []),
+    ]);
+    const anchored = new Set(
+      crypt.anchors.map((anchor) => anchor.feature).filter((feature) => feature !== undefined),
+    );
+
+    expect(featuresFor(place)).toEqual(['hearth', 'pillars', 'alcove', 'shelving']);
+    for (const feature of featuresFor(place)) {
+      expect(`${feature}: ${String(answeredByPlan.has(feature) || anchored.has(feature))}`).toBe(`${feature}: true`);
+    }
+    expect([...anchored].every((feature) => featureSuits(feature as Feature, place))).toBe(true);
+    // Named on its own, because it is the one absence that is a decision: every
+    // other room here offers a stair, and a crypt is reached along a passage.
+    // The description that started this front said "sem escadaria".
+    expect(featureSuits('stairs', place)).toBe(false);
+    expect(crypt.anchors.map((anchor) => anchor.assetId)).not.toContain('stone_stairs');
+  });
+
   it('fills the dungeon hearth feature with a hearth instead of a torch', () => {
     const hall = profileFor({ building: 'dungeon', room: 'hall' });
     const room = profileFor({ building: 'dungeon', room: 'room' });
@@ -80,7 +228,16 @@ describe('profileFor', () => {
     // `Params` can arrive from a language model through JSON, where the type
     // system guarantees nothing. Without the guard the caller would get
     // `undefined` and fail several layers away, reading a property of it.
-    expect(() => profileFor({ building: 'dungeon', room: 'crypt' } as unknown as Place)).toThrow("unknown place");
+    expect(() => profileFor({ building: 'dungeon', room: 'oubliette' } as unknown as Place)).toThrow("unknown place");
+  });
+
+  it('rejects a room one building has when it is asked for in the other', () => {
+    // The half of the vocabulary that opened when the matrix went sparse. Both
+    // halves of `dungeon_crypt` are words this project knows — `tavern` is a
+    // building and `crypt` is a room with a geometry in `ROOM_KINDS` — so a
+    // guard that only asked whether each word is declared would let the pair
+    // through and hand back a profile with no slot filling behind it.
+    expect(() => profileFor({ building: 'tavern', room: 'crypt' })).toThrow("unknown place 'tavern_crypt'");
   });
 
   it('rejects a place type that is only a key of Object.prototype', () => {
