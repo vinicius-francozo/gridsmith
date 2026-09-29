@@ -31,9 +31,12 @@ import {
   CLUTTER_NOT_A_NUMBER,
   CLUTTER_OUT_OF_RANGE,
   codeOf,
+  FEATURE_ALSO_EXCLUDED,
   FEATURE_NOT_IN_PLACE,
   FEATURE_NOT_IN_VOCABULARY,
   FEATURE_OVER_BUDGET,
+  FURNISHING_NOT_A_NUMBER,
+  FURNISHING_OUT_OF_RANGE,
   PLACE_NOT_IN_VOCABULARY,
   UNSUPPORTED_REQUEST,
 } from '../interpreter/codes';
@@ -143,6 +146,16 @@ export const CODE_PHRASES: Readonly<Record<Code, CodePhrase>> = {
     detailed: (detail) =>
       `Elemento deixado de fora por falta de espaço no piso: ${quoted(featureWord(detail))}.`,
   },
+  // The description asked for the thing and, in the same breath, asked for it
+  // not to be there. The sentence says which of the two was obeyed, because
+  // that is the part the person cannot see from the map: an absent staircase
+  // looks the same whether it was refused or never fitted.
+  [FEATURE_ALSO_EXCLUDED]: {
+    bare: 'A descrição pediu um elemento e, ao mesmo tempo, pediu que ele não existisse; ficou de fora.',
+    detailed: (detail) =>
+      'A descrição pediu este elemento e também pediu que ele não existisse. ' +
+      `Ficou de fora: ${quoted(featureWord(detail))}.`,
+  },
   [CLUTTER_NOT_A_NUMBER]: {
     bare: 'A quantidade de tralha no chão não veio como número; o piso foi gerado sem nada solto.',
     detailed: (detail) =>
@@ -153,6 +166,21 @@ export const CODE_PHRASES: Readonly<Record<Code, CodePhrase>> = {
     bare: 'A quantidade de tralha no chão estava fora da faixa de 0 a 1 e foi trazida para o limite mais próximo.',
     detailed: (detail) =>
       'A quantidade de tralha no chão estava fora da faixa de 0 a 1 e foi trazida para o limite mais próximo. ' +
+      `Valor pedido: ${quoted(detail)}.`,
+  },
+  // Named as furniture, never as "tralha": the two are separate fields now, and
+  // a person who reads the same words for both has no way to tell which of the
+  // two numbers the map got wrong.
+  [FURNISHING_NOT_A_NUMBER]: {
+    bare: 'A quantidade de mobília não veio como número; o lugar foi gerado sem móveis.',
+    detailed: (detail) =>
+      'A quantidade de mobília não veio como número; o lugar foi gerado sem móveis. ' +
+      `Valor recebido: ${quoted(detail)}.`,
+  },
+  [FURNISHING_OUT_OF_RANGE]: {
+    bare: 'A quantidade de mobília estava fora da faixa de 0 a 1 e foi trazida para o limite mais próximo.',
+    detailed: (detail) =>
+      'A quantidade de mobília estava fora da faixa de 0 a 1 e foi trazida para o limite mais próximo. ' +
       `Valor pedido: ${quoted(detail)}.`,
   },
   [UNSUPPORTED_REQUEST]: {

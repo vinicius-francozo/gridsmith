@@ -11,6 +11,7 @@ import {
   classify,
   constraintsFrom,
   deriveClutter,
+  deriveFurnishing,
   labelsOf,
   readFeatures,
   readLight,
@@ -24,13 +25,14 @@ import type { ZeroShotOptions, ZeroShotOutput, ZeroShotPipeline } from './pipeli
 import {
   CLUTTER_BY_CONDITION,
   CONDITION_TEMPLATE,
+  FURNISHING_TEMPLATE,
   FEATURE_TEMPLATE,
   LIGHT_TEMPLATE,
   BUILDING_TEMPLATE,
   ROOM_TEMPLATES,
   SIZE_HINT_TEMPLATE,
 } from './templates';
-import type { ChoiceTemplate } from './templates';
+import type { ChoiceTemplate, FurnishingLevel } from './templates';
 
 /**
  * Nothing here downloads a model. The classifier is stood in for in every test,
@@ -66,6 +68,12 @@ const CERTAIN_DISORDER: Record<Condition, number> = {
   ruined: 0.1,
 };
 const NO_SIZE_MENTIONED = { small: 0.34, medium: 0.33, large: 0.33 };
+const HALF_FURNISHED: Record<FurnishingLevel, number> = {
+  bare: 0.1,
+  sparse: 0.4,
+  furnished: 0.4,
+  crowded: 0.1,
+};
 const NO_FEATURES: Record<Feature, number> = {
   bar: 0.1,
   hearth: 0.1,
@@ -281,6 +289,7 @@ describe('assembling the constraints', () => {
     light: 'dim',
     condition: 'disordered',
     clutter: 0.6,
+    furnishing: 0.4,
     features: ['bar'],
   } as const;
 
@@ -296,6 +305,18 @@ describe('assembling the constraints', () => {
 
   it('reports nothing as unresolved, because a classifier cannot notice one', () => {
     expect(constraintsFrom(parts).unresolved).toEqual([]);
+  });
+
+  it('reports nothing as excluded, whatever the parts say', () => {
+    // Measured, not a stance: on this model a feature the description denies
+    // and one it never mentions score the same (see this front's `interpret.ts`
+    // header). `ClassifiedParts` has no `excluded` to carry, and the empty list
+    // has to survive every shape of parts rather than only the furnished one —
+    // an engine that guessed a refusal whenever it found no features would be
+    // wrong most often on exactly the descriptions that name nothing.
+    for (const features of [[], ['bar'], ['bar', 'hearth', 'stairs']] as const) {
+      expect(constraintsFrom({ ...parts, features }).excluded).toEqual([]);
+    }
   });
 
   it('refuses a clutter above one instead of handing it to the generator', () => {
@@ -315,7 +336,7 @@ describe('assembling the constraints', () => {
   });
 });
 
-// --- The six questions -------------------------------------------------------
+// --- The seven questions -----------------------------------------------------
 
 type Ask = { text: string; labels: readonly string[]; options: ZeroShotOptions };
 
@@ -325,6 +346,7 @@ type Answers = {
   light?: Record<Light, number>;
   condition?: Record<Condition, number>;
   size?: Record<'small' | 'medium' | 'large', number>;
+  furnishing?: Record<FurnishingLevel, number>;
   features?: Record<Feature, number>;
 };
 
@@ -345,6 +367,8 @@ function stubPipeline(answers: Answers = {}): { pipeline: ZeroShotPipeline; asks
         return Promise.resolve(outputFor(LIGHT_TEMPLATE, answers.light ?? CERTAIN_DIM));
       case CONDITION_TEMPLATE.hypothesis:
         return Promise.resolve(outputFor(CONDITION_TEMPLATE, answers.condition ?? CERTAIN_DISORDER));
+      case FURNISHING_TEMPLATE.hypothesis:
+        return Promise.resolve(outputFor(FURNISHING_TEMPLATE, answers.furnishing ?? HALF_FURNISHED));
       case SIZE_HINT_TEMPLATE.hypothesis:
         return Promise.resolve(outputFor(SIZE_HINT_TEMPLATE, answers.size ?? NO_SIZE_MENTIONED));
       case FEATURE_TEMPLATE.hypothesis:
@@ -377,7 +401,9 @@ describe('classifying a whole description', () => {
       light: 'dim',
       condition: 'disordered',
       clutter: deriveClutter(CERTAIN_DISORDER),
+      furnishing: deriveFurnishing(HALF_FURNISHED),
       features: ['bar', 'hearth'],
+      excluded: [],
       unresolved: [],
     });
   });
@@ -392,10 +418,13 @@ describe('classifying a whole description', () => {
       ROOM_TEMPLATES.tavern.hypothesis,
       LIGHT_TEMPLATE.hypothesis,
       CONDITION_TEMPLATE.hypothesis,
+      FURNISHING_TEMPLATE.hypothesis,
       SIZE_HINT_TEMPLATE.hypothesis,
       FEATURE_TEMPLATE.hypothesis,
     ]);
-    expect(asks.map((ask) => ask.options.multiLabel)).toEqual([false, false, false, false, false, true]);
+    expect(asks.map((ask) => ask.options.multiLabel)).toEqual([
+      false, false, false, false, false, false, true,
+    ]);
   });
 
   it('asks about every label of the template it is asking for', async () => {
@@ -405,8 +434,9 @@ describe('classifying a whole description', () => {
 
     expect(asks[0].labels).toEqual(labelsOf(BUILDING_TEMPLATE));
     expect(asks[1].labels).toEqual(labelsOf(ROOM_TEMPLATES.tavern));
-    expect(asks[5].labels).toEqual(labelsOf(FEATURE_TEMPLATE));
-    expect(asks[5].labels).toHaveLength(FEATURES.length);
+    expect(asks[4].labels).toEqual(labelsOf(FURNISHING_TEMPLATE));
+    expect(asks[6].labels).toEqual(labelsOf(FEATURE_TEMPLATE));
+    expect(asks[6].labels).toHaveLength(FEATURES.length);
   });
 
   it('passes a description with no synonym in it through exactly as typed', async () => {
@@ -438,12 +468,12 @@ describe('classifying a whole description', () => {
     );
   });
 
-  it('gives all six questions one premise, so the answers are about one sentence', async () => {
+  it('gives all seven questions one premise, so the answers are about one sentence', async () => {
     const { pipeline, asks } = stubPipeline();
 
     await classify('adega com prateleira e escadas', pipeline);
 
-    expect(asks).toHaveLength(6);
+    expect(asks).toHaveLength(7);
     expect(new Set(asks.map((ask) => ask.text)).size).toBe(1);
     expect(asks[0].text).toBe('depósito com prateleiras e escada');
   });

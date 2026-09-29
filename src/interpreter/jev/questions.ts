@@ -102,6 +102,24 @@ export const QUESTIONS = {
     instructions: 'Que tamanho tem o lugar?',
     criteria: ['Pequeno', 'De tamanho médio', 'Grande'],
   },
+  // Asked apart from `condition`, and the separation is the point: the two used
+  // to be one number and a ruin came back full of war tables. The criteria name
+  // furniture that stands on the floor and say nothing about how clean it is,
+  // so that "destruído e em ruínas" and "quase sem móveis" can both be true of
+  // the same sentence. A score rather than a noul because the levels are
+  // ordered, which is the same reason `light`, `condition` and `size` are
+  // scores. Like those three, it has no gold anywhere in this project and so no
+  // accuracy measurement of its own.
+  furnishing: {
+    type: 'score',
+    instructions: 'Quanta mobília há no lugar?',
+    criteria: [
+      'Nenhuma mobília: o chão está vazio',
+      'Pouca mobília: uma peça ou outra',
+      'Mobiliado: mesas, bancos e caixotes pelo cômodo',
+      'Abarrotado de móveis, quase sem espaço livre',
+    ],
+  },
   // The seven features, one proposition each. The bench measured that
   // enriching the *instruction* is what ruins them: a disjunction like
   // "pilares ou colunas" fixes the synonym and breaks the literal, because it
@@ -209,6 +227,18 @@ export const CONDITION_LEVELS: readonly Condition[] = ['tidy', 'lived_in', 'diso
 export const SIZE_LEVELS: readonly NonNullable<Constraints['sizeHint']>[] = ['small', 'medium', 'large'];
 
 /**
+ * The top of `furnishing`'s scale, as an index into its criteria.
+ *
+ * `furnishing` is a 0..1 number and the question is a score over four ordered
+ * criteria, so the reading is a division and this is its divisor. It is derived
+ * from the question above rather than written as a 3, so that a criterion added
+ * or removed there cannot leave the reading scaling against the old length —
+ * the failure mode `LIGHT_LEVELS` and friends are held to by a test and this
+ * one closes by construction.
+ */
+export const FURNISHING_TOP = QUESTIONS.furnishing.criteria.length - 1;
+
+/**
  * How sure Jev has to be that a feature is there for it to be built.
  *
  * **This number is inflated and the ressalva is the point of writing it here.**
@@ -221,6 +251,51 @@ export const SIZE_LEVELS: readonly NonNullable<Constraints['sizeHint']>[] = ['sm
  * been reviewed is what would make it a measurement rather than a fit.
  */
 export const FEATURE_THRESHOLD = 0.62;
+
+/**
+ * At or below this, the description is read as saying the feature is **not**
+ * there — not merely as failing to mention it.
+ *
+ * **Measured, and the measurement says the two do not fully separate.** Forty-one
+ * sentences, every one of the seven nouls on each, against `jev-latest`
+ * (`jev-1.13.0`) — twelve written for this with an explicit negation in them,
+ * the canonical ruler's twenty-eight `features` sentences, and its standalone
+ * negation control. The corpus and every number are in
+ * `corpus-exclusao-jev.md`, which lives beside the canonical ruler outside this
+ * repository for the reason that one gives. Three buckets, 20 · 227 · 33
+ * observations:
+ *
+ * | | min | p25 | median | p75 | max |
+ * | --- | --- | --- | --- | --- | --- |
+ * | explicitly negated | 0.030 | 0.040 | **0.040** | 0.040 | 0.360 |
+ * | not mentioned | 0.030 | 0.080 | **0.120** | 0.180 | 0.860 |
+ * | present | 0.820 | 0.970 | **0.980** | 0.980 | 0.990 |
+ *
+ * Presence stands apart from both of the others; negation and silence overlap
+ * along their whole lower tail. So 0.05 is chosen as a knee and not as a
+ * separation: it catches 18 of the 20 negations, and every threshold from 0.06
+ * to 0.20 catches those same 18 while excluding three to seven times as many
+ * features nobody mentioned. Below it, 0.04 drops to 16 — and the two it drops
+ * are `hearth` and `pillars` in `"Sem fogueira, sem colunas e sem escada."`,
+ * both at 0.050, which is the ruler's own purest negation.
+ *
+ * **What it costs is 11% of the features a description never mentions**
+ * (26 of 227), read as refused. That is the reason `excluded` is acted on and
+ * never narrated — see `FEATURE_ALSO_EXCLUDED` in `codes.ts`. A wrongly refused
+ * anchor is one the draw does not offer; a wrongly announced one is the tool
+ * telling the person they said something they did not.
+ *
+ * The two negations it misses are worth naming, because both are the same
+ * shape: `"a lareira foi arrancada e não há fogo nenhum"` at 0.230 and the
+ * ruler's `"Não há fogo aqui, só cinzas frias"` at 0.360. A sentence that names
+ * the thing while denying it scores far above one that only denies it.
+ *
+ * The comparison is `<=`, not `<`. Three of the twenty negations sit exactly on
+ * 0.050, and the answers are quantised to a hundredth and repeat to within
+ * about 0.01 over three runs, so the boundary is a value the model actually
+ * returns rather than a gap between values.
+ */
+export const EXCLUSION_THRESHOLD = 0.05;
 
 /**
  * How sure Jev has to be that the construction is outside the vocabulary before the map

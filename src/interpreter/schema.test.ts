@@ -12,7 +12,9 @@ const valid: Constraints = {
   light: 'dim',
   condition: 'lived_in',
   clutter: 0.4,
+  furnishing: 0.4,
   features: ['bar', 'hearth'],
+  excluded: ['stairs'],
   unresolved: [],
 };
 
@@ -46,6 +48,12 @@ describe('accepting an answer', () => {
   it('accepts both ends of the clutter range', () => {
     expect(constraintsSchema.parse({ ...valid, clutter: 0 }).clutter).toBe(0);
     expect(constraintsSchema.parse({ ...valid, clutter: 1 }).clutter).toBe(1);
+  });
+
+  it('accepts both ends of the furnishing range, and an empty refusal list', () => {
+    expect(constraintsSchema.parse({ ...valid, furnishing: 0 }).furnishing).toBe(0);
+    expect(constraintsSchema.parse({ ...valid, furnishing: 1 }).furnishing).toBe(1);
+    expect(constraintsSchema.parse({ ...valid, excluded: [] }).excluded).toEqual([]);
   });
 
   it('drops a field the vocabulary does not have instead of carrying it through', () => {
@@ -98,6 +106,19 @@ describe('rejecting an answer', () => {
 
   it('rejects clutter that is not a number at all', () => {
     expect(constraintsSchema.safeParse({ ...valid, clutter: 'a lot' }).success).toBe(false);
+  });
+
+  it('holds furnishing to the same range and the same type as clutter', () => {
+    // A separate field with the same bounds, screened separately: the two used
+    // to be one number and the whole point of the split is that they are not.
+    expect(constraintsSchema.safeParse({ ...valid, furnishing: 1.4 }).success).toBe(false);
+    expect(constraintsSchema.safeParse({ ...valid, furnishing: -0.2 }).success).toBe(false);
+    expect(constraintsSchema.safeParse({ ...valid, furnishing: 'a lot' }).success).toBe(false);
+  });
+
+  it('rejects an excluded list that is not a list of strings', () => {
+    expect(constraintsSchema.safeParse({ ...valid, excluded: 'stairs' }).success).toBe(false);
+    expect(constraintsSchema.safeParse({ ...valid, excluded: [1, 2] }).success).toBe(false);
   });
 
   it('rejects features that are not a list of strings', () => {

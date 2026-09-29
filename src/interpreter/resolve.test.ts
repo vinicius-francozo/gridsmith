@@ -5,9 +5,12 @@ import type { Constraints, Place, Rng, Size } from '../core/types';
 import {
   CLUTTER_NOT_A_NUMBER,
   CLUTTER_OUT_OF_RANGE,
+  FEATURE_ALSO_EXCLUDED,
   FEATURE_NOT_IN_PLACE,
   FEATURE_NOT_IN_VOCABULARY,
   FEATURE_OVER_BUDGET,
+  FURNISHING_NOT_A_NUMBER,
+  FURNISHING_OUT_OF_RANGE,
 } from './codes';
 import { featureBudget, jitterSize, resolve } from './resolve';
 
@@ -54,7 +57,9 @@ function constraints(overrides: Partial<Constraints> = {}): Constraints {
     light: 'dim',
     condition: 'lived_in',
     clutter: 0.3,
+    furnishing: 0.3,
     features: [],
+    excluded: [],
     unresolved: [],
     ...overrides,
   };
@@ -495,3 +500,109 @@ function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.floor(sorted.length / 2)];
 }
+
+describe('furnishing, screened the same way clutter is', () => {
+  it('clamps furnishing above the range and reports the value it was given', () => {
+    const params = resolve(constraints({ furnishing: 1.4 }), 1);
+
+    expect(params.furnishing).toBe(1);
+    expect(params.conflicts).toEqual([`${FURNISHING_OUT_OF_RANGE}:1.4`]);
+  });
+
+  it('clamps furnishing below the range', () => {
+    const params = resolve(constraints({ furnishing: -0.5 }), 1);
+
+    expect(params.furnishing).toBe(0);
+    expect(params.conflicts).toEqual([`${FURNISHING_OUT_OF_RANGE}:-0.5`]);
+  });
+
+  it('reads a furnishing that is not a number as a bare room', () => {
+    // The same untrusted boundary `clutter` is screened at, for the same
+    // reason: the field is typed `number` and the value came through JSON.
+    for (const furnishing of [Number.NaN, undefined, null, 'lots', {}, [], true] as unknown as number[]) {
+      const params = resolve(constraints({ furnishing }), 1);
+
+      expect(params.furnishing).toBe(0);
+      expect(params.conflicts).toEqual([FURNISHING_NOT_A_NUMBER]);
+    }
+  });
+
+  it('leaves furnishing at the edges of the range alone', () => {
+    expect(resolve(constraints({ furnishing: 0 }), 1).conflicts).toEqual([]);
+    expect(resolve(constraints({ furnishing: 1 }), 1).conflicts).toEqual([]);
+  });
+
+  it('reports the wrong number by its own name, not as the other one', () => {
+    // One helper for both fields would have had to carry its pair of codes as
+    // parameters to keep this true; two functions keep it true by construction.
+    const params = resolve(constraints({ clutter: 2, furnishing: 3 }), 1);
+
+    expect(params.conflicts).toEqual([`${CLUTTER_OUT_OF_RANGE}:2`, `${FURNISHING_OUT_OF_RANGE}:3`]);
+  });
+
+  it('carries a furnishing inside the range through untouched', () => {
+    expect(resolve(constraints({ furnishing: 0.42 }), 1).furnishing).toBe(0.42);
+  });
+});
+
+describe('what the description refused', () => {
+  it('reaches Params.excluded, which is what the generator reads', () => {
+    expect(resolve(constraints({ excluded: ['stairs'] }), 1).excluded).toEqual(['stairs']);
+  });
+
+  it('is empty when the description merely never mentioned anything', () => {
+    expect(resolve(constraints(), 1).excluded).toEqual([]);
+    expect(resolve(constraints(), 1).conflicts).toEqual([]);
+  });
+
+  it('normalises and deduplicates the words, the way features are', () => {
+    expect(resolve(constraints({ excluded: ['  STAIRS ', 'stairs', 'bar'] }), 1).excluded).toEqual([
+      'stairs',
+      'bar',
+    ]);
+  });
+
+  it('drops a word the generator has no anchor for, and says nothing about it', () => {
+    // The opposite case from `feature_not_in_vocabulary`. Asking for an anvil
+    // and not getting one is a loss; asking for there to be no anvil is granted
+    // by the generator never having drawn one, so there is nothing to report.
+    const params = resolve(constraints({ excluded: ['Marble Fountain', ''] }), 1);
+
+    expect(params.excluded).toEqual([]);
+    expect(params.conflicts).toEqual([]);
+  });
+
+  it('keeps a word that does not suit the place, because the generator reads it as a ban', () => {
+    const params = resolve(
+      constraints({ place: { building: 'tavern', room: 'storeroom' }, excluded: ['bar'] }),
+      1,
+    );
+
+    expect(params.excluded).toEqual(['bar']);
+    expect(params.conflicts).toEqual([]);
+  });
+
+  it('drops a feature the same description also asked for, and says which', () => {
+    // A contradiction neither classifier can produce — a score is above the
+    // presence threshold or below the exclusion one, never both — so it comes
+    // from the prompted model or from a caller building this by hand. The
+    // refusal wins, because drawing the refused thing is the defect this field
+    // exists to close.
+    const params = resolve(constraints({ features: ['stairs', 'bar'], excluded: ['stairs'] }), 1);
+
+    expect(params.features).toEqual(['bar']);
+    expect(params.conflicts).toEqual([`${FEATURE_ALSO_EXCLUDED}:stairs`]);
+  });
+
+  it('reports the refusal rather than the place, when the feature fails both', () => {
+    // Order matters here and is asserted rather than left to chance: the
+    // exclusion is the person's own instruction and the place is the
+    // generator's, so the person is told about theirs.
+    const params = resolve(
+      constraints({ place: { building: 'tavern', room: 'storeroom' }, features: ['bar'], excluded: ['bar'] }),
+      1,
+    );
+
+    expect(params.conflicts).toEqual([`${FEATURE_ALSO_EXCLUDED}:bar`]);
+  });
+});

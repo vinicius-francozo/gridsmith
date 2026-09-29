@@ -29,7 +29,9 @@ const answer: Constraints = {
   light: 'dim',
   condition: 'disordered',
   clutter: 0.6,
+  furnishing: 0.4,
   features: ['bar', 'hearth'],
+  excluded: [],
   unresolved: [],
 };
 
@@ -190,6 +192,33 @@ describe('interpreting a description', () => {
 
     for (const feature of FEATURES) {
       expect(calls[0].system).toContain(feature);
+    }
+  });
+
+  it('tells the model to fill `excluded` only from what the description denies', async () => {
+    // The one field no classifier can fill (see `local/interpret.ts`), so on
+    // this engine it rests entirely on the prompt. "Only then" is the load-
+    // bearing half: a model that also listed what the description failed to
+    // mention would refuse most of the vocabulary on every request.
+    const { client, calls } = stubClient(respondsWith(answer));
+
+    await interpreterWith(client).interpret('um salão sem escadaria');
+
+    expect(calls[0].system).toContain('`excluded`');
+    expect(calls[0].system).toContain('"sem escadaria" gives ["stairs"]. Only then.');
+    expect(calls[0].system).toContain('mentions stairs leaves `excluded` empty');
+  });
+
+  it('asks for condition, clutter and furnishing as three separate judgements', async () => {
+    // Defect D3 on this engine. The prompt used to name two of the three and
+    // let the furniture count follow the dirt.
+    const { client, calls } = stubClient(respondsWith(answer));
+
+    await interpreterWith(client).interpret('uma catacumba suja');
+
+    expect(calls[0].system).toContain('three separate questions');
+    for (const field of ['condition', 'clutter', 'furnishing']) {
+      expect(calls[0].system).toContain(`\`${field}\``);
     }
   });
 

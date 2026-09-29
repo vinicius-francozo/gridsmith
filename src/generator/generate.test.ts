@@ -98,24 +98,62 @@ describe('generate', () => {
   });
 
   it('gives back a different scene when the params change under one seed', () => {
-    // One param at a time. Moving clutter and condition together is satisfied
-    // by the scatter layer alone, and clutter's other job — how many groups a
-    // room of this size wants — is then left with no test at all.
+    // One param at a time, so that a change satisfied by the scatter layer
+    // alone cannot stand in for one that should have moved the groups.
     const scene = (overrides: Partial<Params>): Scene =>
       generate(busy({ building: 'tavern', room: 'hall' }, overrides), createRng(5));
-    const groupCount = (of: Scene): number =>
-      of.props.filter((prop) => prop.layer === 'group').length;
 
     const bare = scene({ clutter: 0, condition: 'lived_in' });
     const full = scene({ clutter: 1, condition: 'lived_in' });
     expect(stable(full)).not.toBe(stable(bare));
-    expect(`groups at clutter 0 / 1: ${groupCount(bare)} / ${groupCount(full)}`).toBe(
-      `groups at clutter 0 / 1: ${groupCount(bare)} / ${Math.max(groupCount(full), groupCount(bare) + 1)}`,
-    );
+
+    const empty = scene({ furnishing: 0 });
+    const packed = scene({ furnishing: 1 });
+    expect(stable(packed)).not.toBe(stable(empty));
 
     const tidy = scene({ clutter: 0.5, condition: 'tidy' });
     const ruined = scene({ clutter: 0.5, condition: 'ruined' });
     expect(stable(ruined)).not.toBe(stable(tidy));
+  });
+
+  it('counts furniture off furnishing and dirt off clutter, and neither off the other', () => {
+    // Defect D3. "um ambiente sujo" reached `condition: 'ruined'`, which the
+    // interpreters turn into `clutter` 0.85, which used to drive the group
+    // count — so a filthy hall of 195 floor cells came back with about nine war
+    // tables in it. The person asked for dirt and got furniture.
+    //
+    // Counted rather than compared as whole scenes: the two layers draw from
+    // one `Rng`, so moving either number moves the sequence and every scene
+    // differs from every other. What must not move is the *count*.
+    const scene = (overrides: Partial<Params>): Scene =>
+      generate(busy({ building: 'tavern', room: 'hall' }, overrides), createRng(5));
+    const countOf = (of: Scene, layer: 'group' | 'scatter'): number =>
+      of.props.filter((prop) => prop.layer === layer).length;
+
+    // Clutter across its whole range, furnishing held still: the group count
+    // is the same number every time.
+    const groupsByClutter = [0, 0.5, 1].map((clutter) =>
+      countOf(scene({ clutter, furnishing: 0.5 }), 'group'),
+    );
+    expect(`groups at clutter 0 / 0.5 / 1: ${groupsByClutter.join(' / ')}`).toBe(
+      `groups at clutter 0 / 0.5 / 1: ${String(groupsByClutter[0])} / ${String(groupsByClutter[0])} / ${String(groupsByClutter[0])}`,
+    );
+
+    // And furnishing is what does move it.
+    const sparse = countOf(scene({ furnishing: 0, clutter: 0.5 }), 'group');
+    const crowded = countOf(scene({ furnishing: 1, clutter: 0.5 }), 'group');
+    expect(`groups at furnishing 0 / 1: ${String(sparse)} / ${String(crowded)}`).toBe(
+      `groups at furnishing 0 / 1: ${String(sparse)} / ${String(Math.max(crowded, sparse + 1))}`,
+    );
+
+    // The other direction. A bare floor has nothing strewn on it whatever the
+    // furniture does, and a hall at full clutter has a great deal — measured on
+    // `clutter: 0` rather than as a second inequality, because the scatter
+    // chance is the one place the two layers could still be tangled.
+    for (const furnishing of [0, 1]) {
+      expect(countOf(scene({ clutter: 0, furnishing }), 'scatter')).toBe(0);
+      expect(countOf(scene({ clutter: 1, furnishing }), 'scatter')).toBeGreaterThan(0);
+    }
   });
 
   it('produces a scene that passes its own validation, over every place and seed', () => {

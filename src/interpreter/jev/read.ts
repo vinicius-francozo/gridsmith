@@ -37,12 +37,15 @@ import type { Building, Constraints } from '../../core/types';
 import { entry, PLACE_NOT_IN_VOCABULARY } from '../codes';
 import { constraintsSchema } from '../schema';
 import { FEATURES } from '../vocabulary';
+import type { Feature } from '../vocabulary';
 
 import { JevUnusableAnswerError } from './errors';
 import {
   CONDITION_LEVELS,
+  EXCLUSION_THRESHOLD,
   FEATURE_QUESTIONS,
   FEATURE_THRESHOLD,
+  FURNISHING_TOP,
   LIGHT_LEVELS,
   OUT_OF_VOCABULARY_THRESHOLD,
   QUESTIONS,
@@ -93,6 +96,26 @@ export function clutterFromScore(score: number): number {
 }
 
 /**
+ * How furnished the place is, from `furnishing`'s score.
+ *
+ * `Constraints.furnishing` is 0..1 and the question is a position on a scale of
+ * four ordered criteria, so the whole reading is that division. It is a
+ * function rather than a division at the call site for the reason
+ * `clutterFromScore` is one: it is the piece a test can hold against the
+ * question's own criteria, and it is where the relationship between the scale
+ * and the field is written down.
+ *
+ * It does not clamp, and nothing downstream needs it to: `scoreOn` has already
+ * refused anything outside the scale, so the result cannot leave 0..1. That is
+ * the same trade `deriveClutter` makes and for the same reason — a score
+ * outside the band means the answer is to a different question, and clamping it
+ * would turn that into a plausible map.
+ */
+export function furnishingFromScore(score: number): number {
+  return score / FURNISHING_TOP;
+}
+
+/**
  * The constraints a response describes.
  *
  * @param body whatever the proxy relayed, already parsed out of JSON.
@@ -116,13 +139,27 @@ export function readBuildingAnswers(body: unknown): BuildingReading {
   const size = read(answers, 'size', scoreSchema);
   const outOfVocabulary = read(answers, 'out_of_vocabulary', noulSchema).noul;
 
+  const furnishing = furnishingFromScore(
+    scoreOn('furnishing', read(answers, 'furnishing', scoreSchema).score, FURNISHING_TOP),
+  );
+
+  // Read once and split two ways. The same noul answers both questions — is it
+  // there, and did the description say it is not — so reading it twice would
+  // let the two halves drift apart over a value that arrived once.
+  //
   // Vocabulary order rather than the order the answers arrived in, for the
   // reason `readFeatures` gives: `resolve` drops features past the floor's
   // budget from the end, so the order decides which one survives, and it must
   // not depend on a hundredth of a point.
-  const features = FEATURES.filter(
-    (feature) => read(answers, FEATURE_QUESTIONS[feature], noulSchema).noul >= FEATURE_THRESHOLD,
-  );
+  const nouls = {} as Record<Feature, number>;
+  for (const feature of FEATURES) {
+    nouls[feature] = read(answers, FEATURE_QUESTIONS[feature], noulSchema).noul;
+  }
+  const features = FEATURES.filter((feature) => nouls[feature] >= FEATURE_THRESHOLD);
+  // The band between the two thresholds is the ordinary case — a description
+  // that simply never mentioned the thing — and it belongs to neither list.
+  // See `EXCLUSION_THRESHOLD` for what was measured, in which sentences.
+  const excluded = FEATURES.filter((feature) => nouls[feature] <= EXCLUSION_THRESHOLD);
 
   // The score is read only when the gate lets it through: below the gate the
   // hint is dropped whatever it says, so refusing an out-of-band score there
@@ -139,7 +176,9 @@ export function readBuildingAnswers(body: unknown): BuildingReading {
     light,
     condition: levelOf('condition', conditionScore, CONDITION_LEVELS),
     clutter: clutterFromScore(conditionScore),
+    furnishing,
     features,
+    excluded,
     // The detail is the kind of place that was built, so the interface can say
     // what the person got rather than only that they did not get what they
     // asked for. Written through `entry`, never as a sentence: `codes.ts:1-17`.
@@ -220,21 +259,33 @@ function read<T>(answers: Record<string, unknown>, name: QuestionName | 'room', 
 }
 
 /**
- * The level a score lands on.
+ * A score, once it is known to be a position on the scale that was asked about.
  *
- * A score is a position on the scale it was asked about, so anything outside
- * `0` to `levels.length - 1` is an answer to a different question and is
+ * Anything outside `0` to `top` is an answer to a different question and is
  * refused rather than clamped. Clamping is what would turn a broken response
  * into a plausible map, which is the trade `deriveClutter` declines for the
- * same reason. Inside the band, rounding always lands on a level that exists.
+ * same reason.
+ *
+ * Split out of `levelOf` when `furnishing` arrived, because that one is a
+ * position on a scale that is never rounded to a level — it is divided into a
+ * 0..1 field — and the check is the half the two readings share.
  */
-function levelOf<T extends string>(name: QuestionName, score: number, levels: readonly T[]): T {
-  if (!(score >= 0 && score <= levels.length - 1)) {
+function scoreOn(name: QuestionName, score: number, top: number): number {
+  if (!(score >= 0 && score <= top)) {
     throw new JevUnusableAnswerError(
-      `${name}: a score of ${String(score)} is outside the ${String(levels.length)} levels it was asked about`,
+      `${name}: a score of ${String(score)} is outside the ${String(top + 1)} levels it was asked about`,
     );
   }
-  return levels[Math.round(score)];
+  return score;
+}
+
+/**
+ * The level a score lands on.
+ *
+ * Inside the band, rounding always lands on a level that exists.
+ */
+function levelOf<T extends string>(name: QuestionName, score: number, levels: readonly T[]): T {
+  return levels[Math.round(scoreOn(name, score, levels.length - 1))];
 }
 
 /**

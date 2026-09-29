@@ -11,6 +11,8 @@ import {
   LIGHT_TEMPLATE,
   BUILDING_TEMPLATE,
   ROOM_TEMPLATES,
+  FURNISHING_BY_LEVEL,
+  FURNISHING_TEMPLATE,
   SIZE_HINT_TEMPLATE,
   STOREROOM_WORD,
 } from './templates';
@@ -38,6 +40,7 @@ const ALL_TEMPLATES: Array<{ name: string; template: ChoiceTemplate<string> }> =
   { name: 'light', template: LIGHT_TEMPLATE },
   { name: 'condition', template: CONDITION_TEMPLATE },
   { name: 'size hint', template: SIZE_HINT_TEMPLATE },
+  { name: 'furnishing', template: FURNISHING_TEMPLATE },
   { name: 'feature', template: FEATURE_TEMPLATE },
 ];
 
@@ -93,13 +96,28 @@ describe('every template covers its closed vocabulary', () => {
 });
 
 describe('the wording handed to the classifier', () => {
-  it('pins the six hypotheses, including the two new place questions', () => {
+  it('pins the seven hypotheses, including the two new place questions', () => {
     expect(BUILDING_TEMPLATE.hypothesis).toBe('A construção é {}.');
     expect(ROOM_TEMPLATES.tavern.hypothesis).toBe('O cômodo é {}.');
     expect(LIGHT_TEMPLATE.hypothesis).toBe('A iluminação do lugar é assim: {}.');
     expect(CONDITION_TEMPLATE.hypothesis).toBe('O lugar está {}.');
     expect(SIZE_HINT_TEMPLATE.hypothesis).toBe('O lugar é {}.');
     expect(FEATURE_TEMPLATE.hypothesis).toBe('O lugar tem {}.');
+    expect(FURNISHING_TEMPLATE.hypothesis).toBe('A mobília do lugar é assim: {}.');
+  });
+
+  it('gives every question asked in one pass a hypothesis of its own', () => {
+    // Every stand-in classifier in this front dispatches on the hypothesis, so
+    // two questions sharing one string is a silently wrong answer rather than a
+    // failure. `furnishing` would have read naturally as `'O lugar está {}.'`,
+    // which is `condition`'s.
+    //
+    // The two room templates are left out and are the exception that proves the
+    // rule: they share a hypothesis, and `classify` asks exactly one of them,
+    // chosen by the building it already settled on.
+    const asked = ALL_TEMPLATES.filter(({ name }) => name !== 'dungeon room');
+    const hypotheses = asked.map(({ template }) => template.hypothesis);
+    expect(new Set(hypotheses).size).toBe(hypotheses.length);
   });
 
   it('never offers the model a choice inside one label', () => {
@@ -183,6 +201,23 @@ describe('the wording handed to the classifier', () => {
     });
   });
 
+  it('pins the furnishing labels, and keeps them about furniture alone', () => {
+    // Furniture on the floor and nothing about how clean it is: the separation
+    // from `condition` is the whole point of the question, and a label that
+    // said "sujo" or "arrumado" would put it back.
+    expect(FURNISHING_TEMPLATE.labels).toEqual({
+      bare: 'sem móveis, o chão está vazio',
+      sparse: 'com pouca mobília, umas poucas peças',
+      furnished: 'mobiliado, com mesas, bancos e caixotes',
+      crowded: 'abarrotado de móveis, quase sem espaço livre',
+    });
+    for (const label of Object.values(FURNISHING_TEMPLATE.labels)) {
+      for (const word of Object.values(CONDITION_TEMPLATE.labels)) {
+        expect(label).not.toContain(word);
+      }
+    }
+  });
+
   it('builds the storeroom label on the word the synonym layer rewrites towards', () => {
     // `synonyms.ts` reads `STOREROOM_WORD`, not this label. If the two ever
     // stopped being the same word, every "porão" would be rewritten into a word
@@ -223,6 +258,25 @@ describe('the thresholds and the clutter table', () => {
     // Below a third, a description that never mentioned a size would come back
     // with one anyway, and `sizeHint` would stop meaning "they asked for this".
     expect(SIZE_HINT_TEMPLATE.minConfidence).toBeGreaterThan(1 / 3);
+  });
+
+  it('spans the whole of 0..1 with the furnishing figures, in the order of the labels', () => {
+    // 0 rather than `CLUTTER_BY_CONDITION`'s 0.1 floor: a tidy room still has
+    // dust in it, and a bare room has no furniture.
+    const figures = Object.keys(FURNISHING_TEMPLATE.labels).map(
+      (level) => FURNISHING_BY_LEVEL[level as keyof typeof FURNISHING_BY_LEVEL],
+    );
+    expect(figures[0]).toBe(0);
+    expect(figures[figures.length - 1]).toBe(1);
+    for (let i = 1; i < figures.length; i += 1) {
+      expect(figures[i]).toBeGreaterThan(figures[i - 1]);
+    }
+  });
+
+  it('gives a furnishing figure to every label and nothing else', () => {
+    expect(Object.keys(FURNISHING_BY_LEVEL).sort()).toEqual(
+      Object.keys(FURNISHING_TEMPLATE.labels).sort(),
+    );
   });
 
   it('gives every condition a clutter figure inside 0..1', () => {

@@ -57,7 +57,9 @@ function constraintsFor(overrides: Partial<Constraints> = {}): Constraints {
     light: 'dim',
     condition: 'lived_in',
     clutter: 0.4,
+    furnishing: 0.4,
     features: [],
+    excluded: [],
     unresolved: [],
     ...overrides,
   };

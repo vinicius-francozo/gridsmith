@@ -493,16 +493,40 @@ function placeOneOf(room: Room, candidates: Placement[], rng: Rng): PlacedProp[]
 
 /**
  * The anchors this room wants: the ones its features asked for by name first,
- * then whatever else the profile offers, up to the profile's count.
+ * then whatever else the profile offers that was not refused, up to the
+ * profile's count.
+ *
+ * Two rules, and the second is the one that was missing. Asking for a feature
+ * is a **priority** — it goes to the front of the order. Excluding one is a
+ * **restriction** — its anchor is not in the draw at all, at any seed. Before
+ * `Params.excluded` existed there was only the first rule, so "sem escadaria"
+ * had no path by which it could work: the fill drew from the whole profile and
+ * a staircase came out of a request that forbade one.
+ *
+ * The fill itself is untouched, and that is deliberate. Stopping the draw as
+ * soon as the requested anchors ran out would have been the smaller change and
+ * the wrong one: a description that names only features which are not anchors
+ * — the one that started this, which asked for pillars — would leave the order
+ * empty and produce a dungeon hall with nothing against any of its walls. That
+ * may be literally correct and it reads as broken. So the draw still fills to
+ * `anchorRange.min`, out of what is left. A hall told to have no stairs still
+ * gets its weapon rack.
+ *
+ * A room whose every anchor is excluded does come back with none, and that is
+ * the one case where the refusal outranks the filling: the person said no to
+ * each of them by name.
  */
 function anchorOrder(params: Params, profile: PlaceProfile, rng: Rng): AnchorSpec[] {
-  const requested = profile.anchors.filter(
+  const allowed = profile.anchors.filter(
+    (spec) => spec.feature === undefined || !params.excluded.includes(spec.feature),
+  );
+  const requested = allowed.filter(
     (spec) => spec.feature !== undefined && params.features.includes(spec.feature),
   );
   const wanted = rng.int(profile.anchorRange.min, profile.anchorRange.max);
 
   const order = [...requested];
-  let rest = profile.anchors.filter((spec) => !order.includes(spec));
+  let rest = allowed.filter((spec) => !order.includes(spec));
   while (order.length < wanted && rest.length > 0) {
     const spec = rng.pick(rest);
     order.push(spec);
@@ -511,11 +535,22 @@ function anchorOrder(params: Params, profile: PlaceProfile, rng: Rng): AnchorSpe
   return order;
 }
 
-/** How many groups a room of `floorArea` cells wants at this clutter. */
+/**
+ * How many groups a room of `floorArea` cells wants at this furnishing.
+ *
+ * `furnishing`, not `clutter`, and the swap is the whole of defect D3. A
+ * description of a filthy ruin read as `condition: ruined`, which the
+ * interpreters turn into `clutter` 0.85, which through this line asked for
+ * `2 + 3 × 0.85` groups per hundred cells — about nine war tables in a hall of
+ * 195 floor cells. The person had asked for dirt and been given furniture.
+ * The two are separate questions now (`core/types.ts`), and this is the line
+ * that reads the second one. `scatterProps` still reads `clutter`, which is
+ * what dirt actually is.
+ */
 function groupTarget(floorArea: number, params: Params, profile: PlaceProfile): number {
-  const clutter = Math.min(1, Math.max(0, params.clutter));
+  const furnishing = Math.min(1, Math.max(0, params.furnishing));
   const { min, max } = profile.groupsPerHundredCells;
-  return Math.round((floorArea / 100) * (min + (max - min) * clutter));
+  return Math.round((floorArea / 100) * (min + (max - min) * furnishing));
 }
 
 /**
