@@ -4,7 +4,7 @@ import {
   CONDITION_TEMPLATE,
   FEATURE_TEMPLATE,
   LIGHT_TEMPLATE,
-  PLACE_TYPE_TEMPLATE,
+  ROOM_TEMPLATES,
   SIZE_HINT_TEMPLATE,
   STOREROOM_WORD,
 } from './templates';
@@ -31,7 +31,7 @@ import type { AppliedSynonym, SynonymRule } from './synonyms';
  */
 
 describe('the three errors the bench measured', () => {
-  // All three `placeType` mistakes the winning model made in twenty
+  // All three `place` mistakes the winning model made in twenty
   // descriptions were this one word wearing three hats, and every one of them
   // came back as `tavern_hall`.
   it('rewrites "porão" inside a sentence', () => {
@@ -444,7 +444,7 @@ describe('the rules themselves', () => {
     // word this layer rewrites towards, that no hypothesis ever mentions, is a
     // rewrite into a word the model is not listening for.
     const asked = [
-      ...Object.values(PLACE_TYPE_TEMPLATE.labels),
+      ...Object.values(ROOM_TEMPLATES.tavern.labels),
       ...Object.values(LIGHT_TEMPLATE.labels),
       ...Object.values(CONDITION_TEMPLATE.labels),
       ...Object.values(SIZE_HINT_TEMPLATE.labels),

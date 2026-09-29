@@ -53,7 +53,7 @@ function recorder(): { target: RenderTarget; canvas: RecordingCanvas } {
 
 function constraintsFor(overrides: Partial<Constraints> = {}): Constraints {
   return {
-    placeType: 'tavern_hall',
+    place: { building: 'tavern', room: 'hall' },
     light: 'dim',
     condition: 'lived_in',
     clutter: 0.4,
@@ -80,7 +80,7 @@ const EXAMPLES: ReadonlyArray<{ description: string; constraints: Constraints }>
   {
     description: 'um salão de taverna, luz baixa, móveis derrubados',
     constraints: constraintsFor({
-      placeType: 'tavern_hall',
+      place: { building: 'tavern', room: 'hall' },
       light: 'dark',
       condition: 'disordered',
       clutter: 0.6,
@@ -90,7 +90,7 @@ const EXAMPLES: ReadonlyArray<{ description: string; constraints: Constraints }>
   {
     description: 'um quarto de taverna pequeno e bagunçado',
     constraints: constraintsFor({
-      placeType: 'tavern_room',
+      place: { building: 'tavern', room: 'room' },
       sizeHint: 'small',
       light: 'dim',
       condition: 'disordered',
@@ -101,7 +101,7 @@ const EXAMPLES: ReadonlyArray<{ description: string; constraints: Constraints }>
   {
     description: 'um depósito de taverna com engradados empilhados',
     constraints: constraintsFor({
-      placeType: 'tavern_storeroom',
+      place: { building: 'tavern', room: 'storeroom' },
       light: 'dark',
       condition: 'lived_in',
       clutter: 0.7,
@@ -137,7 +137,7 @@ describe('the whole loop, end to end', () => {
       );
 
       expect(interpreter.asked).toEqual([example.description]);
-      expect(result.params.placeType).toBe(example.constraints.placeType);
+      expect(result.params.place).toBe(example.constraints.place);
       expect(result.scene.props.length).toBeGreaterThan(0);
       // The surface was resized and painted. `render.test.ts` owns what the
       // commands are; this owns that the pipeline got there at all.
@@ -238,7 +238,7 @@ describe('what the loop could not do comes back with the map', () => {
   });
 
   it('reports a feature that does not belong in the place as a conflict', async () => {
-    const constraints = constraintsFor({ placeType: 'tavern_room', features: ['bar'] });
+    const constraints = constraintsFor({ place: { building: 'tavern', room: 'room' }, features: ['bar'] });
 
     const result = await generateMap(
       { description: 'um quarto de taverna com um balcão', seed: 5 },

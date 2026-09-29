@@ -17,7 +17,8 @@
 
 import { createRng } from '../core/prng';
 import { MAX_SIDE } from '../core/types';
-import type { Constraints, Params, PlaceType, Rng, Size } from '../core/types';
+import type { Constraints, Params, Place, RoomKind, Rng, Size } from '../core/types';
+import { BUILDINGS, roomsFor } from '../generator/profiles';
 
 import {
   CLUTTER_NOT_A_NUMBER,
@@ -48,7 +49,7 @@ type PlaceProfile = {
 };
 
 /**
- * The three kinds of tavern space, at their three sizes.
+ * The three shared room geometries, at their three size hints.
  *
  * These are footprints, so the wall ring is included: a 7x7 room has a 5x5
  * floor inside it. Two things fix where each band sits, and neither is taste.
@@ -75,8 +76,8 @@ type PlaceProfile = {
  * because they are different kinds of place and not one place with a dial on
  * it. `resolve.test.ts` holds the tables to that too.
  */
-const PROFILES: Readonly<Record<PlaceType, PlaceProfile>> = {
-  tavern_room: {
+const PROFILES: Readonly<Record<RoomKind, PlaceProfile>> = {
+  room: {
     // The tightest of the three: the generator will build a guest room no
     // smaller than 6x6 and no larger than 11x10, which is not six cells of
     // width and five of height for three bands that have to clear each other.
@@ -88,12 +89,12 @@ const PROFILES: Readonly<Record<PlaceType, PlaceProfile>> = {
     // cornered in, which is the reason to fight in one.
     doors: { min: 1, max: 1 },
   },
-  tavern_storeroom: {
+  storeroom: {
     sizes: { small: { w: 9, h: 7 }, medium: { w: 12, h: 8 }, large: { w: 13, h: 11 } },
     // The stair down, and often a hatch to the street for deliveries.
     doors: { min: 1, max: 2 },
   },
-  tavern_hall: {
+  hall: {
     // Room enough that all three bands clear each other on both sides, and
     // the outer two land exactly on the generator's 12x10 floor and 20x18
     // ceiling.
@@ -117,14 +118,14 @@ const DEFAULT_SIZE_HINT = 'medium';
  * @throws {TypeError} if `seed` is not an integer, from `createRng`. A
  *                     fractional seed would name a map that cannot be found
  *                     again.
- * @throws {RangeError} if `placeType` is not in the vocabulary — see
+ * @throws {RangeError} if `place` is not in the vocabulary — see
  *                      `profileFor`.
  */
 export function resolve(constraints: Constraints, seed: number): Params {
   const rng = createRng(seed);
   const conflicts: string[] = [];
 
-  const profile = profileFor(constraints.placeType);
+  const profile = profileFor(constraints.place);
   const size = jitterSize(profile.sizes[constraints.sizeHint ?? DEFAULT_SIZE_HINT], rng);
   const doorCount = rng.int(profile.doors.min, profile.doors.max);
 
@@ -132,7 +133,7 @@ export function resolve(constraints: Constraints, seed: number): Params {
   const clutter = resolveClutter(constraints.clutter, conflicts);
 
   return {
-    placeType: constraints.placeType,
+    place: constraints.place,
     size,
     light: constraints.light,
     condition: constraints.condition,
@@ -145,11 +146,11 @@ export function resolve(constraints: Constraints, seed: number): Params {
 }
 
 /**
- * The profile for `placeType`.
+ * The size and door profile for `place`.
  *
  * `resolve` is a public function, reached from the interface with whatever a
  * language model answered — and the API does not hold the model to the
- * vocabulary, so `placeType` arrives unverified in exactly the way `clutter`
+ * vocabulary, so `place` arrives unverified in exactly the way `clutter`
  * does. Left alone, an unknown kind of place reads a missing profile and
  * fails a field later on `sizes`, naming neither the field that was wrong nor
  * the value it held. Unlike `clutter` there is nothing sensible to fall back
@@ -163,15 +164,16 @@ export function resolve(constraints: Constraints, seed: number): Params {
  * fails on `.sizes` one line later — the raw `TypeError` this guard exists to
  * replace. Only a key we declared is a kind of place.
  *
- * @throws {RangeError} if `placeType` is not one of the three kinds.
+ * @throws {RangeError} if the pair is unsupported.
  */
-function profileFor(placeType: PlaceType): PlaceProfile {
-  if (!Object.hasOwn(PROFILES, placeType)) {
+function profileFor(place: Place): PlaceProfile {
+  if (!place || !Object.hasOwn(BUILDINGS, place.building) || !Object.hasOwn(PROFILES, place.room) ||
+      !roomsFor(place.building).includes(place.room)) {
     throw new RangeError(
-      `resolve() was given placeType "${String(placeType)}", which is not a kind of place the generator knows`,
+      `resolve() was given place "${String(place?.building)}_${String(place?.room)}", which is not a kind of place the generator knows`,
     );
   }
-  return PROFILES[placeType];
+  return PROFILES[place.room];
 }
 
 /**
@@ -221,7 +223,7 @@ function resolveFeatures(constraints: Constraints, size: Size, conflicts: string
       conflicts.push(entry(FEATURE_NOT_IN_VOCABULARY, raw));
       continue;
     }
-    if (!featureSuits(word, constraints.placeType)) {
+    if (!featureSuits(word, constraints.place)) {
       conflicts.push(entry(FEATURE_NOT_IN_PLACE, word));
       continue;
     }
@@ -268,7 +270,7 @@ export function featureBudget(size: Size): number {
  * so the type is a claim and not a fact: `null`, a missing field and the word
  * `"lots"` all arrive here typed as a number. Testing only for `NaN` lets
  * every one of them through untouched, to be multiplied into a prop count
- * somewhere else — the same untrusted boundary `placeType` is screened at, so
+ * somewhere else — the same untrusted boundary `place` is screened at, so
  * anything that is not a number is read the same way a `NaN` is.
  */
 function resolveClutter(clutter: number, conflicts: string[]): number {
@@ -282,4 +284,3 @@ function resolveClutter(clutter: number, conflicts: string[]): number {
   }
   return clutter;
 }
-

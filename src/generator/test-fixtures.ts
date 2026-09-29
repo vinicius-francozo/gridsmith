@@ -23,7 +23,7 @@ import type {
   Facing,
   Floorplan,
   Params,
-  PlaceType,
+  Place,
   PlacedProp,
   Rng,
   Scene,
@@ -98,10 +98,10 @@ export function sceneFrom(floorplan: Floorplan, props: PlacedProp[] = []): Scene
   return { floorplan, zones: [], tiles, props, lights: [] };
 }
 
-/** Concrete params for `placeType`, with whatever a test cares about changed. */
-export function paramsFor(placeType: PlaceType, overrides: Partial<Params> = {}): Params {
+/** Concrete params for `place`, with whatever a test cares about changed. */
+export function paramsFor(place: Place, overrides: Partial<Params> = {}): Params {
   const base: Params = {
-    placeType,
+    place,
     size: { w: 14, h: 12 },
     light: 'dim',
     condition: 'lived_in',

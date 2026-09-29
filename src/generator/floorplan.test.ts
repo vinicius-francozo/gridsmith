@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { cellAt, cellKey, inBounds, step } from '../core/grid';
 import { createRng } from '../core/prng';
-import type { Cell, CellKind, Floorplan, PlaceType } from '../core/types';
+import type { Cell, CellKind, Floorplan, Place } from '../core/types';
 import {
   buildFloorplan,
   doorCandidates,
@@ -14,7 +14,7 @@ import {
 import { clampDoorCount, clampSize, profileFor } from './profiles';
 import { paramsFor, planFrom } from './test-fixtures';
 
-const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
+const PLACE_TYPES: Place[] = [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'tavern', room: 'storeroom' }];
 
 /** The eight offsets around a cell. */
 const AROUND: Cell[] = [
@@ -24,14 +24,14 @@ const AROUND: Cell[] = [
 ];
 
 /** A plan for every place type, over a spread of seeds. */
-function everyPlan(seeds = 25): { placeType: PlaceType; seed: number; floorplan: Floorplan }[] {
+function everyPlan(seeds = 25): { place: Place; seed: number; floorplan: Floorplan }[] {
   const plans = [];
-  for (const placeType of PLACE_TYPES) {
-    const profile = profileFor(placeType);
+  for (const place of PLACE_TYPES) {
+    const profile = profileFor(place);
     for (let seed = 0; seed < seeds; seed += 1) {
-      const params = paramsFor(placeType, { size: profile.maxSize, doorCount: 2 });
+      const params = paramsFor(place, { size: profile.maxSize, doorCount: 2 });
       plans.push({
-        placeType,
+        place,
         seed,
         floorplan: buildFloorplan(params, profile, createRng(seed)).floorplan,
       });
@@ -114,7 +114,7 @@ describe('segmentWalls', () => {
   });
 
   it('covers every wall cell exactly once, over every generated plan', () => {
-    for (const { placeType, seed, floorplan } of everyPlan()) {
+    for (const { place, seed, floorplan } of everyPlan()) {
       const counted = new Map<string, number>();
       for (const segment of floorplan.walls) {
         expect(segment.from.x === segment.to.x || segment.from.y === segment.to.y).toBe(true);
@@ -124,7 +124,7 @@ describe('segmentWalls', () => {
         }
       }
       for (const [key, times] of counted) {
-        expect(`${placeType}/${seed} ${key} x${times}`).toBe(`${placeType}/${seed} ${key} x1`);
+        expect(`${place}/${seed} ${key} x${times}`).toBe(`${place}/${seed} ${key} x1`);
       }
       const walls = floorplan.cells.flat().filter((kind) => kind === 'wall').length;
       expect(counted.size).toBe(walls);
@@ -142,7 +142,7 @@ describe('the derived wall contour', () => {
     // string and a regex in there costs enough to time the test out under
     // worker contention, which made the suite flaky without ever being wrong.
     const spills: string[] = [];
-    for (const { placeType, seed, floorplan } of everyPlan()) {
+    for (const { place, seed, floorplan } of everyPlan()) {
       for (const cell of floorCells(floorplan)) {
         for (const offset of AROUND) {
           const neighbor = { x: cell.x + offset.x, y: cell.y + offset.y };
@@ -150,7 +150,7 @@ describe('the derived wall contour', () => {
             ? cellAt(floorplan.cells, neighbor)
             : 'off-grid';
           if (kind === 'void' || kind === 'off-grid') {
-            spills.push(`${placeType}/${seed} ${cellKey(neighbor)}: ${kind}`);
+            spills.push(`${place}/${seed} ${cellKey(neighbor)}: ${kind}`);
           }
         }
       }
@@ -373,9 +373,9 @@ describe('placeDoors', () => {
 
 describe('buildFloorplan', () => {
   it('always opens at least one door', () => {
-    for (const { placeType, seed, floorplan } of everyPlan()) {
-      expect(`${placeType}/${seed}: ${floorplan.doors.length}`).not.toBe(
-        `${placeType}/${seed}: 0`,
+    for (const { place, seed, floorplan } of everyPlan()) {
+      expect(`${place}/${seed}: ${floorplan.doors.length}`).not.toBe(
+        `${place}/${seed}: 0`,
       );
     }
   });
@@ -403,10 +403,10 @@ describe('buildFloorplan', () => {
   });
 
   it('opens as many doors as the params ask for, held inside the profile range', () => {
-    for (const placeType of PLACE_TYPES) {
-      const profile = profileFor(placeType);
+    for (const place of PLACE_TYPES) {
+      const profile = profileFor(place);
       for (const doorCount of [0, 1, 2, 7]) {
-        const params = paramsFor(placeType, { size: profile.maxSize, doorCount });
+        const params = paramsFor(place, { size: profile.maxSize, doorCount });
         const { floorplan } = buildFloorplan(params, profile, createRng(9));
         expect(floorplan.doors).toHaveLength(clampDoorCount(doorCount, profile));
       }
@@ -414,8 +414,8 @@ describe('buildFloorplan', () => {
   });
 
   it('holds an out-of-range size inside the profile, and so inside 20 cells', () => {
-    const profile = profileFor('tavern_hall');
-    const params = paramsFor('tavern_hall', { size: { w: 400, h: 1 } });
+    const profile = profileFor({ building: 'tavern', room: 'hall' });
+    const params = paramsFor({ building: 'tavern', room: 'hall' }, { size: { w: 400, h: 1 } });
     const { floorplan } = buildFloorplan(params, profile, createRng(2));
     expect(floorplan.size).toEqual(clampSize(params.size, profile));
     expect(floorplan.cells).toHaveLength(floorplan.size.h);
@@ -423,9 +423,9 @@ describe('buildFloorplan', () => {
   });
 
   it('hands back the grammar regions stage two segments into zones', () => {
-    const profile = profileFor('tavern_hall');
+    const profile = profileFor({ building: 'tavern', room: 'hall' });
     const { regions, floorplan } = buildFloorplan(
-      paramsFor('tavern_hall', { size: profile.maxSize }),
+      paramsFor({ building: 'tavern', room: 'hall' }, { size: profile.maxSize }),
       profile,
       createRng(5),
     );
@@ -439,8 +439,8 @@ describe('buildFloorplan', () => {
   });
 
   it('varies the plan from seed to seed', () => {
-    const profile = profileFor('tavern_hall');
-    const params = paramsFor('tavern_hall', { size: profile.maxSize });
+    const profile = profileFor({ building: 'tavern', room: 'hall' });
+    const params = paramsFor({ building: 'tavern', room: 'hall' }, { size: profile.maxSize });
     const plans = new Set<string>();
     for (let seed = 0; seed < 20; seed += 1) {
       plans.add(JSON.stringify(buildFloorplan(params, profile, createRng(seed)).floorplan.cells));
@@ -473,31 +473,31 @@ describe('the features stage one answers to', () => {
   }
 
   it('cuts an alcove into the plan when one is asked for', () => {
-    const profile = profileFor('tavern_hall');
+    const profile = profileFor({ building: 'tavern', room: 'hall' });
     for (let seed = 0; seed < 20; seed += 1) {
-      const params = paramsFor('tavern_hall', { size: profile.maxSize, features: ['alcove'] });
+      const params = paramsFor({ building: 'tavern', room: 'hall' }, { size: profile.maxSize, features: ['alcove'] });
       const { regions } = buildFloorplan(params, profile, createRng(seed));
       expect(`seed ${seed}: ${regions.length} region(s)`).toBe(`seed ${seed}: 2 region(s)`);
     }
   });
 
   it('grows pillars in a hall when they are asked for', () => {
-    const profile = profileFor('tavern_hall');
+    const profile = profileFor({ building: 'tavern', room: 'hall' });
     for (let seed = 0; seed < 20; seed += 1) {
-      const params = paramsFor('tavern_hall', { size: profile.maxSize, features: ['pillars'] });
+      const params = paramsFor({ building: 'tavern', room: 'hall' }, { size: profile.maxSize, features: ['pillars'] });
       const { floorplan } = buildFloorplan(params, profile, createRng(seed));
       expect(`seed ${seed}: ${hasPillar(floorplan)}`).toBe(`seed ${seed}: true`);
     }
   });
 
   it('never grows a pillar in a place whose profile forbids them', () => {
-    for (const placeType of ['tavern_room', 'tavern_storeroom'] as PlaceType[]) {
-      const profile = profileFor(placeType);
+    for (const place of [{ building: 'tavern', room: 'room' }, { building: 'tavern', room: 'storeroom' }] as Place[]) {
+      const profile = profileFor(place);
       expect(profile.allowPillars).toBe(false);
       for (let seed = 0; seed < 20; seed += 1) {
-        const params = paramsFor(placeType, { size: profile.maxSize, features: ['pillars'] });
+        const params = paramsFor(place, { size: profile.maxSize, features: ['pillars'] });
         const { floorplan } = buildFloorplan(params, profile, createRng(seed));
-        expect(`${placeType}/${seed}: ${hasPillar(floorplan)}`).toBe(`${placeType}/${seed}: false`);
+        expect(`${place}/${seed}: ${hasPillar(floorplan)}`).toBe(`${place}/${seed}: false`);
       }
     }
   });

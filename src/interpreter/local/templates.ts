@@ -1,73 +1,18 @@
 /**
  * The hypotheses the local classifier is asked to judge, and nothing else.
  *
- * This file is data. It holds no logic on purpose, because the wording in it is
- * the part of this front that was *measured* rather than reasoned about: a
- * bench scored two models against twenty Portuguese descriptions and the
- * phrasings below are the ones it came back with. Everything here is written so
- * that replacing it is editing strings in a map — never hunting a hypothesis
- * down inside a function.
+ * The old bench measured a single choice among three tavern places. Its place
+ * accuracy and confidence figures do not describe the building-then-room
+ * classifier below. The light, condition, size and feature labels remain from
+ * that bench; their wording is pinned by `templates.test.ts`.
  *
- * Three rules keep it that way, and the reviewer should hold this front to all
- * three:
- *
- * 1. **Every label map is an exact `Record` over a closed vocabulary.** A fourth
- *    kind of place, or an eighth feature, stops this file compiling rather than
- *    silently becoming a value the classifier is never asked about. That one is
- *    the compiler's, and `templates.test.ts` restates each vocabulary by hand so
- *    that a type and a template cannot drift together unnoticed.
- * 2. **No hypothesis or label string is restated anywhere that has to agree
- *    with it.** A copy is a copy that silently stops matching when these
- *    change. `synonyms.ts` is the one file that needs the model's own words,
- *    and it *derives* them from here rather than restating them — see
- *    `STOREROOM_WORD` below, which exists exactly so that it can.
- *
- *    `templates.test.ts` is the deliberate exception, and it is the opposite
- *    case rather than a breach of the rule: a test that writes a measured value
- *    out by hand does not drift quietly, it *fails*, which is the entire point
- *    of writing it down twice. It pins the five hypotheses, the three
- *    thresholds, the shape of the labels, and every label's own wording.
- *
- *    That last one is deliberate and it is the expensive one. The wordings are
- *    not a design choice somebody should feel free to tidy — they are what the
- *    bench scored, and every accuracy figure below describes them and nothing
- *    else. Shortening `'usado, mas em ordem'` to `'usado'` breaks no shape
- *    check and invalidates every number in this file at once. A later bench is
- *    still expected to replace them; it replaces both files together, on
- *    purpose, which is exactly what that ought to cost.
- * 3. **Nothing here gets "improved" without a measurement.** The three findings
- *    under the next heading are all cases where the wording a person would
- *    naturally write is the wording that scores worst.
- *
- * ## What the bench found, so that nobody undoes it
- *
- * - **A long, descriptive label collapses.** Phrasing `placeType` as a
- *   descriptive sentence scored 45%, against 90% for the bare short label below.
- *   In `features` the same change took F1 from 0.94 to 0.57. The labels here are
- *   therefore as short as they can be said, and the features are bare nouns.
- * - **A disjunction in a feature label is worse than either half.** Asking about
- *   `'pilares ou colunas'` took F1 from 0.94 to 0.79 and invented false
- *   positives. No label here contains "ou".
- * - **`tavern_storeroom` deliberately does not say "porão ou adega".** That
- *   longer label raised raw accuracy and flattened confidence, which is the one
- *   thing the gate in `PLACE_TYPE_TEMPLATE.minConfidence` cannot survive.
- *   `synonyms.ts` resolves "porão" and "adega" *before* the model is asked, so
- *   the short label and the high confidence are no longer a trade.
- *
- * ## Why the labels are in Portuguese when the code is in English
- *
- * These are not identifiers and not screen text — they are the model's input,
- * the second half of an entailment pair whose first half is the game master's
- * own sentence. The bench scored these Portuguese hypotheses against Portuguese
- * premises, and that pairing is what the numbers above describe.
- *
- * *Known limitation, stated rather than hidden:* a description in another
- * language is judged against a Portuguese hypothesis. The model is multilingual
- * so this degrades rather than fails, but it degrades — and `synonyms.ts`, which
- * only knows Portuguese words, does nothing for it at all.
+ * New building and room labels are short Portuguese phrases, like the old
+ * labels, but have no accuracy measurement yet. `synonyms.ts` still rewrites
+ * "porão" and "adega" toward `STOREROOM_WORD` for the tavern room label.
+ * Descriptions in other languages are classified against Portuguese labels.
  */
 
-import type { Condition, Light, PlaceType } from '../../core/types';
+import type { Building, Condition, Light, RoomKind } from '../../core/types';
 import type { Feature } from '../vocabulary';
 
 /**
@@ -97,13 +42,8 @@ export type ChoiceTemplate<T extends string> = {
 /**
  * A classification with a score below which its winner is not acted on.
  *
- * What "not acted on" means is the reader's business, and it is a different
- * thing in each of the three places this is used: for `features` the label is
- * taken as absent, for `sizeHint` the field is left off entirely, and for
- * `placeType` the answer is kept but marked untrusted. What is common — and
- * what this type is for — is that the number is *data*, sitting beside the
- * labels it was measured against, rather than a constant somewhere in a
- * function.
+ * Features below their threshold are absent; a size hint below its threshold
+ * is omitted. Building and room have no confidence gate.
  */
 export type GatedTemplate<T extends string> = ChoiceTemplate<T> & {
   /** At or above this score, the winning label is acted on. */
@@ -123,26 +63,35 @@ export type GatedTemplate<T extends string> = ChoiceTemplate<T> & {
 export const STOREROOM_WORD = 'depósito';
 
 /**
- * Which of the three tavern spaces the description is about.
- *
- * `minConfidence` is the measured one: with these short labels the bench put
- * the AUC of confidence against correctness at 0.922 — the model's own
- * certainty really does tell a right answer from a wrong one — and a gate at
- * 0.55 accepted 13 of 20 descriptions, all 13 of them correct.
- *
- * **Nothing falls back yet.** There is no rule-based interpreter to fall back
- * *to*, so `readPlaceType` computes the gate, reports it, and the answer is
- * used either way. The number lives here so that the day that path is built, it
- * is built against a figure somebody measured.
+ * The two choices that locate a place. The old confidence result applied to
+ * a single three-way tavern choice, not to these labels, so neither choice is
+ * gated by it.
  */
-export const PLACE_TYPE_TEMPLATE: GatedTemplate<PlaceType> = {
-  hypothesis: 'Este texto é sobre {}.',
+export const BUILDING_TEMPLATE: ChoiceTemplate<Building> = {
+  hypothesis: 'A construção é {}.',
   labels: {
-    tavern_hall: 'salão de taverna',
-    tavern_room: 'quarto de taverna',
-    tavern_storeroom: `${STOREROOM_WORD} de taverna`,
+    tavern: 'taverna',
+    dungeon: 'masmorra',
   },
-  minConfidence: 0.55,
+};
+
+export const ROOM_TEMPLATES: Record<Building, ChoiceTemplate<RoomKind>> = {
+  tavern: {
+    hypothesis: 'O cômodo é {}.',
+    labels: {
+      hall: 'salão de taverna',
+      room: 'quarto de taverna',
+      storeroom: `${STOREROOM_WORD} de taverna`,
+    },
+  },
+  dungeon: {
+    hypothesis: 'O cômodo é {}.',
+    labels: {
+      hall: 'salão da masmorra',
+      room: 'cela da masmorra',
+      storeroom: 'arsenal da masmorra',
+    },
+  },
 };
 
 /** How lit the place is. */

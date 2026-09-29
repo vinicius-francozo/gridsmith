@@ -38,7 +38,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createRng } from '../core/prng';
-import type { AssetLibrary, Constraints, Interpreter, PlaceType, Scene } from '../core/types';
+import type { AssetLibrary, Constraints, Interpreter, Place, Scene } from '../core/types';
 import { generate } from '../generator/generate';
 import { resolve } from '../interpreter/resolve';
 import { featuresFor } from '../interpreter/vocabulary';
@@ -86,7 +86,7 @@ vi.mock('../interpreter/claude', () => ({
     interpret(text: string): Promise<Constraints> {
       spy.asked.push(text);
       return Promise.resolve({
-        placeType: 'tavern_hall',
+        place: { building: 'tavern', room: 'hall' },
         light: 'dim',
         condition: 'lived_in',
         clutter: 0.4,
@@ -271,27 +271,27 @@ function lendLocalStorage(store: KeyStore): void {
 }
 
 /**
- * The three kinds of place, exhaustively.
- *
- * Written as the keys of a `Record<PlaceType, true>` so that a fourth kind
- * added to the frozen vocabulary stops this file compiling instead of quietly
- * going untested.
+ * The six building/room pairs in the approved vocabulary.
+ * Keep this list in step with the pair matrix when it grows.
  */
-const PLACE_TYPES = Object.keys({
-  tavern_hall: true,
-  tavern_room: true,
-  tavern_storeroom: true,
-} satisfies Record<PlaceType, true>) as PlaceType[];
+const PLACE_TYPES: Place[] = [
+  { building: 'tavern', room: 'hall' },
+  { building: 'tavern', room: 'room' },
+  { building: 'tavern', room: 'storeroom' },
+  { building: 'dungeon', room: 'hall' },
+  { building: 'dungeon', room: 'room' },
+  { building: 'dungeon', room: 'storeroom' },
+];
 
-/** A scene of `placeType` at `seed`, asking for everything that place can hold. */
-function sceneFor(placeType: PlaceType, seed: number): Scene {
+/** A scene of `place` at `seed`, asking for everything that place can hold. */
+function sceneFor(place: Place, seed: number): Scene {
   const params = resolve(
     {
-      placeType,
+      place,
       light: 'dim',
       condition: 'lived_in',
       clutter: 0.6,
-      features: featuresFor(placeType),
+      features: featuresFor(place),
       unresolved: [],
     },
     seed,
@@ -488,21 +488,31 @@ describe('what the page is wired to when nobody stands in for anything', () => {
 
     const missing = new Set<string>();
     let placed = 0;
-    for (const placeType of PLACE_TYPES) {
+    for (const place of PLACE_TYPES) {
+      let placedForPair = 0;
       for (let seed = 1; seed <= 25; seed += 1) {
-        for (const prop of sceneFor(placeType, seed).props) {
+        for (const prop of sceneFor(place, seed).props) {
           placed += 1;
-          if (library.get(prop.assetId) === undefined) {
+          placedForPair += 1;
+          const asset = library.get(prop.assetId);
+          if (asset === undefined) {
             missing.add(prop.assetId);
+            continue;
           }
+          expect(asset.kind).toBe(prop.layer);
+          const footprint = prop.rotation === 90 || prop.rotation === 270
+            ? { w: asset.footprint.h, h: asset.footprint.w }
+            : asset.footprint;
+          expect(prop.footprint).toEqual(footprint);
         }
       }
+      expect(placedForPair).toBeGreaterThan(0);
     }
 
     expect(placed).toBeGreaterThan(0);
     expect([...missing]).toEqual([]);
 
-    // The three kinds it does carry, and the fourth it leaves out on purpose:
+    // The three asset kinds it does carry, and the fourth it leaves out on purpose:
     // floors are flat colour by design, so `tile/...` resolving to nothing is
     // the plan working rather than the same gap in a fourth place.
     for (const kind of ['anchor', 'group', 'scatter'] as const) {

@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Constraints } from '../core/types';
+import { BUILDINGS } from '../generator/profiles';
 
 import { constraintsSchema } from './schema';
 import type { ParsedConstraints } from './schema';
 
 /** A complete, valid answer, used as the base for the rejection cases. */
 const valid: Constraints = {
-  placeType: 'tavern_hall',
+  place: { building: 'tavern', room: 'hall' },
   light: 'dim',
   condition: 'lived_in',
   clutter: 0.4,
@@ -59,7 +60,20 @@ describe('accepting an answer', () => {
 // are the checks that actually close it.
 describe('rejecting an answer', () => {
   it('rejects a place type outside the vocabulary', () => {
-    expect(constraintsSchema.safeParse({ ...valid, placeType: 'throne_room' }).success).toBe(false);
+    expect(constraintsSchema.safeParse({ ...valid, place: 'throne_room' }).success).toBe(false);
+    expect(constraintsSchema.safeParse({ ...valid, place: { building: 'forge', room: 'hall' } }).success).toBe(false);
+    expect(constraintsSchema.safeParse({ ...valid, place: { building: 'tavern', room: 'crypt' } }).success).toBe(false);
+    expect(constraintsSchema.safeParse({ ...valid, place: { building: 'toString', room: 'hall' } }).success).toBe(false);
+  });
+
+  it('rejects a valid room key absent from the chosen building', () => {
+    const filling = BUILDINGS.dungeon.rooms.room;
+    delete BUILDINGS.dungeon.rooms.room;
+    try {
+      expect(constraintsSchema.safeParse({ ...valid, place: { building: 'dungeon', room: 'room' } }).success).toBe(false);
+    } finally {
+      BUILDINGS.dungeon.rooms.room = filling;
+    }
   });
 
   it('rejects a light level outside the vocabulary', () => {

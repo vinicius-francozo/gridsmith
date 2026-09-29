@@ -26,7 +26,7 @@ import { SceneValidationError, validateScene } from './validate';
  *         played.
  */
 export function generate(params: Params, rng: Rng): Scene {
-  const profile = profileFor(params.placeType);
+  const profile = profileFor(params.place);
 
   const { floorplan, regions } = buildFloorplan(params, profile, rng);
   const { zones, tiles } = paintMaterials(floorplan, regions, profile, rng);

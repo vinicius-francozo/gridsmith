@@ -25,7 +25,7 @@ const IN_NODE: Runtime = { isBrowser: false, isOnline: true };
 
 /** What the model answers with. `unresolved` is whatever it felt like writing. */
 const answer: Constraints = {
-  placeType: 'tavern_hall',
+  place: { building: 'tavern', room: 'hall' },
   light: 'dim',
   condition: 'disordered',
   clutter: 0.6,
@@ -156,7 +156,7 @@ describe('interpreting a description', () => {
     await interpreterWith(client).interpret('a tavern hall');
     const parse = answerParserOf(calls[0]);
 
-    expect(() => parse(JSON.stringify({ ...answer, placeType: 'throne_room' }))).toThrow(/placeType/);
+    expect(() => parse(JSON.stringify({ ...answer, place: 'throne_room' }))).toThrow(/place/);
     expect(() => parse(JSON.stringify({ ...answer, light: 'candlelit' }))).toThrow(/light/);
     expect(() => parse(JSON.stringify({ ...answer, clutter: 4 }))).toThrow(/clutter/);
     expect(() => parse(JSON.stringify({ ...answer, unresolved: undefined }))).toThrow(/unresolved/);
@@ -191,6 +191,15 @@ describe('interpreting a description', () => {
     for (const feature of FEATURES) {
       expect(calls[0].system).toContain(feature);
     }
+  });
+
+  it('frames the place vocabulary as both tavern and dungeon', async () => {
+    const { client, calls } = stubClient(respondsWith(answer));
+
+    await interpreterWith(client).interpret('uma cela de masmorra');
+
+    expect(calls[0].system).toContain('tavern or dungeon room');
+    expect(calls[0].system).not.toContain('description of a tavern space');
   });
 });
 
@@ -316,7 +325,7 @@ describe('failing in a way the interface can explain', () => {
   it('reports an answer that failed the schema, which the API does not enforce for us', async () => {
     // `zodOutputFormat` throws this after a perfectly successful HTTP call,
     // because the enums travel to the model as advice, not as grammar.
-    const failure = new Anthropic.AnthropicError('Failed to parse structured output: invalid placeType');
+    const failure = new Anthropic.AnthropicError('Failed to parse structured output: invalid place');
 
     await expect(interpreterWith(failingClient(failure)).interpret('a hall')).rejects.toBeInstanceOf(
       UnusableResponseError,

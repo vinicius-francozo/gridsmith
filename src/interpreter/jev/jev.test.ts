@@ -19,10 +19,10 @@ import { JevInterpreter, JEV_KEY_HEADER, JEV_MODEL, JEV_PROXY_ENDPOINT } from '.
 const ANSWER = `{
   "model": "jev-1.13.0",
   "answers": {
-    "place_type": {
+    "building": {
       "type": "choice",
-      "choice": "tavern_storeroom",
-      "probabilities": { "tavern_hall": 0, "tavern_room": 0, "tavern_storeroom": 1 },
+      "choice": "tavern",
+      "probabilities": { "tavern": 1, "dungeon": 0 },
       "confidence": 0.94
     },
     "out_of_vocabulary": { "type": "noul", "noul": 0.08 },
@@ -39,6 +39,7 @@ const ANSWER = `{
   },
   "usage": { "input_tokens": 307, "output_tokens": 72 }
 }`;
+const ROOM_ANSWER = '{"answers":{"room":{"type":"choice","choice":"storeroom","confidence":0.94}}}';
 
 /** The twelve names the request has to carry, written out rather than derived. */
 const QUESTION_NAMES = [
@@ -52,8 +53,8 @@ const QUESTION_NAMES = [
   'feature_stairs',
   'light',
   'out_of_vocabulary',
-  'place_type',
   'size',
+  'building',
 ];
 
 const KEY = 'ts-key-for-tests';
@@ -68,7 +69,8 @@ function stubFetch(respond: () => Response | Promise<Response>): {
   const calls: Call[] = [];
   const fetchImpl: typeof fetch = async (input, init) => {
     calls.push({ input, init });
-    return respond();
+    const response = await respond();
+    return calls.length === 2 && response.ok ? new Response(ROOM_ANSWER) : response;
   };
   return { fetchImpl, calls };
 }
@@ -84,7 +86,7 @@ function answering(body: string, status = 200): () => Response {
 
 /** The parsed body of the one request that was made. */
 function sentBody(calls: Call[]): Record<string, unknown> {
-  expect(calls).toHaveLength(1);
+  expect(calls).toHaveLength(2);
   return JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
 }
 
@@ -107,7 +109,7 @@ describe('refusing before the request', () => {
 });
 
 describe('the request the proxy is handed', () => {
-  it('posts every question in one call, to the proxy', async () => {
+  it('posts the building questions then the room question to the proxy', async () => {
     const { fetchImpl, calls } = stubFetch(answering(ANSWER));
 
     await new JevInterpreter({ apiKey: KEY, fetchImpl }).interpret('uma adega fria');
@@ -120,7 +122,40 @@ describe('the request the proxy is handed', () => {
     expect(body.state).toBe('uma adega fria');
     expect(body.model).toBe(JEV_MODEL);
     expect(JEV_MODEL).toBe('jev-latest');
-    expect(Object.keys(body.questions as object).sort()).toEqual(QUESTION_NAMES);
+    expect(Object.keys(body.questions as object).sort()).toEqual([...QUESTION_NAMES].sort());
+    const second = JSON.parse(String(calls[1].init?.body)) as Record<string, unknown>;
+    expect(second.state).toBe(body.state);
+    expect(Object.keys(second.questions as object)).toEqual(['room']);
+    expect(Object.keys((second.questions as { room: { criteria: object } }).room.criteria)).toEqual([
+      'hall', 'room', 'storeroom',
+    ]);
+  });
+
+  it('uses dungeon criteria for the second request when the first answer chooses dungeon', async () => {
+    const dungeonAnswer = ANSWER.replace('"choice": "tavern"', '"choice": "dungeon"');
+    const { fetchImpl, calls } = stubFetch(answering(dungeonAnswer));
+    const description = 'um arsenal da masmorra, com armas e caixotes';
+
+    const constraints = await new JevInterpreter({ apiKey: KEY, fetchImpl }).interpret(description);
+
+    expect(constraints.place).toEqual({ building: 'dungeon', room: 'storeroom' });
+    expect(calls).toHaveLength(2);
+    const first = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
+    const second = JSON.parse(String(calls[1].init?.body)) as Record<string, unknown>;
+    expect(first.state).toBe(description);
+    expect(second.state).toBe(description);
+    expect(second.questions).toEqual({
+      room: {
+        type: 'choice',
+        instructions: 'Qual cômodo desta construção o texto descreve?',
+        criteria: {
+          hall: 'Sala comum ou da guarda da masmorra',
+          room: 'Cela ou quarto da masmorra, com catre',
+          storeroom: 'Arsenal ou depósito da masmorra, com armas e caixotes',
+        },
+      },
+    });
+    expect(JSON.stringify(second.questions)).not.toContain('taverna');
   });
 
   it('asks each question as the primitive it was designed for', async () => {
@@ -131,7 +166,7 @@ describe('the request the proxy is handed', () => {
     await new JevInterpreter({ apiKey: KEY, fetchImpl }).interpret('uma adega fria');
 
     const questions = sentBody(calls).questions as Record<string, { type: string }>;
-    expect(questions.place_type.type).toBe('choice');
+    expect(questions.building.type).toBe('choice');
     expect(questions.out_of_vocabulary.type).toBe('noul');
     expect(questions.light.type).toBe('score');
     expect(questions.condition.type).toBe('score');
@@ -146,13 +181,16 @@ describe('the request the proxy is handed', () => {
 
     await new JevInterpreter({ apiKey: KEY, fetchImpl }).interpret('uma adega fria');
 
-    const headers = calls[0].init?.headers as Record<string, string>;
-    expect(headers[JEV_KEY_HEADER]).toBe(KEY);
+    expect(calls).toHaveLength(2);
     expect(JEV_KEY_HEADER).toBe('x-typesafe-key');
-    expect(headers['content-type']).toBe('application/json');
-    // The URL is logged by every server between here and the proxy.
-    expect(String(calls[0].input)).not.toContain(KEY);
-    expect(String(calls[0].init?.body)).not.toContain(KEY);
+    for (const call of calls) {
+      const headers = call.init?.headers as Record<string, string>;
+      expect(headers[JEV_KEY_HEADER]).toBe(KEY);
+      expect(headers['content-type']).toBe('application/json');
+      // The URL is logged by every server between here and the proxy.
+      expect(String(call.input)).not.toContain(KEY);
+      expect(String(call.init?.body)).not.toContain(KEY);
+    }
   });
 
   it('goes where it is told to, when it is told', async () => {
@@ -177,7 +215,7 @@ describe('what comes back', () => {
     );
 
     expect(constraints).toEqual({
-      placeType: 'tavern_storeroom',
+      place: { building: 'tavern', room: 'storeroom' },
       sizeHint: 'small',
       light: 'dark',
       condition: 'disordered',
@@ -229,6 +267,22 @@ describe('what comes back', () => {
     const interpreter = new JevInterpreter({ apiKey: KEY, fetchImpl });
 
     await expect(interpreter.interpret('uma adega')).rejects.toThrow(JevUnusableAnswerError);
+  });
+
+  it('does not ask for a room when the first answer is malformed', async () => {
+    const { fetchImpl, calls } = stubFetch(answering('{"answers":{"building":{"type":"choice","choice":"forge","confidence":0.9}}}'));
+    await expect(new JevInterpreter({ apiKey: KEY, fetchImpl }).interpret('uma ferraria')).rejects.toThrow(JevUnusableAnswerError);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('rejects a room choice outside the selected building', async () => {
+    let calls = 0;
+    const fetchImpl: typeof fetch = async () => {
+      calls += 1;
+      return new Response(calls === 1 ? ANSWER : '{"answers":{"room":{"type":"choice","choice":"crypt","confidence":0.9}}}');
+    };
+    await expect(new JevInterpreter({ apiKey: KEY, fetchImpl }).interpret('uma cripta')).rejects.toThrow(JevUnusableAnswerError);
+    expect(calls).toBe(2);
   });
 
   it('raises every failure as an InterpreterError, so the interface can catch one type', async () => {

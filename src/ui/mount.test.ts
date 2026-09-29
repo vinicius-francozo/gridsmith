@@ -276,7 +276,7 @@ function fakeStore(initial?: string): KeyStore & { items: Map<string, string> } 
 
 function constraintsFor(overrides: Partial<Constraints> = {}): Constraints {
   return {
-    placeType: 'tavern_hall',
+    place: { building: 'tavern', room: 'hall' },
     light: 'dim',
     condition: 'lived_in',
     clutter: 0.4,
@@ -582,7 +582,7 @@ describe('asking for a map', () => {
     {
       description: 'um salão de taverna, luz baixa, móveis derrubados',
       constraints: constraintsFor({
-        placeType: 'tavern_hall',
+        place: { building: 'tavern', room: 'hall' },
         light: 'dark',
         condition: 'disordered',
         clutter: 0.6,
@@ -592,7 +592,7 @@ describe('asking for a map', () => {
     {
       description: 'um quarto de taverna pequeno e bagunçado',
       constraints: constraintsFor({
-        placeType: 'tavern_room',
+        place: { building: 'tavern', room: 'room' },
         sizeHint: 'small',
         condition: 'disordered',
         clutter: 0.5,
@@ -602,7 +602,7 @@ describe('asking for a map', () => {
     {
       description: 'um depósito de taverna com engradados empilhados',
       constraints: constraintsFor({
-        placeType: 'tavern_storeroom',
+        place: { building: 'tavern', room: 'storeroom' },
         light: 'dark',
         clutter: 0.7,
         features: ['shelving'],
@@ -627,7 +627,7 @@ describe('asking for a map', () => {
       await settle();
 
       expect(app.saved).toHaveLength(1);
-      expect(app.saved[0].filename).toContain(example.constraints.placeType.replace('_', '-'));
+      expect(app.saved[0].filename).toContain(`${example.constraints.place.building}-${example.constraints.place.room}`);
       expect(app.saved[0].filename).toContain('4242');
       expect(app.saved[0].filename.endsWith('.png')).toBe(true);
     });
@@ -734,7 +734,7 @@ describe('what the map could not be', () => {
     // A bar in a bedroom: the known conflict. `resolve` writes
     // `feature_not_in_place:bar` and the screen must not show that.
     const app = mountHarness({
-      answer: constraintsFor({ placeType: 'tavern_room', features: ['bar'] }),
+      answer: constraintsFor({ place: { building: 'tavern', room: 'room' }, features: ['bar'] }),
     });
     app.description.value = 'um quarto de taverna com um balcão';
 

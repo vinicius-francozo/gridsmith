@@ -2,10 +2,10 @@
  * The sixth implementation of `Interpreter`, and the first that needs a server.
  *
  * `ClaudeInterpreter` sends a sentence to a language model and reads JSON back.
- * `LocalInterpreter` runs a classifier in the browser and asks it five
+ * `LocalInterpreter` runs a classifier in the browser and asks six
  * entailment questions. This one asks TypeSafe's Jev twelve structured
- * questions in a single call — see `questions.ts` for what each one is and
- * `read.ts` for how the answers become `Constraints`.
+ * questions, then asks for a room in a second call restricted to the chosen
+ * building. See `questions.ts` and `read.ts` for the translation.
  *
  * ## Why the proxy
  *
@@ -27,8 +27,8 @@
 import type { Constraints, Interpreter } from '../../core/types';
 
 import { JevRejectedKeyError, JevUnavailableError, JevUnusableAnswerError } from './errors';
-import { QUESTIONS } from './questions';
-import { readAnswers } from './read';
+import { QUESTIONS, roomQuestionFor } from './questions';
+import { readBuildingAnswers, readRoomAnswers } from './read';
 
 /** The model this engine is written against. */
 export const JEV_MODEL = 'jev-latest';
@@ -89,7 +89,8 @@ export class JevInterpreter implements Interpreter {
       throw new JevRejectedKeyError('no key was supplied');
     }
 
-    return readAnswers(await bodyOf(await this.post(text)));
+    const first = readBuildingAnswers(await bodyOf(await this.post(text, QUESTIONS)));
+    return readRoomAnswers(await bodyOf(await this.post(text, roomQuestionFor(first.building))), first);
   }
 
   /**
@@ -101,13 +102,13 @@ export class JevInterpreter implements Interpreter {
    * reported as one rather than given a type of its own — the person has the
    * same thing to do about all of them.
    */
-  private async post(text: string): Promise<Response> {
+  private async post(text: string, questions: object): Promise<Response> {
     let response: Response;
     try {
       response = await this.fetchImpl(this.endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json', [JEV_KEY_HEADER]: this.apiKey },
-        body: JSON.stringify({ state: text, model: JEV_MODEL, questions: QUESTIONS }),
+        body: JSON.stringify({ state: text, model: JEV_MODEL, questions }),
       });
     } catch (error) {
       throw new JevUnavailableError(`${this.endpoint} could not be reached: ${messageOf(error)}`, {

@@ -27,7 +27,7 @@ export const FEATURE_NOT_IN_VOCABULARY = 'feature_not_in_vocabulary';
  * A feature in the vocabulary, but not one that belongs in this kind of place:
  * a bar in a bedroom.
  *
- * Detail: the feature, lowercased. The kind of place is in `Params.placeType`
+ * Detail: the feature, lowercased. The kind of place is in `Params.place`
  * and is not repeated here.
  */
 export const FEATURE_NOT_IN_PLACE = 'feature_not_in_place';
@@ -73,9 +73,9 @@ export const UNSUPPORTED_REQUEST = 'unsupported_request';
 
 /**
  * The description is of a kind of place this vocabulary has no word for — a
- * forge, a crypt, a courtyard — and the nearest of the three was built.
+ * forge, a crypt, a courtyard — and the nearest supported building/room pair was built.
  *
- * Detail: the `PlaceType` that was built, so the wording can say what the
+ * Detail: the stable `building_room` identifier that was built, so the wording can say what the
  * person got and not only what they did not get.
  *
  * Only an interpreter that can be *asked* this ever emits it. A classifier

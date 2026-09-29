@@ -24,7 +24,7 @@
  * nothing after the colon is an entry that can actually arrive.
  */
 
-import type { Params, PlaceType } from '../core/types';
+import type { Building, Params, RoomKind } from '../core/types';
 import type { SceneIssueKind } from '../generator/validate';
 import { SceneValidationError } from '../generator/validate';
 import {
@@ -106,7 +106,7 @@ function featureWord(detail: string): string {
  *
  * Reads `PLACE_NAMES` rather than spelling the three names again, so the notice
  * above the map and the line beneath it call the place the same thing. The
- * detail of `PLACE_NOT_IN_VOCABULARY` is the `PlaceType` the generator settled
+ * detail of `PLACE_NOT_IN_VOCABULARY` is the `building_room` identifier the generator settled
  * on, written by this project rather than by a model — but it still arrives as
  * a string, so an unrecognised one is shown as it came instead of dropped, the
  * same way `featureWord` does.
@@ -115,7 +115,7 @@ function featureWord(detail: string): string {
  * answer a prototype member for `constructor` or `toString`.
  */
 function placeWord(detail: string): string {
-  return Object.hasOwn(PLACE_NAMES, detail) ? PLACE_NAMES[detail as PlaceType] : detail;
+  return Object.hasOwn(PLACE_NAMES, detail) ? PLACE_NAMES[detail as `${Building}_${RoomKind}`] : detail;
 }
 
 /**
@@ -512,16 +512,19 @@ export function describeModelProgress(progress: ModelProgress): string {
 }
 
 /**
- * The three kinds of place, in Portuguese.
+ * The six supported building and room pairs, in Portuguese.
  *
  * Exact `Record` for the same reason as the two tables above: a fourth kind of
  * place stops this file compiling rather than reaching the screen as
  * `tavern_cellar`.
  */
-const PLACE_NAMES: Readonly<Record<PlaceType, string>> = {
+const PLACE_NAMES: Readonly<Record<`${Building}_${RoomKind}`, string>> = {
   tavern_hall: 'Salão de taverna',
   tavern_room: 'Quarto de taverna',
   tavern_storeroom: 'Depósito de taverna',
+  dungeon_hall: 'Salão da masmorra',
+  dungeon_room: 'Cela da masmorra',
+  dungeon_storeroom: 'Arsenal da masmorra',
 };
 
 /**
@@ -533,7 +536,7 @@ const PLACE_NAMES: Readonly<Record<PlaceType, string>> = {
  */
 export function describeResult(params: Params): string {
   return (
-    `${PLACE_NAMES[params.placeType]}, ${String(params.size.w)}×${String(params.size.h)} casas, ` +
+    `${PLACE_NAMES[`${params.place.building}_${params.place.room}`]}, ${String(params.size.w)}×${String(params.size.h)} casas, ` +
     `semente ${String(params.seed)}.`
   );
 }

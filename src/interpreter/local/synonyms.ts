@@ -2,6 +2,10 @@
  * The words a person writes, rewritten into the words the model was asked
  * about — before the model is asked anything.
  *
+ * The place accuracy and confidence figures below were measured with the old
+ * single three-place tavern classifier. They do not measure the current
+ * building-then-room classifier or its dungeon labels.
+ *
  * ## Why this layer exists at all
  *
  * Every mistake the winning model made on the bench was a synonym, and nothing
@@ -140,8 +144,8 @@
  * ## What this layer is actually worth, measured
  *
  * On the 59-description corpus, with the hypotheses and thresholds read out of
- * `templates.ts` and `placeType` scored on the argmax, because `readPlaceType`
- * reports the gate rather than obeying it:
+ * `templates.ts` and the old, single `placeType` question scored on the argmax
+ * rather than the confidence gate. This predates the building/room split:
  *
  * - **`placeType`, 31 descriptions: 27/31 without this layer, 28/31 with it.**
  *   Two repaired (p03, p16, both storeroom words) and one broken (the "porão"

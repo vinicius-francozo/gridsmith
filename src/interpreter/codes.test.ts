@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Constraints, PlaceType } from '../core/types';
+import type { Constraints, Place } from '../core/types';
 
 import {
   CONFLICT_CODES,
@@ -11,10 +11,10 @@ import {
   UNRESOLVED_CODES,
   UNSUPPORTED_REQUEST,
 } from './codes';
-import { readAnswers } from './jev/read';
+import { readBuildingAnswers, readRoomAnswers } from './jev/read';
 import { resolve } from './resolve';
 
-const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
+const PLACE_TYPES: Place[] = [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'tavern', room: 'storeroom' }];
 const SIZE_HINTS = [undefined, 'small', 'medium', 'large'] as const;
 const CLUTTERS = [-1, 0, 0.5, 1, 2, Number.NaN];
 /** Real words, a word for another place, and a word from nowhere. */
@@ -29,12 +29,12 @@ const FEATURES = ['bar', 'hearth', 'stairs', 'pillars', 'alcove', 'shelving', 'b
  */
 function everyConflict(): string[] {
   const conflicts: string[] = [];
-  for (const placeType of PLACE_TYPES) {
+  for (const place of PLACE_TYPES) {
     for (const sizeHint of SIZE_HINTS) {
       for (const clutter of CLUTTERS) {
         for (let seed = 0; seed < 12; seed += 1) {
           const constraints: Constraints = {
-            placeType,
+            place,
             sizeHint,
             light: 'dim',
             condition: 'lived_in',
@@ -61,10 +61,10 @@ function everyConflict(): string[] {
 const OUT_OF_VOCABULARY_ANSWER = `{
   "model": "jev-1.13.0",
   "answers": {
-    "place_type": {
+    "building": {
       "type": "choice",
-      "choice": "tavern_hall",
-      "probabilities": { "tavern_hall": 0.71, "tavern_room": 0.2, "tavern_storeroom": 0.09 },
+      "choice": "tavern",
+      "probabilities": { "tavern": 0.71, "dungeon": 0.29 },
       "confidence": 0.71
     },
     "out_of_vocabulary": { "type": "noul", "noul": 0.98 },
@@ -81,6 +81,13 @@ const OUT_OF_VOCABULARY_ANSWER = `{
   },
   "usage": { "input_tokens": 311, "output_tokens": 70 }
 }`;
+
+function readAnswers(body: unknown) {
+  return readRoomAnswers(
+    { answers: { room: { type: 'choice', choice: 'hall', confidence: 0.9 } } },
+    readBuildingAnswers(body),
+  );
+}
 
 /**
  * Every entry the interpreter can put in `unresolved`, from both producers.
@@ -206,7 +213,7 @@ describe('the place the vocabulary has no word for', () => {
   it('is an entry of the form the interface reads, with the place built as the detail', () => {
     // `describeEntry` splits on the first colon: the code is what it looks a
     // phrase up by, and the detail is what the phrase puts in front of the
-    // person. The detail here is the `PlaceType` the map was built as, so the
+    // person. The detail here is the `Place` the map was built as, so the
     // sentence can say what they got instead of only what they did not.
     const entries = readAnswers(JSON.parse(OUT_OF_VOCABULARY_ANSWER)).unresolved;
 

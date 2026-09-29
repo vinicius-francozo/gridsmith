@@ -7,7 +7,8 @@ import {
   CONDITION_TEMPLATE,
   FEATURE_TEMPLATE,
   LIGHT_TEMPLATE,
-  PLACE_TYPE_TEMPLATE,
+  BUILDING_TEMPLATE,
+  ROOM_TEMPLATES,
   SIZE_HINT_TEMPLATE,
 } from './templates';
 import type { ChoiceTemplate } from './templates';
@@ -20,7 +21,8 @@ import type { ChoiceTemplate } from './templates';
  */
 
 const ALL_TEMPLATES: Array<ChoiceTemplate<string>> = [
-  PLACE_TYPE_TEMPLATE,
+  BUILDING_TEMPLATE,
+  ROOM_TEMPLATES.tavern,
   LIGHT_TEMPLATE,
   CONDITION_TEMPLATE,
   SIZE_HINT_TEMPLATE,
@@ -42,7 +44,7 @@ function confidentAbout(template: ChoiceTemplate<string>, winner: string): ZeroS
   };
 }
 
-/** A classifier that answers every one of the five questions. */
+/** A classifier that answers every one of the six questions. */
 const answering: ZeroShotPipeline = (_text, _labels, options) => {
   const template = ALL_TEMPLATES.find((each) => each.hypothesis === options.hypothesisTemplate);
   if (template === undefined) {
@@ -137,7 +139,7 @@ describe('loading the model lazily', () => {
     const interpreter = new LocalInterpreter({ loadPipeline });
 
     await expect(interpreter.interpret('um salão')).rejects.toThrow(ModelUnavailableError);
-    await expect(interpreter.interpret('um salão')).resolves.toMatchObject({ placeType: 'tavern_hall' });
+    await expect(interpreter.interpret('um salão')).resolves.toMatchObject({ place: { building: 'tavern', room: 'hall' } });
 
     expect(attempts).toBe(2);
   });
@@ -260,7 +262,7 @@ describe('what it answers with', () => {
     const interpreter = new LocalInterpreter({ loadPipeline: loaderFor().loadPipeline });
 
     await expect(interpreter.interpret('um salão de taverna')).resolves.toEqual({
-      placeType: 'tavern_hall',
+      place: { building: 'tavern', room: 'hall' },
       sizeHint: 'small',
       light: 'dark',
       condition: 'tidy',

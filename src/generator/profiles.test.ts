@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { createRng } from '../core/prng';
-import type { PlaceType, Size } from '../core/types';
+import { PLACEHOLDER_CATALOG } from '../assets/placeholder';
+import type { Place, Size } from '../core/types';
 import {
   ALCOVE_FEATURE,
   clampDoorCount,
@@ -12,16 +13,64 @@ import {
   pickRotation,
   PILLARS_FEATURE,
   profileFor,
+  roomsFor,
+  BUILDINGS,
+  ROOM_KINDS,
   ROTATIONS,
   wallMaterialFor,
 } from './profiles';
 
-const PLACE_TYPES: PlaceType[] = ['tavern_hall', 'tavern_room', 'tavern_storeroom'];
+const PLACE_TYPES: Place[] = [
+  { building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' },
+  { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' },
+  { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'storeroom' },
+];
+
+describe('building and room composition', () => {
+  it('declares all six pairs and shares geometry for the same room', () => {
+    for (const building of ['tavern', 'dungeon'] as const) {
+      expect(roomsFor(building)).toEqual(['hall', 'room', 'storeroom']);
+    }
+    for (const room of ['hall', 'room', 'storeroom'] as const) {
+      const tavern = profileFor({ building: 'tavern', room });
+      const dungeon = profileFor({ building: 'dungeon', room });
+      expect(tavern.minSize).toEqual(dungeon.minSize);
+      expect(tavern.maxSize).toEqual(dungeon.maxSize);
+      expect(tavern.doorRange).toEqual(dungeon.doorRange);
+      expect(tavern.shapes).toEqual(dungeon.shapes);
+      expect(tavern.anchors.map(({ footprint, placement }) => ({ footprint, placement }))).toEqual(
+        dungeon.anchors.map(({ footprint, placement }) => ({ footprint, placement })),
+      );
+      expect(tavern.anchors.map((anchor) => anchor.assetId)).not.toEqual(
+        dungeon.anchors.map((anchor) => anchor.assetId),
+      );
+      expect(ROOM_KINDS[room].groupsPerHundredCells).toEqual(tavern.groupsPerHundredCells);
+    }
+  });
+
+  it('rejects an incomplete slot filling before assigning an undefined asset', () => {
+    const filling = BUILDINGS.dungeon.rooms.room!;
+    const original = filling.anchors;
+    filling.anchors = original.slice(0, -1);
+    try {
+      expect(() => profileFor({ building: 'dungeon', room: 'room' })).toThrow('invalid slot filling');
+    } finally {
+      filling.anchors = original;
+    }
+  });
+
+  it('fills the dungeon hearth feature with a hearth instead of a torch', () => {
+    const hall = profileFor({ building: 'dungeon', room: 'hall' });
+    const room = profileFor({ building: 'dungeon', room: 'room' });
+    expect(hall.anchors.find((anchor) => anchor.feature === 'hearth')?.assetId).toBe('stone_hearth');
+    expect(room.anchors.find((anchor) => anchor.assetId === 'wall_torch')?.feature).toBeUndefined();
+  });
+});
 
 describe('profileFor', () => {
   it('has a profile for every place type', () => {
-    for (const placeType of PLACE_TYPES) {
-      expect(profileFor(placeType).placeType).toBe(placeType);
+    for (const place of PLACE_TYPES) {
+      expect(profileFor(place).place).toBe(place);
     }
   });
 
@@ -29,7 +78,7 @@ describe('profileFor', () => {
     // `Params` can arrive from a language model through JSON, where the type
     // system guarantees nothing. Without the guard the caller would get
     // `undefined` and fail several layers away, reading a property of it.
-    expect(() => profileFor('dungeon_crypt' as PlaceType)).toThrow("unknown place type");
+    expect(() => profileFor({ building: 'dungeon', room: 'crypt' } as unknown as Place)).toThrow("unknown place");
   });
 
   it('rejects a place type that is only a key of Object.prototype', () => {
@@ -40,15 +89,15 @@ describe('profileFor', () => {
     // `undefined`, and both would be handed on as a profile to all three
     // generation stages. Every one of these survives `JSON.parse`.
     for (const key of ['toString', 'constructor', 'valueOf', '__proto__', 'hasOwnProperty']) {
-      expect(() => profileFor(key as PlaceType)).toThrow(`unknown place type '${key}'`);
+      expect(() => profileFor({ building: key, room: 'hall' } as unknown as Place)).toThrow(`unknown place '${key}_hall'`);
     }
   });
 });
 
 describe('profile material vocabulary', () => {
   it('names only materials the catalogue declares', () => {
-    for (const placeType of PLACE_TYPES) {
-      const profile = profileFor(placeType);
+    for (const place of PLACE_TYPES) {
+      const profile = profileFor(place);
       const named = [
         ...profile.floorMaterials,
         ...Object.values(profile.wallMaterials),
@@ -61,8 +110,8 @@ describe('profile material vocabulary', () => {
   });
 
   it('gives every floor material of a profile a wall counterpart', () => {
-    for (const placeType of PLACE_TYPES) {
-      const profile = profileFor(placeType);
+    for (const place of PLACE_TYPES) {
+      const profile = profileFor(place);
       for (const floor of profile.floorMaterials) {
         expect(profile.wallMaterials[floor]).toBeDefined();
       }
@@ -72,8 +121,8 @@ describe('profile material vocabulary', () => {
 
 describe('profile furniture', () => {
   it('keeps every anchor small enough to stand in the smallest room of its kind', () => {
-    for (const placeType of PLACE_TYPES) {
-      const profile = profileFor(placeType);
+    for (const place of PLACE_TYPES) {
+      const profile = profileFor(place);
       // The interior is the footprint minus the wall ring on both sides.
       const interior: Size = { w: profile.minSize.w - 2, h: profile.minSize.h - 2 };
       for (const anchor of profile.anchors) {
@@ -84,8 +133,8 @@ describe('profile furniture', () => {
   });
 
   it('keeps every group part inside the box its offsets are measured in', () => {
-    for (const placeType of PLACE_TYPES) {
-      for (const group of profileFor(placeType).groups) {
+    for (const place of PLACE_TYPES) {
+      for (const group of profileFor(place).groups) {
         for (const part of group.parts) {
           expect(part.offset.x + part.footprint.w).toBeLessThanOrEqual(group.size.w);
           expect(part.offset.y + part.footprint.h).toBeLessThanOrEqual(group.size.h);
@@ -95,8 +144,8 @@ describe('profile furniture', () => {
   });
 
   it('gives every scatter prop a positive weight', () => {
-    for (const placeType of PLACE_TYPES) {
-      for (const spec of profileFor(placeType).scatter) {
+    for (const place of PLACE_TYPES) {
+      for (const spec of profileFor(place).scatter) {
         expect(spec.weight).toBeGreaterThan(0);
       }
     }
@@ -127,17 +176,17 @@ describe('materialDef', () => {
 
 describe('clampSize', () => {
   it('leaves a size already inside the profile alone', () => {
-    const profile = profileFor('tavern_hall');
+    const profile = profileFor({ building: 'tavern', room: 'hall' });
     expect(clampSize({ w: 14, h: 12 }, profile)).toEqual({ w: 14, h: 12 });
   });
 
   it('raises a size below the profile minimum', () => {
-    const profile = profileFor('tavern_hall');
+    const profile = profileFor({ building: 'tavern', room: 'hall' });
     expect(clampSize({ w: 3, h: 2 }, profile)).toEqual(profile.minSize);
   });
 
   it('lowers a size above the profile maximum, which is never past 20 cells', () => {
-    const profile = profileFor('tavern_hall');
+    const profile = profileFor({ building: 'tavern', room: 'hall' });
     const clamped = clampSize({ w: 99, h: 99 }, profile);
     expect(clamped).toEqual(profile.maxSize);
     expect(clamped.w).toBeLessThanOrEqual(20);
@@ -145,12 +194,12 @@ describe('clampSize', () => {
   });
 
   it('rounds a fractional size to whole cells', () => {
-    expect(clampSize({ w: 13.4, h: 12.6 }, profileFor('tavern_hall'))).toEqual({ w: 13, h: 13 });
+    expect(clampSize({ w: 13.4, h: 12.6 }, profileFor({ building: 'tavern', room: 'hall' }))).toEqual({ w: 13, h: 13 });
   });
 
   it('keeps every profile inside the twenty-cell ceiling of the project', () => {
-    for (const placeType of PLACE_TYPES) {
-      const profile = profileFor(placeType);
+    for (const place of PLACE_TYPES) {
+      const profile = profileFor(place);
       expect(profile.maxSize.w).toBeLessThanOrEqual(20);
       expect(profile.maxSize.h).toBeLessThanOrEqual(20);
       expect(profile.minSize.w).toBeLessThanOrEqual(profile.maxSize.w);
@@ -160,7 +209,7 @@ describe('clampSize', () => {
 });
 
 describe('clampDoorCount', () => {
-  const profile = profileFor('tavern_hall');
+  const profile = profileFor({ building: 'tavern', room: 'hall' });
 
   it('keeps a count inside the profile range', () => {
     expect(clampDoorCount(2, profile)).toBe(2);
@@ -184,13 +233,13 @@ describe('clampDoorCount', () => {
 
 describe('wallMaterialFor', () => {
   it('gives each floor material its declared wall', () => {
-    const profile = profileFor('tavern_hall');
+    const profile = profileFor({ building: 'tavern', room: 'hall' });
     expect(wallMaterialFor('wood_plank', profile)).toBe('timber_wall');
     expect(wallMaterialFor('flagstone', profile)).toBe('stone_wall');
   });
 
   it('falls back to the profile default for a floor material it has no pairing for', () => {
-    const profile = profileFor('tavern_hall');
+    const profile = profileFor({ building: 'tavern', room: 'hall' });
     expect(wallMaterialFor('dirt_floor', profile)).toBe(profile.defaultWallMaterial);
   });
 });
@@ -222,14 +271,14 @@ describe('the feature vocabulary', () => {
    * generator answers to nothing for is a request that disappears from the
    * map without an error anywhere.
    */
-  const FEATURE_PLACES: Record<string, PlaceType[]> = {
-    bar: ['tavern_hall'],
-    hearth: ['tavern_hall', 'tavern_room'],
-    stairs: ['tavern_hall', 'tavern_storeroom'],
-    pillars: ['tavern_hall'],
-    alcove: ['tavern_hall', 'tavern_room'],
-    shelving: ['tavern_storeroom', 'tavern_room'],
-    bunks: ['tavern_room'],
+  const FEATURE_PLACES: Record<string, Place[]> = {
+    bar: [{ building: 'tavern', room: 'hall' }],
+    hearth: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }],
+    stairs: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'storeroom' }],
+    pillars: [{ building: 'tavern', room: 'hall' }, { building: 'dungeon', room: 'hall' }],
+    alcove: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'room' }],
+    shelving: [{ building: 'tavern', room: 'storeroom' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'storeroom' }, { building: 'dungeon', room: 'room' }],
+    bunks: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
   };
 
   it('is the same seven words the interpreter writes', () => {
@@ -238,8 +287,8 @@ describe('the feature vocabulary', () => {
 
   it('answers to every word, either with an anchor or with the plan itself', () => {
     const byAnchor = new Set(
-      PLACE_TYPES.flatMap((placeType) =>
-        profileFor(placeType)
+      PLACE_TYPES.flatMap((place) =>
+        profileFor(place)
           .anchors.map((spec) => spec.feature)
           .filter((feature): feature is string => feature !== undefined),
       ),
@@ -258,18 +307,18 @@ describe('the feature vocabulary', () => {
       if (feature === ALCOVE_FEATURE || feature === PILLARS_FEATURE) {
         continue;
       }
-      for (const placeType of places) {
-        const anchors = profileFor(placeType).anchors.filter((spec) => spec.feature === feature);
-        expect(`${placeType}/${feature}: ${anchors.length} anchor(s)`).not.toBe(
-          `${placeType}/${feature}: 0 anchor(s)`,
+      for (const place of places) {
+        const anchors = profileFor(place).anchors.filter((spec) => spec.feature === feature);
+        expect(`${place}/${feature}: ${anchors.length} anchor(s)`).not.toBe(
+          `${place}/${feature}: 0 anchor(s)`,
         );
       }
     }
   });
 
   it('names no feature the interpreter would never send', () => {
-    for (const placeType of PLACE_TYPES) {
-      for (const spec of profileFor(placeType).anchors) {
+    for (const place of PLACE_TYPES) {
+      for (const spec of profileFor(place).anchors) {
         if (spec.feature !== undefined) {
           expect(FEATURE_VOCABULARY).toContain(spec.feature);
         }
@@ -282,22 +331,22 @@ describe('the asset vocabulary the profiles declare', () => {
   /** Every (assetId, footprint) a profile names, wherever it names it. */
   function declarations(): { assetId: string; footprint: Size; where: string }[] {
     const found: { assetId: string; footprint: Size; where: string }[] = [];
-    for (const placeType of PLACE_TYPES) {
-      const profile = profileFor(placeType);
+    for (const place of PLACE_TYPES) {
+      const profile = profileFor(place);
       for (const spec of profile.anchors) {
-        found.push({ assetId: spec.assetId, footprint: spec.footprint, where: `${placeType} anchor` });
+        found.push({ assetId: spec.assetId, footprint: spec.footprint, where: `${place} anchor` });
       }
       for (const group of profile.groups) {
         for (const part of group.parts) {
           found.push({
             assetId: part.assetId,
             footprint: part.footprint,
-            where: `${placeType} group ${group.id}`,
+            where: `${place} group ${group.id}`,
           });
         }
       }
       for (const spec of profile.scatter) {
-        found.push({ assetId: spec.assetId, footprint: { w: 1, h: 1 }, where: `${placeType} scatter` });
+        found.push({ assetId: spec.assetId, footprint: { w: 1, h: 1 }, where: `${place} scatter` });
       }
     }
     return found;
@@ -338,6 +387,15 @@ describe('the asset vocabulary the profiles declare', () => {
       expect(`${where}/${assetId}: ${footprint.w}x${footprint.h}`).toBe(
         `${where}/${assetId}: ${Math.max(1, footprint.w)}x${Math.max(1, footprint.h)}`,
       );
+    }
+  });
+
+  it('matches every declared profile asset with a marker of the same footprint', () => {
+    const catalog = new Map(PLACEHOLDER_CATALOG.map((asset) => [asset.id, asset]));
+    for (const { assetId, footprint } of declarations()) {
+      const kind = PLACEHOLDER_CATALOG.find((asset) => asset.id.endsWith(`/${assetId}`));
+      expect(kind, assetId).toBeDefined();
+      expect(catalog.get(kind!.id)?.footprint).toEqual(footprint);
     }
   });
 });

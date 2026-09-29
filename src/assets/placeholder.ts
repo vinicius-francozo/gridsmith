@@ -128,6 +128,15 @@ export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   { id: 'anchor/wardrobe', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['storage', 'furniture', 'wood'], againstWall: true },
   { id: 'anchor/shelf_row', kind: 'anchor', footprint: { w: 4, h: 1 }, tags: ['shelving', 'storage', 'wood'], againstWall: true },
   { id: 'anchor/shelf_row_short', kind: 'anchor', footprint: { w: 3, h: 1 }, tags: ['shelving', 'storage', 'wood'], againstWall: true },
+  { id: 'anchor/weapon_rack', kind: 'anchor', footprint: { w: 5, h: 2 }, tags: ['weapons', 'dungeon'], againstWall: true },
+  { id: 'anchor/stone_hearth', kind: 'anchor', footprint: { w: 3, h: 2 }, tags: ['hearth', 'light', 'dungeon'], againstWall: true },
+  { id: 'anchor/stone_stairs', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['stairs', 'stone'], againstWall: true },
+  { id: 'anchor/cot', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['bed', 'dungeon'], againstWall: true },
+  { id: 'anchor/iron_bunks', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['bunks', 'dungeon'], againstWall: true },
+  { id: 'anchor/lockers', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['storage', 'dungeon'], againstWall: true },
+  { id: 'anchor/wall_rack', kind: 'anchor', footprint: { w: 3, h: 1 }, tags: ['shelving', 'dungeon'], againstWall: true },
+  { id: 'anchor/wall_torch', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['hearth', 'light', 'dungeon'], againstWall: true },
+  { id: 'anchor/armory_rack', kind: 'anchor', footprint: { w: 4, h: 1 }, tags: ['shelving', 'weapons'], againstWall: true },
 
   // Groups: arrangements placed in the open, with room around them.
   { id: 'group/table_round', kind: 'group', footprint: { w: 2, h: 2 }, tags: ['table', 'seating', 'wood'], againstWall: false },
@@ -138,6 +147,14 @@ export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   { id: 'group/crate', kind: 'group', footprint: { w: 2, h: 1 }, tags: ['storage', 'crate', 'wood'], againstWall: false },
   { id: 'group/crate_small', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['storage', 'crate', 'wood'], againstWall: false },
   { id: 'group/barrel', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['storage', 'barrel', 'wood'], againstWall: false },
+  { id: 'group/war_table', kind: 'group', footprint: { w: 2, h: 2 }, tags: ['table', 'dungeon'], againstWall: false },
+  { id: 'group/guard_stool', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['seating', 'dungeon'], againstWall: false },
+  { id: 'group/stone_bench', kind: 'group', footprint: { w: 3, h: 1 }, tags: ['seating', 'stone'], againstWall: false },
+  { id: 'group/war_table_long', kind: 'group', footprint: { w: 3, h: 1 }, tags: ['table', 'dungeon'], againstWall: false },
+  { id: 'group/prison_desk', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['table', 'dungeon'], againstWall: false },
+  { id: 'group/supply_crate', kind: 'group', footprint: { w: 2, h: 1 }, tags: ['storage', 'dungeon'], againstWall: false },
+  { id: 'group/small_crate', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['storage', 'dungeon'], againstWall: false },
+  { id: 'group/weapon_bundle', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['weapons', 'dungeon'], againstWall: false },
 
   // Scatter: one-cell litter, strewn over the floor.
   { id: 'scatter/mug', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['tableware', 'clutter'], againstWall: false },
@@ -146,6 +163,11 @@ export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   { id: 'scatter/straw', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['clutter', 'debris'], againstWall: false },
   { id: 'scatter/sack', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['storage', 'clutter'], againstWall: false },
   { id: 'scatter/shard', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['clutter', 'debris'], againstWall: false },
+  { id: 'scatter/bone', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['dungeon', 'debris'], againstWall: false },
+  { id: 'scatter/broken_chain', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['dungeon', 'debris'], againstWall: false },
+  { id: 'scatter/rubble', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['stone', 'debris'], againstWall: false },
+  { id: 'scatter/dust', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['dungeon', 'debris'], againstWall: false },
+  { id: 'scatter/loose_arrow', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['weapons', 'debris'], againstWall: false },
 ];
 
 /**

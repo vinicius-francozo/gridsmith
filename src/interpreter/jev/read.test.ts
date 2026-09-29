@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { Place } from '../../core/types';
 
 import { CLUTTER_BY_CONDITION } from '../local/templates';
 
 import { JevUnusableAnswerError } from './errors';
 import { CONDITION_LEVELS, FEATURE_THRESHOLD, OUT_OF_VOCABULARY_THRESHOLD, SIZE_MIN_CONFIDENCE } from './questions';
-import { clutterFromScore, readAnswers } from './read';
+import { clutterFromScore, readBuildingAnswers, readRoomAnswers } from './read';
 
 /**
  * Every response in this file is JSON **text**, typed out by hand and parsed
@@ -20,15 +21,16 @@ import { clutterFromScore, readAnswers } from './read';
  *
  * The figures are `p01` of the canonical ruler — `O salão principal da taverna,
  * com mesas compridas e um balcão de carvalho.` — as the bench recorded them in
- * `raw.json`: `place_type` at confidence 1.000, `out_of_vocabulary` 0.02, a
+ * `raw.json`: the old place choice at confidence 1.000, `out_of_vocabulary` 0.02, a
  * `condition` score of 0.71, and the seven feature nouls. **The bench did not
  * store the `light` and `size` scores or any of the score confidences**, so
  * those four numbers are written here to exercise the reader and are not
- * measurements. They are marked where they appear.
+ * measurements. The building and room replies below are adapted to the new
+ * two-call protocol and were not measured in that bench.
  */
 
 type Figures = {
-  place: string;
+  place: Place;
   placeConfidence: number;
   oov: number;
   /** Not measured: the bench kept the level, not the score. `dim` is index 1. */
@@ -52,7 +54,7 @@ type Figures = {
 };
 
 const P01: Figures = {
-  place: 'tavern_hall',
+  place: { building: 'tavern', room: 'hall' },
   placeConfidence: 1,
   oov: 0.02,
   lightScore: 1.1,
@@ -75,11 +77,12 @@ function responseText(figures: Partial<Figures> = {}): string {
   const f = { ...P01, ...figures };
   return `{
   "model": "jev-1.13.0",
+  "test_room": "${f.place.room}",
   "answers": {
-    "place_type": {
+    "building": {
       "type": "choice",
-      "choice": "${f.place}",
-      "probabilities": { "tavern_hall": 1, "tavern_room": 0, "tavern_storeroom": 0 },
+      "choice": "${f.place.building}",
+      "probabilities": { "tavern": 1, "dungeon": 0 },
       "confidence": ${String(f.placeConfidence)}
     },
     "out_of_vocabulary": { "type": "noul", "noul": ${String(f.oov)} },
@@ -121,6 +124,12 @@ function response(figures: Partial<Figures> = {}): unknown {
   return JSON.parse(responseText(figures));
 }
 
+function readAnswers(body: unknown) {
+  const first = readBuildingAnswers(body);
+  const room = (body as { test_room: string }).test_room;
+  return readRoomAnswers({ answers: { room: { type: 'choice', choice: room, confidence: 0.9 } } }, first);
+}
+
 describe('a measured answer, read', () => {
   it('reads p01 of the ruler the way the bench read it', () => {
     // Written out rather than compared field by field: the absent `sizeHint`
@@ -128,7 +137,7 @@ describe('a measured answer, read', () => {
     // that nothing else appeared either.
     const constraints = readAnswers(response());
 
-    expect(constraints.placeType).toBe('tavern_hall');
+    expect(constraints.place).toEqual({ building: 'tavern', room: 'hall' });
     expect(constraints.light).toBe('dim');
     expect(constraints.condition).toBe('lived_in');
     expect(constraints.features).toEqual(['bar']);
@@ -248,12 +257,12 @@ describe('a place the vocabulary has no word for', () => {
   });
 
   it('emits the code at the threshold, with the place that was built as the detail', () => {
-    const constraints = readAnswers(response({ oov: 0.75, place: 'tavern_room' }));
+    const constraints = readAnswers(response({ oov: 0.75, place: { building: 'tavern', room: 'room' } }));
 
     expect(constraints.unresolved).toEqual(['place_not_in_vocabulary:tavern_room']);
     // And the map is still of the nearest place, which is the precedent in
     // `resolve.ts:221-237`: leave it out, say so, do not refuse.
-    expect(constraints.placeType).toBe('tavern_room');
+    expect(constraints.place).toEqual({ building: 'tavern', room: 'room' });
   });
 
   it('carries a code and never a sentence', () => {
@@ -288,9 +297,9 @@ describe('an answer this layer cannot use', () => {
 
   it('refuses an answer of the wrong primitive, naming the question', () => {
     const body = JSON.parse(responseText()) as { answers: Record<string, unknown> };
-    body.answers.place_type = { type: 'noul', noul: 0.9 };
+    body.answers.building = { type: 'noul', noul: 0.9 };
 
-    expect(() => readAnswers(body)).toThrow(/place_type/);
+    expect(() => readAnswers(body)).toThrow(/building/);
   });
 
   it('refuses a probability that is not one', () => {
@@ -305,7 +314,7 @@ describe('an answer this layer cannot use', () => {
     // the `throne_room` a prompted model invents — it is the proxy relaying
     // something else. `constraintsSchema` is what catches it either way, and
     // `schema.ts:10-15` is why that gate is not optional.
-    expect(() => readAnswers(response({ place: 'throne_room' }))).toThrow(JevUnusableAnswerError);
-    expect(() => readAnswers(response({ place: 'throne_room' }))).toThrow(/placeType/);
+    expect(() => readAnswers(response({ place: { building: 'tavern', room: 'throne_room' } as unknown as Place }))).toThrow(JevUnusableAnswerError);
+    expect(() => readAnswers(response({ place: { building: 'tavern', room: 'throne_room' } as unknown as Place }))).toThrow(/room/);
   });
 });

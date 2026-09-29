@@ -56,7 +56,7 @@ const MAX_TOKENS = 16000;
 const EFFORT = 'low';
 
 const SYSTEM_PROMPT = [
-  'You turn a spoken description of a tavern space into the closed set of constraints a',
+  'You turn a spoken description of a tavern or dungeon room into the closed set of constraints a',
   'battlemap generator understands. The description is what a game master said at the table,',
   'so it is short, it may be in any language, and it is often incomplete.',
   '',

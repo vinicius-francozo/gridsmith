@@ -36,8 +36,10 @@ import { ClassificationFailedError, ModelUnavailableError } from './errors';
  * What it costs to run, with the conditions attached, because a bare
  * millisecond figure is worthless without them: measured in Node on this
  * machine — `onnxruntime-node`, twelve CPU cores, no GPU — a whole description
- * takes a median of about 510 ms. That is the five questions this front asks,
- * twenty forward passes, and it held within 11 ms across three runs of a
+ * took a median of about 510 ms with the former five-question, twenty-forward-pass
+ * place vocabulary. The current building/room split asks six questions and
+ * twenty-two forward passes; its total has not been measured. The old run
+ * held within 11 ms across three runs of a
  * hundred timings each. Taken apart, the three-label questions are about 80 ms,
  * the four-label one about 105 ms and the seven-label `features` question about
  * 170 ms; `templates.ts` quotes the four-label figure out of this same run, so

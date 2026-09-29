@@ -73,7 +73,7 @@ export class CorsError extends InterpreterError {
  *
  * The API does not enforce the schema for us. `zodOutputFormat` sends the
  * enums and the numeric bounds as a *description*, not as grammar, so the
- * model is free to answer `placeType: "throne_room"` and the request still
+ * model is free to answer `place.room: "throne_room"` and the request still
  * succeeds. Validation on this side is what closes the vocabulary, and this is
  * what it throws when the answer falls outside it.
  */

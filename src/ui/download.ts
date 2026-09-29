@@ -15,7 +15,7 @@ export const FILENAME_PREFIX = 'gridsmith';
 /**
  * Anything that is not a plain word, collapsed to a hyphen.
  *
- * `placeType` comes out of a language model, and the schema closes the
+ * `place` comes out of a language model, and the schema closes the
  * vocabulary before it gets here — but a file name is handed to the operating
  * system, and a slash or a `..` in one is worth an extra line to make
  * impossible rather than worth reasoning about.
@@ -38,7 +38,7 @@ function slug(value: string): string {
  */
 export function mapFilename(params: Params): string {
   const seed = slug(String(params.seed));
-  return `${FILENAME_PREFIX}-${slug(params.placeType)}-seed-${seed}.png`;
+  return `${FILENAME_PREFIX}-${slug(params.place.building)}-${slug(params.place.room)}-seed-${seed}.png`;
 }
 
 /** Hands `blob` to the browser to save under `filename`. */

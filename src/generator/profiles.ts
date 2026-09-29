@@ -1,5 +1,5 @@
 /**
- * Per-`PlaceType` profiles: everything the three generation stages need to
+ * Composed building and room profiles: everything the three generation stages need to
  * know about a kind of room that is not in `Params`.
  *
  * `Params` already carries the concrete size, door count and clutter that the
@@ -12,7 +12,7 @@
  * Every measurement here is in grid cells.
  */
 
-import type { Cell, PlacedProp, PlaceType, Rotation, Size } from '../core/types';
+import type { Building, Cell, Place, PlacedProp, RoomKind, Rotation, Size } from '../core/types';
 import type { Rng } from '../core/types';
 
 /** The four rotations, in clockwise order. */
@@ -189,7 +189,7 @@ export type ScatterSpec = { assetId: string; weight: number };
 // --- Profiles --------------------------------------------------------------
 
 export type PlaceProfile = {
-  placeType: PlaceType;
+  place: Place;
   /** The generator clamps `Params.size` into these bounds. */
   minSize: Size;
   maxSize: Size;
@@ -216,7 +216,7 @@ export type PlaceProfile = {
 };
 
 const TAVERN_HALL: PlaceProfile = {
-  placeType: 'tavern_hall',
+  place: { building: 'tavern', room: 'hall' },
   minSize: { w: 12, h: 10 },
   maxSize: { w: 20, h: 18 },
   doorRange: { min: 1, max: 3 },
@@ -270,7 +270,7 @@ const TAVERN_HALL: PlaceProfile = {
 };
 
 const TAVERN_ROOM: PlaceProfile = {
-  placeType: 'tavern_room',
+  place: { building: 'tavern', room: 'room' },
   minSize: { w: 6, h: 6 },
   maxSize: { w: 11, h: 10 },
   doorRange: { min: 1, max: 2 },
@@ -313,7 +313,7 @@ const TAVERN_ROOM: PlaceProfile = {
 };
 
 const TAVERN_STOREROOM: PlaceProfile = {
-  placeType: 'tavern_storeroom',
+  place: { building: 'tavern', room: 'storeroom' },
   minSize: { w: 8, h: 6 },
   maxSize: { w: 14, h: 12 },
   doorRange: { min: 1, max: 2 },
@@ -355,31 +355,165 @@ const TAVERN_STOREROOM: PlaceProfile = {
   ],
 };
 
-const PROFILES: Record<PlaceType, PlaceProfile> = {
-  tavern_hall: TAVERN_HALL,
-  tavern_room: TAVERN_ROOM,
-  tavern_storeroom: TAVERN_STOREROOM,
+type RoomGeometry = Pick<PlaceProfile,
+  'minSize' | 'maxSize' | 'doorRange' | 'shapes' | 'allowPillars' |
+  'anchorRange' | 'groupsPerHundredCells' | 'scatterChance'> & {
+    anchors: Pick<AnchorSpec, 'footprint' | 'placement'>[];
+    groups: (Omit<GroupSpec, 'parts'> & { parts: Omit<GroupPart, 'assetId'>[] })[];
+    scatter: Pick<ScatterSpec, 'weight'>[];
+  };
+
+type SlotFilling = Pick<PlaceProfile, 'floorMaterials' | 'wallMaterials' | 'defaultWallMaterial'> & {
+  anchors: Pick<AnchorSpec, 'assetId' | 'feature' | 'light'>[];
+  groups: string[][];
+  scatter: string[];
 };
 
+type BuildingPalette = {
+  rooms: Partial<Record<RoomKind, SlotFilling>>;
+};
+
+function geometryOf(profile: PlaceProfile): RoomGeometry {
+  return {
+    minSize: profile.minSize, maxSize: profile.maxSize, doorRange: profile.doorRange,
+    shapes: profile.shapes, allowPillars: profile.allowPillars,
+    anchorRange: profile.anchorRange,
+    anchors: profile.anchors.map(({ footprint, placement }) => ({ footprint, placement })),
+    groupsPerHundredCells: profile.groupsPerHundredCells,
+    groups: profile.groups.map(({ parts, ...group }) => ({
+      ...group, parts: parts.map(({ assetId: _assetId, ...slot }) => slot),
+    })),
+    scatterChance: profile.scatterChance,
+    scatter: profile.scatter.map(({ assetId: _assetId, ...slot }) => slot),
+  };
+}
+
+function fillingOf(profile: PlaceProfile): SlotFilling {
+  return {
+    floorMaterials: profile.floorMaterials,
+    wallMaterials: profile.wallMaterials,
+    defaultWallMaterial: profile.defaultWallMaterial,
+    anchors: profile.anchors.map(({ assetId, feature, light }) => ({ assetId, feature, light })),
+    groups: profile.groups.map((group) => group.parts.map((slot) => slot.assetId)),
+    scatter: profile.scatter.map((slot) => slot.assetId),
+  };
+}
+
+// The three geometries are shared by every building; only the slot fillings
+// and material palette differ. These legacy values preserve tavern prop order.
+export const ROOM_KINDS: Record<RoomKind, RoomGeometry> = {
+  hall: geometryOf(TAVERN_HALL),
+  room: geometryOf(TAVERN_ROOM),
+  storeroom: geometryOf(TAVERN_STOREROOM),
+};
+
+export const BUILDINGS: Record<Building, BuildingPalette> = {
+  tavern: {
+    rooms: {
+      hall: fillingOf(TAVERN_HALL),
+      room: fillingOf(TAVERN_ROOM),
+      storeroom: fillingOf(TAVERN_STOREROOM),
+    },
+  },
+  dungeon: {
+    rooms: {
+      hall: {
+        floorMaterials: ['flagstone', 'stone_floor'],
+        wallMaterials: { flagstone: 'stone_wall', stone_floor: 'stone_wall' },
+        defaultWallMaterial: 'stone_wall',
+        anchors: [
+          { assetId: 'weapon_rack' },
+          { assetId: 'stone_hearth', feature: 'hearth', light: { radiusCells: 6, colorHex: '#ffb46b' } },
+          { assetId: 'stone_stairs', feature: 'stairs' },
+        ],
+        groups: [
+          ['war_table', 'guard_stool', 'guard_stool', 'guard_stool', 'guard_stool'],
+          ['stone_bench', 'war_table_long', 'stone_bench'],
+        ],
+        scatter: ['bone', 'broken_chain', 'rubble', 'dust'],
+      },
+      room: {
+        floorMaterials: ['flagstone', 'stone_floor'],
+        wallMaterials: { flagstone: 'stone_wall', stone_floor: 'stone_wall' },
+        defaultWallMaterial: 'stone_wall',
+        anchors: [
+          { assetId: 'cot' },
+          { assetId: 'iron_bunks', feature: 'bunks' },
+          { assetId: 'lockers' },
+          { assetId: 'wall_rack', feature: 'shelving' },
+          { assetId: 'wall_torch', light: { radiusCells: 4, colorHex: '#ffb46b' } },
+        ],
+        groups: [['prison_desk', 'guard_stool']],
+        scatter: ['bone', 'broken_chain', 'dust'],
+      },
+      storeroom: {
+        floorMaterials: ['flagstone', 'stone_floor'],
+        wallMaterials: { flagstone: 'stone_wall', stone_floor: 'stone_wall' },
+        defaultWallMaterial: 'stone_wall',
+        anchors: [{ assetId: 'armory_rack', feature: 'shelving' }, { assetId: 'stone_stairs', feature: 'stairs' }],
+        groups: [['supply_crate', 'small_crate', 'weapon_bundle'], ['weapon_bundle', 'weapon_bundle']],
+        scatter: ['loose_arrow', 'rubble', 'dust'],
+      },
+    },
+  },
+};
+
+export function roomsFor(building: Building): readonly RoomKind[] {
+  if (!Object.hasOwn(BUILDINGS, building)) {
+    throw new Error(`unknown building '${String(building)}'`);
+  }
+  return (Object.keys(BUILDINGS[building].rooms) as RoomKind[]).filter(
+    (room) => BUILDINGS[building].rooms[room] !== undefined,
+  );
+}
+
 /**
- * The profile for `placeType`.
+ * The profile for a building and room pair.
  *
- * @throws {Error} if `PROFILES` does not declare `placeType`. The type system
+ * @throws {Error} if `BUILDINGS` does not declare the pair. The type system
  *                 rules this out inside the project, but `Params` may have
  *                 come through a language model and a JSON boundary.
  *
- * `Object.hasOwn`, because `PROFILES` is an object literal and a lookup on
+ * `Object.hasOwn`, because these tables are object literals and a lookup on
  * `'toString'` or `'__proto__'` comes back with something inherited rather
- * than with `undefined` — a `placeType` every JSON document can carry, and
+ * than with `undefined` — a key every JSON document can carry, and
  * one that would be handed on as a profile to all three generation stages.
  * The whole point of the guard is to close the vocabulary, and a vocabulary
  * is closed by what it declares, not by what a lookup fails to find.
  */
-export function profileFor(placeType: PlaceType): PlaceProfile {
-  if (!Object.hasOwn(PROFILES, placeType)) {
-    throw new Error(`unknown place type '${placeType}'`);
+export function profileFor(place: Place): PlaceProfile {
+  if (!place || !Object.hasOwn(BUILDINGS, place.building) ||
+      !Object.hasOwn(ROOM_KINDS, place.room) ||
+      !Object.hasOwn(BUILDINGS[place.building].rooms, place.room) ||
+      BUILDINGS[place.building].rooms[place.room] === undefined) {
+    throw new Error(`unknown place '${String(place?.building)}_${String(place?.room)}'`);
   }
-  return PROFILES[placeType];
+  const geometry = ROOM_KINDS[place.room];
+  const building = BUILDINGS[place.building];
+  const filling = building.rooms[place.room]!;
+  if (filling.anchors.length !== geometry.anchors.length ||
+      filling.groups.length !== geometry.groups.length ||
+      geometry.groups.some((group, index) => filling.groups[index].length !== group.parts.length) ||
+      filling.scatter.length !== geometry.scatter.length ||
+      filling.anchors.some((slot) => !slot.assetId) || filling.groups.some((group) => group.some((id) => !id)) ||
+      filling.scatter.some((id) => !id)) {
+    throw new Error(`invalid slot filling for '${place.building}_${place.room}'`);
+  }
+  return {
+    place,
+    ...geometry,
+    floorMaterials: filling.floorMaterials,
+    wallMaterials: filling.wallMaterials,
+    defaultWallMaterial: filling.defaultWallMaterial,
+    anchors: geometry.anchors.map((slot, index) => ({ ...slot, ...filling.anchors[index] })),
+    groups: geometry.groups.map((group, groupIndex) => ({
+      ...group,
+      parts: group.parts.map((slot, index) => ({
+        ...slot, assetId: filling.groups[groupIndex][index],
+      })),
+    })),
+    scatter: geometry.scatter.map((slot, index) => ({ ...slot, assetId: filling.scatter[index] })),
+  };
 }
 
 /**
