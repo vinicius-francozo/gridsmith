@@ -226,7 +226,7 @@ describe('a place type outside the vocabulary', () => {
 });
 
 describe('feature compatibility by building and room', () => {
-  it('drops a tavern bar from a dungeon hall while keeping its brazier', () => {
+  it('drops a tavern bar from a dungeon hall while keeping its stone hearth', () => {
     const params = resolve(constraints({
       place: { building: 'dungeon', room: 'hall' },
       features: ['bar', 'hearth'],

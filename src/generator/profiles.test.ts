@@ -58,6 +58,13 @@ describe('building and room composition', () => {
       filling.anchors = original;
     }
   });
+
+  it('fills the dungeon hearth feature with a hearth instead of a torch', () => {
+    const hall = profileFor({ building: 'dungeon', room: 'hall' });
+    const room = profileFor({ building: 'dungeon', room: 'room' });
+    expect(hall.anchors.find((anchor) => anchor.feature === 'hearth')?.assetId).toBe('stone_hearth');
+    expect(room.anchors.find((anchor) => anchor.assetId === 'wall_torch')?.feature).toBeUndefined();
+  });
 });
 
 describe('profileFor', () => {

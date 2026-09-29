@@ -423,7 +423,7 @@ export const BUILDINGS: Record<Building, BuildingPalette> = {
         defaultWallMaterial: 'stone_wall',
         anchors: [
           { assetId: 'weapon_rack' },
-          { assetId: 'brazier', feature: 'hearth', light: { radiusCells: 6, colorHex: '#ffb46b' } },
+          { assetId: 'stone_hearth', feature: 'hearth', light: { radiusCells: 6, colorHex: '#ffb46b' } },
           { assetId: 'stone_stairs', feature: 'stairs' },
         ],
         groups: [

@@ -92,12 +92,8 @@ describe('every template covers its closed vocabulary', () => {
   });
 });
 
-describe('what the bench measured about the wording', () => {
-  it('asks each of the five questions in the words they were measured in', () => {
-    // The frame every label is judged inside. Changing one of these changes all
-    // of that question's answers at once and leaves no other trace, so the five
-    // are written out here by hand — a measured sentence that somebody reworded
-    // on the way past should be a red test, not a quieter map.
+describe('the wording handed to the classifier', () => {
+  it('pins the six hypotheses, including the two new place questions', () => {
     expect(BUILDING_TEMPLATE.hypothesis).toBe('A construção é {}.');
     expect(ROOM_TEMPLATES.tavern.hypothesis).toBe('O cômodo é {}.');
     expect(LIGHT_TEMPLATE.hypothesis).toBe('A iluminação do lugar é assim: {}.');
@@ -132,14 +128,12 @@ describe('what the bench measured about the wording', () => {
     }
   });
 
-  it('offers every label in the exact words the bench scored', () => {
+  it('pins the existing measured labels and the new unmeasured place labels', () => {
     // ## Why the wording is written out here, and what it costs to change
     //
-    // These strings are not a design choice, they are the *result of a
-    // measurement*. A bench scored two models over twenty Portuguese
-    // descriptions, and the accuracy figures this front is built on — 90% on
-    // `place`, F1 0.94 on `features`, the AUC behind `minConfidence` —
-    // describe these exact phrasings and no others.
+    // The old bench measured the light, condition, size and feature labels,
+    // plus one three-way tavern place choice. Building and room are new
+    // questions and do not inherit its place accuracy or confidence figures.
     //
     // So this test does not claim the labels below are the *right* words. It
     // claims they are the *measured* words. Without it, somebody tidies

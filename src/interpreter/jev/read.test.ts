@@ -21,11 +21,12 @@ import { clutterFromScore, readBuildingAnswers, readRoomAnswers } from './read';
  *
  * The figures are `p01` of the canonical ruler — `O salão principal da taverna,
  * com mesas compridas e um balcão de carvalho.` — as the bench recorded them in
- * `raw.json`: `place_type` at confidence 1.000, `out_of_vocabulary` 0.02, a
+ * `raw.json`: the old place choice at confidence 1.000, `out_of_vocabulary` 0.02, a
  * `condition` score of 0.71, and the seven feature nouls. **The bench did not
  * store the `light` and `size` scores or any of the score confidences**, so
  * those four numbers are written here to exercise the reader and are not
- * measurements. They are marked where they appear.
+ * measurements. The building and room replies below are adapted to the new
+ * two-call protocol and were not measured in that bench.
  */
 
 type Figures = {

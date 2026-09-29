@@ -315,7 +315,7 @@ describe('assembling the constraints', () => {
   });
 });
 
-// --- The five questions ------------------------------------------------------
+// --- The six questions -------------------------------------------------------
 
 type Ask = { text: string; labels: readonly string[]; options: ZeroShotOptions };
 
@@ -438,7 +438,7 @@ describe('classifying a whole description', () => {
     );
   });
 
-  it('gives all five questions one premise, so the five answers are about one sentence', async () => {
+  it('gives all six questions one premise, so the answers are about one sentence', async () => {
     const { pipeline, asks } = stubPipeline();
 
     await classify('adega com prateleira e escadas', pipeline);

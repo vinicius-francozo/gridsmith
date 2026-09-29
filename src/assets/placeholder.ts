@@ -129,7 +129,7 @@ export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   { id: 'anchor/shelf_row', kind: 'anchor', footprint: { w: 4, h: 1 }, tags: ['shelving', 'storage', 'wood'], againstWall: true },
   { id: 'anchor/shelf_row_short', kind: 'anchor', footprint: { w: 3, h: 1 }, tags: ['shelving', 'storage', 'wood'], againstWall: true },
   { id: 'anchor/weapon_rack', kind: 'anchor', footprint: { w: 5, h: 2 }, tags: ['weapons', 'dungeon'], againstWall: true },
-  { id: 'anchor/brazier', kind: 'anchor', footprint: { w: 3, h: 2 }, tags: ['hearth', 'light', 'dungeon'], againstWall: true },
+  { id: 'anchor/stone_hearth', kind: 'anchor', footprint: { w: 3, h: 2 }, tags: ['hearth', 'light', 'dungeon'], againstWall: true },
   { id: 'anchor/stone_stairs', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['stairs', 'stone'], againstWall: true },
   { id: 'anchor/cot', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['bed', 'dungeon'], againstWall: true },
   { id: 'anchor/iron_bunks', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['bunks', 'dungeon'], againstWall: true },

@@ -44,7 +44,7 @@ function confidentAbout(template: ChoiceTemplate<string>, winner: string): ZeroS
   };
 }
 
-/** A classifier that answers every one of the five questions. */
+/** A classifier that answers every one of the six questions. */
 const answering: ZeroShotPipeline = (_text, _labels, options) => {
   const template = ALL_TEMPLATES.find((each) => each.hypothesis === options.hypothesisTemplate);
   if (template === undefined) {

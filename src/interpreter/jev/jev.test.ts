@@ -109,7 +109,7 @@ describe('refusing before the request', () => {
 });
 
 describe('the request the proxy is handed', () => {
-  it('posts every question in one call, to the proxy', async () => {
+  it('posts the building questions then the room question to the proxy', async () => {
     const { fetchImpl, calls } = stubFetch(answering(ANSWER));
 
     await new JevInterpreter({ apiKey: KEY, fetchImpl }).interpret('uma adega fria');
