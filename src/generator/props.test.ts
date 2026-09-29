@@ -700,6 +700,30 @@ describe('the two dials over the group layer', () => {
     }
   });
 
+  it('never leaves a crypt with nothing but its brazier', () => {
+    // Why `anchorRange.min` is 2 in the crypt's profile. `anchorOrder` draws
+    // from the three anchors, so at a floor of one, one crypt in nine comes
+    // back holding only the votive brazier — a lit sconce on a wall, which
+    // reads as no particular room. At two, any draw takes two of three and so
+    // cannot miss both the sarcophagus and the bone niche, which are the pieces
+    // that say *crypt* on the map. The map is the only place the person checks.
+    //
+    // `features: []` is load-bearing and the mutation sweep is how that was
+    // found out. `furnished` asks for every featured anchor by default, so both
+    // the bone niche and the brazier arrive already requested, the order starts
+    // with them whatever `anchorRange.min` says, and the floor is never
+    // exercised: written that way this test passed with `min` set back to 1.
+    for (let seed = 1; seed <= 40; seed += 1) {
+      const { props } = furnished({ building: 'dungeon', room: 'crypt' }, seed, { features: [], furnishing: 0.5, clutter: 0.3 });
+      const anchors = props.filter((prop) => prop.layer === 'anchor').map((prop) => prop.assetId);
+      const speaking = anchors.filter(
+        (id) => id === assetIdFor('anchor', 'sarcophagus') || id === assetIdFor('anchor', 'bone_niche'),
+      );
+      expect(`seed ${String(seed)}: ${String(speaking.length)} of ${String(anchors.length)} say crypt`)
+        .not.toBe(`seed ${String(seed)}: 0 of ${String(anchors.length)} say crypt`);
+    }
+  });
+
   it('empties the crypt when asked for no furniture, and never the common room', () => {
     // `groupTarget` scales between the profile's two numbers, so the `min` is a
     // floor the dial cannot get under: at `furnishing: 0` a hall still comes
