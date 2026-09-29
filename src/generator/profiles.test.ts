@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { createRng } from '../core/prng';
-import { PLACEHOLDER_CATALOG } from '../assets/placeholder';
+import { materialColor } from '../assets/palette';
+import { MATERIAL_VARIANTS, PLACEHOLDER_CATALOG } from '../assets/placeholder';
 import type { Place, Size } from '../core/types';
 import {
   ALCOVE_FEATURE,
+  PILLAR_MATERIAL,
   clampDoorCount,
   clampSize,
   FEATURE_VOCABULARY,
@@ -94,6 +96,132 @@ describe('profileFor', () => {
   });
 });
 
+/**
+ * How far from the floor a pillar has to be to be worth noticing, in ΔE2000.
+ *
+ * Measured at both ends. Below it: two variants of one material — the same
+ * stone, cut differently — are 10.2 apart at most, so nothing under that means
+ * anything. Above it: 32.7 is what `PILLAR_MATERIAL` manages against the worst
+ * floor shade in the vocabulary, and 33.1 is the best *any* name reaches
+ * against a dungeon hall, so there is no more headroom to be had from this
+ * side of the project. 28 sits above the 23.4 the old wall material managed —
+ * the map that prompted all this — and leaves 4.7 to the one in use.
+ */
+const STANDS_OUT = 28;
+
+/**
+ * CIEDE2000 between two `#rrggbb` colours.
+ *
+ * The obvious ruler — straight-line distance in sRGB channels — cannot answer
+ * the question this file asks, and the reason is specific to `materialColor`:
+ * it separates the variants of one material **by lightness alone**. So in sRGB
+ * the four cuts of `wood_plank`, which are the same plank by construction,
+ * span 54.4, while `dirt_floor` and `plaster_wall` — two different materials —
+ * sit 13.7 apart. Any sRGB threshold therefore says "same material" and
+ * "different material" at once. In ΔE2000 the same two facts read 10.2 and
+ * 14.0, in the right order, because it discounts a pure lightness step and
+ * weighs a change of hue.
+ */
+function deltaE2000(hexA: string, hexB: string): number {
+  const [L1, a1, b1] = labOf(hexA);
+  const [L2, a2, b2] = labOf(hexB);
+  const cBar = (Math.hypot(a1, b1) + Math.hypot(a2, b2)) / 2;
+  const g = 0.5 * (1 - Math.sqrt(cBar ** 7 / (cBar ** 7 + 25 ** 7)));
+  const ap1 = (1 + g) * a1;
+  const ap2 = (1 + g) * a2;
+  const cp1 = Math.hypot(ap1, b1);
+  const cp2 = Math.hypot(ap2, b2);
+  const hueOf = (b: number, a: number): number => {
+    if (b === 0 && a === 0) {
+      return 0;
+    }
+    const angle = (Math.atan2(b, a) * 180) / Math.PI;
+    return angle < 0 ? angle + 360 : angle;
+  };
+  const hp1 = hueOf(b1, ap1);
+  const hp2 = hueOf(b2, ap2);
+  const dLp = L2 - L1;
+  const dCp = cp2 - cp1;
+  let dhp = 0;
+  if (cp1 * cp2 !== 0) {
+    dhp = hp2 - hp1;
+    if (dhp > 180) {
+      dhp -= 360;
+    } else if (dhp < -180) {
+      dhp += 360;
+    }
+  }
+  const radians = (degrees: number): number => (degrees * Math.PI) / 180;
+  const dHp = 2 * Math.sqrt(cp1 * cp2) * Math.sin(radians(dhp) / 2);
+  const lBar = (L1 + L2) / 2;
+  const cBarP = (cp1 + cp2) / 2;
+  let hBar: number;
+  if (cp1 * cp2 === 0) {
+    hBar = hp1 + hp2;
+  } else if (Math.abs(hp1 - hp2) <= 180) {
+    hBar = (hp1 + hp2) / 2;
+  } else {
+    hBar = (hp1 + hp2 + (hp1 + hp2 < 360 ? 360 : -360)) / 2;
+  }
+  const t =
+    1 - 0.17 * Math.cos(radians(hBar - 30)) + 0.24 * Math.cos(radians(2 * hBar)) +
+    0.32 * Math.cos(radians(3 * hBar + 6)) - 0.2 * Math.cos(radians(4 * hBar - 63));
+  const sL = 1 + (0.015 * (lBar - 50) ** 2) / Math.sqrt(20 + (lBar - 50) ** 2);
+  const sC = 1 + 0.045 * cBarP;
+  const sH = 1 + 0.015 * cBarP * t;
+  const rT =
+    -Math.sin(radians(60 * Math.exp(-(((hBar - 275) / 25) ** 2)))) *
+    2 * Math.sqrt(cBarP ** 7 / (cBarP ** 7 + 25 ** 7));
+  return Math.sqrt(
+    (dLp / sL) ** 2 + (dCp / sC) ** 2 + (dHp / sH) ** 2 +
+    rT * (dCp / sC) * (dHp / sH),
+  );
+}
+
+/** `#rrggbb` to CIELAB under D65, the space ΔE2000 is defined in. */
+function labOf(hex: string): [number, number, number] {
+  const linear = (offset: number): number => {
+    const channel = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  };
+  const r = linear(1);
+  const g = linear(3);
+  const b = linear(5);
+  const f = (t: number): number => (t > 216 / 24389 ? Math.cbrt(t) : (841 / 108) * t + 4 / 29);
+  const x = f((0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047);
+  const y = f(0.2126729 * r + 0.7151522 * g + 0.072175 * b);
+  const z = f((0.0193339 * r + 0.119192 * g + 0.9503041 * b) / 1.08883);
+  return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+}
+
+/**
+ * Every colour a material can be drawn in.
+ *
+ * @throws {Error} if the marking library has no record of the material, which
+ *                 would otherwise make every comparison below vacuously true.
+ */
+function shadesOf(material: string): string[] {
+  const variants = MATERIAL_VARIANTS[material];
+  if (variants === undefined) {
+    throw new Error(`the test expects ${material} in the marking library's material record`);
+  }
+  return Array.from({ length: variants }, (_, variant) => materialColor(material, variant));
+}
+
+/** Every floor material any profile can pave a zone with, and every shade of it. */
+function everyFloorShade(): { material: string; variant: number; color: string }[] {
+  const found: { material: string; variant: number; color: string }[] = [];
+  for (const place of PLACE_TYPES) {
+    for (const material of profileFor(place).floorMaterials) {
+      if (found.some((shade) => shade.material === material)) {
+        continue;
+      }
+      shadesOf(material).forEach((color, variant) => found.push({ material, variant, color }));
+    }
+  }
+  return found;
+}
+
 describe('profile material vocabulary', () => {
   it('names only materials the catalogue declares', () => {
     for (const place of PLACE_TYPES) {
@@ -109,13 +237,75 @@ describe('profile material vocabulary', () => {
     }
   });
 
-  it('gives every floor material of a profile a wall counterpart', () => {
+  it('names a pillar material the catalogue declares, and no profile\u2019s own material', () => {
+    expect(Object.keys(MATERIALS)).toContain(PILLAR_MATERIAL);
     for (const place of PLACE_TYPES) {
       const profile = profileFor(place);
-      for (const floor of profile.floorMaterials) {
-        expect(profile.wallMaterials[floor]).toBeDefined();
+      const own = [
+        ...profile.floorMaterials,
+        ...Object.values(profile.wallMaterials),
+        profile.defaultWallMaterial,
+      ];
+      expect(`${place.building}/${place.room}: ${own.includes(PILLAR_MATERIAL)}`)
+        .toBe(`${place.building}/${place.room}: false`);
+    }
+  });
+
+  it('paints a pillar so that it stands out against every floor it can stand on', () => {
+    // This is the test the whole front exists for, and what it compares is
+    // the **floor**, not the wall. A pillar is surrounded by floor — of
+    // 22,552 grown pillars only 9.3% touch a wall cell at all, none of them
+    // in a `rectangle` or an `l_shape` — so the floor is what the eye puts it
+    // next to.
+    for (const shade of everyFloorShade()) {
+      for (const pillarShade of shadesOf(PILLAR_MATERIAL)) {
+        const apart = deltaE2000(pillarShade, shade.color);
+        expect(`${PILLAR_MATERIAL} vs ${shade.material}#${shade.variant}: ${apart >= STANDS_OUT}`)
+          .toBe(`${PILLAR_MATERIAL} vs ${shade.material}#${shade.variant}: true`);
       }
     }
+  });
+
+  it('would not have passed on the wall material a pillar used to be painted', () => {
+    // The regression anchor. Painting a pillar `stone_wall` is what the map
+    // that prompted this did, and against `dirt_floor` and `flagstone` it
+    // measures 23.4 and 25.0 — under the ruler. It was 42.6 against
+    // `stone_floor`, which is why "the pillars are invisible" was the wrong
+    // diagnosis and "nobody looked at them" was the right one.
+    const worst = Math.min(
+      ...everyFloorShade().flatMap((shade) =>
+        shadesOf('stone_wall').map((wall) => deltaE2000(wall, shade.color)),
+      ),
+    );
+    expect(worst).toBeLessThan(STANDS_OUT);
+    expect(Math.round(worst * 10) / 10).toBe(23.4);
+  });
+
+  it('is told apart from a floor by more than one material is told from itself', () => {
+    // What the ruler has to clear. `materialColor` separates the variants of
+    // one material by lightness alone, and they are the same material by
+    // construction, so the largest gap between two of them is the point below
+    // which a difference means nothing at all.
+    let widest = 0;
+    for (const material of Object.keys(MATERIAL_VARIANTS)) {
+      const shades = shadesOf(material);
+      for (let i = 0; i < shades.length; i += 1) {
+        for (let j = i + 1; j < shades.length; j += 1) {
+          widest = Math.max(widest, deltaE2000(shades[i], shades[j]));
+        }
+      }
+    }
+    expect(Math.round(widest * 10) / 10).toBe(10.2);
+    expect(STANDS_OUT).toBeGreaterThan(widest * 2);
+  });
+
+  it('costs a pillar cell exactly the draws a wall cell already cost', () => {
+    // `tileOf` draws a variant for every cell and a rotation only for a
+    // rotatable material, and `Rng.int` takes one number whatever its range.
+    // So one variant and no rotation means the rng sequence is untouched:
+    // same plan, same props, same rotations, and three or four tiles — the
+    // pillars — painted a different colour.
+    expect(materialDef(PILLAR_MATERIAL)).toEqual({ variants: 1, rotatable: false });
   });
 });
 

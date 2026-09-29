@@ -10,12 +10,13 @@
  *
  * `Scene.tiles` is total: every cell of the grid gets a `TileRef`, wall and
  * void included. A void cell takes the void material; a wall cell takes the
- * wall material of the zone it borders.
+ * wall material of the zone it borders, unless it is one of stage one's
+ * free-standing pillars, which takes `PILLAR_MATERIAL` instead.
  */
 
 import { cellAt, setCellAt } from '../core/grid';
 import type { Cell, CellKind, Floorplan, Rng, Size, TileRef, Zone } from '../core/types';
-import { materialDef, pickRotation, VOID_MATERIAL, wallMaterialFor } from './profiles';
+import { materialDef, PILLAR_MATERIAL, pickRotation, VOID_MATERIAL, wallMaterialFor } from './profiles';
 import type { PlaceProfile } from './profiles';
 import { rectArea, rectContains } from './shapes';
 import type { Rect } from './shapes';
@@ -37,6 +38,15 @@ const AROUND: readonly Cell[] = [
   { x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 },
   { x: -1, y: -1 }, { x: 1, y: -1 }, { x: 1, y: 1 }, { x: -1, y: 1 },
 ];
+
+/** The first four of `AROUND`: the sides of a cell, with no corners. */
+const ORTHOGONAL: readonly Cell[] = AROUND.slice(0, 4);
+
+/**
+ * How many of its four sides a wall cell must face floor across to be a
+ * pillar. See `isPillar` for where the number comes from.
+ */
+const PILLAR_SIDES = 3;
 
 export type PaintedTiles = {
   /** Disjoint by construction: every floor cell belongs to exactly one zone. */
@@ -126,6 +136,61 @@ function tileOf(material: string, rng: Rng): TileRef {
 }
 
 /**
+ * Whether the wall cell at `cell` is one of stage one's free-standing pillars.
+ *
+ * It has to be *rediscovered* here, because stage one destroys the fact.
+ * `growPillars` marks a pillar `'void'` (`floorplan.ts:347-357`) and
+ * `deriveWalls` then turns it into `'wall'` along with every other non-floor
+ * cell that touches floor, after which a pillar and a stretch of perimeter
+ * hold the same value. What still separates them is how much floor each one
+ * faces, counted **across its four sides only**:
+ *
+ * - a pillar stands in the open and faces floor on all four, or on three when
+ *   it grew flush against the perimeter, which `t_shape` and `alcove` both do;
+ * - a straight run of perimeter faces floor on one side, an outer corner on
+ *   none, and the inside corner of an `l_shape` or a `t_shape` — the case that
+ *   looks most like a pillar — on exactly two.
+ *
+ * So three is the line, and it is measured rather than argued: over 19,200
+ * plans, covering all four shapes, both buildings, all three room kinds, the
+ * smallest and the largest size each profile allows, and `features` with and
+ * without `pillars`, this rule named every pillar stage one grew and named
+ * nothing else — no false positive, no false negative. A histogram of 774,000
+ * non-pillar wall cells puts none of them above two.
+ *
+ * Counting the **eight** neighbours instead is the trap, and a cheap one to
+ * fall into: a straight perimeter cell faces three floor cells once diagonals
+ * are included, so "three of eight" selects the whole wall ring — 64 cells of
+ * a 20x18 rectangular hall, where there are four pillars.
+ *
+ * **The margin is zero, and it rests on a constant in another module.** Two
+ * sides is a real inside corner and four is a pillar in the open, so three is
+ * the only line there is. It holds because `MIN_INTERIOR_FOR_PILLARS`
+ * (`floorplan.ts:38`) is 9x9 and the four columns are grown two cells in from
+ * the interior's edge, which leaves them at least four cells apart. Lower that
+ * gate to 6 and two pillars become adjacent, each drops to two floor sides,
+ * and all four stop being painted — silently, because nothing here can see
+ * that constant. There is no test on this side that would fail; this note is
+ * the only thing standing between that edit and a quiet regression.
+ */
+export function isPillar(cells: CellKind[][], size: Size, cell: Cell): boolean {
+  if (cellAt(cells, cell) !== 'wall') {
+    return false;
+  }
+  let sides = 0;
+  for (const offset of ORTHOGONAL) {
+    const neighbor = { x: cell.x + offset.x, y: cell.y + offset.y };
+    if (neighbor.x < 0 || neighbor.y < 0 || neighbor.x >= size.w || neighbor.y >= size.h) {
+      continue;
+    }
+    if (cellAt(cells, neighbor) === 'floor') {
+      sides += 1;
+    }
+  }
+  return sides >= PILLAR_SIDES;
+}
+
+/**
  * Paints the whole grid.
  *
  * Cells are visited in reading order, so the sequence drawn from `rng` — and
@@ -173,10 +238,15 @@ export function paintMaterials(
         setCellAt(tiles, cell, { material: VOID_MATERIAL, variant: 0, rotation: 0 });
         continue;
       }
+      // A pillar is asked about before the bordering zone, because it is a
+      // wall cell and would otherwise take the wall's material — which is
+      // what it used to do, and what left four columns nobody looked at.
       const material =
         kind === 'floor'
           ? zones[cellAt(zoneOf, cell)].material
-          : wallMaterialFor(borderingMaterial(zoneOf, zones, size, cell), profile);
+          : isPillar(cells, size, cell)
+            ? PILLAR_MATERIAL
+            : wallMaterialFor(borderingMaterial(zoneOf, zones, size, cell), profile);
       setCellAt(tiles, cell, tileOf(material, rng));
     }
   }

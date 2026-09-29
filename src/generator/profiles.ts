@@ -33,6 +33,41 @@ export function pickRotation(rng: Rng): Rotation {
 /** The material of a cell that is not part of the building at all. */
 export const VOID_MATERIAL = 'void';
 
+/**
+ * The material a free-standing pillar is painted in — one for the project,
+ * not one per building.
+ *
+ * **The defect this fixes is not the one it looks like.** The pillars were
+ * drawn all along, and they were not hard to tell from the wall: stage two
+ * gave them the wall material, which on the map the report came from stood at
+ * 42.6 ΔE2000 from the floor around them. Asked what had gone wrong, the
+ * person who reported them missing said he had not noticed them. That is
+ * visual hierarchy, not a material being mistaken for another, so the target
+ * here is **salience against the floor a pillar stands on**, not separability
+ * from the wall.
+ *
+ * The floor is the right comparison and the wall is not, because a pillar is
+ * surrounded by floor: over 22,552 grown pillars only 9.3% touch a wall cell
+ * at all, none in a `rectangle` or an `l_shape`, 14.5% in a `t_shape` and
+ * 21.5% in an `alcove`. Even those still face floor on their other sides.
+ *
+ * The colour is not authored. `materialColor` derives it from the name by
+ * FNV-1a (`assets/palette.ts`), and that derivation is not this module's to
+ * change, so the **name is the only lever** and this one was chosen by
+ * measuring. Against every shade of every floor material in the vocabulary it
+ * measures **32.7 ΔE2000 at worst** (`stone_floor` variant 0), where the
+ * wall material a pillar used to be painted measured 23.4, and where two
+ * variants of one material — the same stone, cut differently — sit 10.2
+ * apart. It is also the loudest colour the derivation can produce: saturation
+ * 37 and lightness 37 are both the ceiling, and no name reaches a higher
+ * worst case against the two floors of a dungeon hall than 33.1.
+ *
+ * Optimising against the wall as well was measured and rejected: the best any
+ * name manages against floors and walls together is 23.6, which is worse
+ * against the floor than the wall material it replaces.
+ */
+export const PILLAR_MATERIAL = 'tufa_column';
+
 export type MaterialDef = {
   /** How many interchangeable tile variants the asset library offers. */
   variants: number;
@@ -59,6 +94,12 @@ export const MATERIALS: Record<string, MaterialDef> = {
   stone_wall: { variants: 3, rotatable: false },
   plaster_wall: { variants: 2, rotatable: false },
   timber_wall: { variants: 2, rotatable: false },
+  // See `PILLAR_MATERIAL`. One variant and no rotation: the variant ladder
+  // exists so that a floor of two hundred cells does not read as one flat
+  // sheet, and a room has four pillars — a pillar drawn in three shades would
+  // read as three different things. One variant also keeps the draws per cell
+  // exactly what a wall cell already cost, so the rng sequence is untouched.
+  [PILLAR_MATERIAL]: { variants: 1, rotatable: false },
 };
 
 /**

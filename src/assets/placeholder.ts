@@ -99,6 +99,7 @@ export const MATERIAL_VARIANTS: Readonly<Record<string, number>> = {
   stone_wall: 3,
   plaster_wall: 2,
   timber_wall: 2,
+  tufa_column: 1,
 };
 
 /**

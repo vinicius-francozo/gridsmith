@@ -159,6 +159,7 @@ describe('MATERIAL_VARIANTS', () => {
       stone_wall: 3,
       plaster_wall: 2,
       timber_wall: 2,
+      tufa_column: 1,
     });
   });
 });
