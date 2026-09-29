@@ -367,10 +367,24 @@ describe('furnishing, off a scale of its own', () => {
   it('refuses a furnishing score outside the scale rather than clamping it', () => {
     // The same trade the other scores make: a score out of band is an answer to
     // a different question, and clamping turns that into a plausible map.
-    expect(() => readAnswers(response({ furnishingScore: FURNISHING_TOP + 0.1 }))).toThrow(
-      JevUnusableAnswerError,
-    );
-    expect(() => readAnswers(response({ furnishingScore: -0.1 }))).toThrow(/furnishing/);
+    //
+    // Asserted on the sentence `scoreOn` writes, not on the type and not on the
+    // word "furnishing". `constraintsSchema` would refuse these two anyway —
+    // the reading is `score / 3`, so out of band in means out of 0..1 out — and
+    // both paths throw a `JevUnusableAnswerError` that names the field. A test
+    // that watched either of those would go on passing with this guard deleted,
+    // which is what it did until it was asked to prove otherwise. Only this
+    // wording tells the reader which of the two refused, and that matters: the
+    // schema is the last net, and a field that reaches it is a field this layer
+    // let through.
+    // Not `NaN`: the fixture is JSON text by the rule at the top of this file,
+    // and `NaN` is not JSON. `scoreSchema` is what refuses a score that is not
+    // a number, one step earlier.
+    for (const furnishingScore of [FURNISHING_TOP + 0.1, -0.1, 99]) {
+      expect(() => readAnswers(response({ furnishingScore }))).toThrow(
+        /furnishing: a score of .+ is outside the 4 levels it was asked about/,
+      );
+    }
   });
 });
 

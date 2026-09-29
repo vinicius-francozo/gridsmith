@@ -214,7 +214,9 @@ export const FEATURE_TEMPLATE: GatedTemplate<Feature> = {
  * be crowded — and this table is only one of them. It used to be both: until
  * `Constraints.furnishing` existed, the number below drove the count of
  * furniture groups as well as the loose stuff underfoot, so a description of a
- * ruin came back with nine war tables in it. The second signal is now
+ * ruin came back full of war tables. `groupTarget` in `generator/props.ts`
+ * carries the arithmetic and the floor area it is true of; the count is a
+ * function of both, so it is quoted in one place rather than restated here. The second signal is now
  * `FURNISHING_TEMPLATE`, a question of its own, and this table is back to
  * meaning what its name says.
  */

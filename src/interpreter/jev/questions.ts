@@ -1,9 +1,9 @@
 /**
- * The twelve first-pass questions the Jev engine asks, and the numbers that read the
+ * The thirteen first-pass questions the Jev engine asks, and the numbers that read the
  * answers back. Data and room criteria — the reading itself is `read.ts`, and the call is
  * `jev.ts`.
  *
- * The first twelve questions go in one request. The second request asks only
+ * The first thirteen questions go in one request. The second request asks only
  * for a room supported by the chosen building.
  *
  * The mapping onto Jev's three primitives is not one-to-one with
@@ -57,7 +57,7 @@ export type JevQuestion = JevNoulQuestion | JevChoiceQuestion | JevScoreQuestion
  * Every question, as the `questions` map of one System One request.
  *
  * Written out rather than assembled, so that this file has no logic in it and
- * so that the twelve names a response is read by are visible in one place.
+ * so that the thirteen names a response is read by are visible in one place.
  */
 export const QUESTIONS = {
   building: {
@@ -294,6 +294,15 @@ export const FEATURE_THRESHOLD = 0.62;
  * 0.050, and the answers are quantised to a hundredth and repeat to within
  * about 0.01 over three runs, so the boundary is a value the model actually
  * returns rather than a gap between values.
+ *
+ * **Taken with the seven feature questions alone, and taken again with the
+ * thirteen this engine actually sends.** A noul that moved with its neighbours
+ * would have made the corpus a measurement of the harness. Across the 287
+ * observations the mean move is 0.006 and the largest is 0.080, and three
+ * verdicts flip — each of them a single hundredth across this very boundary,
+ * and none of them anywhere near the presence bucket. Nothing above changes:
+ * the same medians, the same 18 of 20 at 0.05, the same knee, and still two
+ * negations sitting exactly on 0.050, so `<` would still cost two of them.
  */
 export const EXCLUSION_THRESHOLD = 0.05;
 

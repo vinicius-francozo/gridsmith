@@ -37,13 +37,16 @@ import { ClassificationFailedError, ModelUnavailableError } from './errors';
  * millisecond figure is worthless without them: measured in Node on this
  * machine — `onnxruntime-node`, twelve CPU cores, no GPU — a whole description
  * took a median of about 510 ms with the former five-question, twenty-forward-pass
- * place vocabulary. The current building/room split asks six questions and
- * twenty-two forward passes; its total has not been measured. The old run
+ * place vocabulary. The current shape asks seven questions and twenty-six
+ * forward passes — building 2, room 3, light 3, condition 4, furnishing 4, size
+ * 3, features 7 — and its total has not been measured. The old run
  * held within 11 ms across three runs of a
  * hundred timings each. Taken apart, the three-label questions are about 80 ms,
- * the four-label one about 105 ms and the seven-label `features` question about
- * 170 ms; `templates.ts` quotes the four-label figure out of this same run, so
- * the two files cannot drift into contradicting each other.
+ * the four-label `condition` question about 105 ms and the seven-label
+ * `features` question about 170 ms; `templates.ts` quotes the `condition`
+ * figure out of this same run, so the two files cannot drift into contradicting
+ * each other. `furnishing` is four labels as well and has never been timed, so
+ * nothing here claims a figure for it.
  *
  * The browser is a different runtime — WebAssembly, one tab, whatever machine
  * the person has — so this is the shape of the cost and not a promise. Nothing

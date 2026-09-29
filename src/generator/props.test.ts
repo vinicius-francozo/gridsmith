@@ -653,11 +653,16 @@ describe('an anchor the description refused', () => {
     );
   });
 
-  it('leaves the walls bare when every anchor of the place was refused by name', () => {
+  it('leaves the walls bare when every anchor of the place is in `excluded`', () => {
     // The one case where the refusal outranks the filling. A tavern storeroom
     // offers two anchors and both carry a feature, so refusing both leaves the
-    // draw nothing to offer — and that is the person's own instruction, said
-    // twice, rather than a room the generator failed to furnish.
+    // draw nothing to offer.
+    //
+    // Not named "refused by name": `excluded` is not only what the person said,
+    // and `props.ts` says how often it is not. What is pinned here is the rule,
+    // not a claim about why the list looks the way it does — filling from the
+    // refused anchors instead would put back the staircase this whole field
+    // exists to keep out.
     const place: Place = { building: 'tavern', room: 'storeroom' };
     for (let seed = 0; seed < 12; seed += 1) {
       const { props } = furnished(place, seed, { features: [], excluded: ['shelving', 'stairs'] });

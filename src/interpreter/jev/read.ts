@@ -248,7 +248,7 @@ function answersOf(body: unknown, expected: string[]): Record<string, unknown> {
  *
  * @throws {JevUnusableAnswerError} naming the question, because "expected
  *                                  noul, got score" says nothing on its own
- *                                  when twelve questions were asked at once.
+ *                                  when thirteen questions were asked at once.
  */
 function read<T>(answers: Record<string, unknown>, name: QuestionName | 'room', schema: z.ZodType<T>): T {
   const parsed = schema.safeParse(answers[name]);

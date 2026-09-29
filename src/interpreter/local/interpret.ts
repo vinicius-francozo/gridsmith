@@ -353,14 +353,15 @@ function describeIssue(issue: { path: PropertyKey[]; message: string }): string 
  * It was six until `furnishing` became a field of its own. The seventh pass is
  * what that costs, and it buys the map the two axes it declares: the old six
  * answered `condition` and let the furniture count follow it, which is how a
- * ruin came back with nine war tables in it.
+ * ruin came back full of war tables. The arithmetic and the floor area that
+ * make it a number are in `groupTarget` (`generator/props.ts`).
  *
  * ## What the model is shown
  *
  * Not `text` itself: `synonyms.ts` rewrites the handful of words this model is
  * known to miss — "porão" for the storeroom, "estante" for the shelving — into
- * the words its labels use, and the result of that is the premise of all six
- * entailment pairs. All six get the *same* premise, so the six answers are
+ * the words its labels use, and the result of that is the premise of all seven
+ * entailment pairs. All seven get the *same* premise, so the seven answers are
  * about one sentence.
  *
  * `text` is not touched. `premise.original` is it, character for character, and
