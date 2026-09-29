@@ -700,6 +700,46 @@ describe('the two dials over the group layer', () => {
     }
   });
 
+  it('fits the crypt furniture into the smallest crypt there is', () => {
+    // `furnished` builds at `profile.maxSize` by default, so nothing else in
+    // this file exercises a room anywhere near its floor — `minSize` does not
+    // otherwise appear in it. That matters because an anchor with no wall long
+    // enough for it does not fail, it silently drops out (`AnchorSpec.feature`
+    // says so), and a crypt is the tightest room that carries a 4x1 niche and a
+    // 3x2 sarcophagus.
+    const place: Place = { building: 'dungeon', room: 'crypt' };
+    const profile = profileFor(place);
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const { props } = furnished(place, seed, {
+        size: profile.minSize, features: [], furnishing: 0.5, clutter: 0.3,
+      });
+      const anchors = props.filter((prop) => prop.layer === 'anchor');
+      expect(`seed ${String(seed)}: ${String(anchors.length)} anchors in an ${String(profile.minSize.w)}x${String(profile.minSize.h)} crypt`)
+        .not.toBe(`seed ${String(seed)}: 0 anchors in an ${String(profile.minSize.w)}x${String(profile.minSize.h)} crypt`);
+    }
+  });
+
+  it('leaves the sarcophagus standing however much of the crypt is refused', () => {
+    // The net, and it is the featureless anchor rather than `anchorRange.min`.
+    // `anchorOrder` drops any anchor whose feature is in `excluded`; the
+    // sarcophagus has no feature, so it cannot be named and cannot be refused.
+    // This is not hypothetical — it is the map this front exists for. The live
+    // model read "catacumba **escura**" as a refusal of `hearth` and returned
+    // `excluded: ['bar', 'hearth', 'stairs', 'bunks']`, which takes the brazier
+    // out before the draw starts; `shelving` going the same way would take the
+    // bone niche too. Give the sarcophagus a feature word and the room becomes
+    // refusable down to bare walls.
+    const everyFeature = ['bar', 'hearth', 'stairs', 'pillars', 'alcove', 'shelving', 'bunks'];
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const { props } = furnished({ building: 'dungeon', room: 'crypt' }, seed, {
+        features: [], excluded: everyFeature, furnishing: 0.5, clutter: 0.3,
+      });
+      const anchors = props.filter((prop) => prop.layer === 'anchor').map((prop) => prop.assetId);
+      expect(`seed ${String(seed)}: ${anchors.join(' ')}`)
+        .toBe(`seed ${String(seed)}: ${assetIdFor('anchor', 'sarcophagus')}`);
+    }
+  });
+
   it('never leaves a crypt with nothing but its brazier', () => {
     // Why `anchorRange.min` is 2 in the crypt's profile. `anchorOrder` draws
     // from the three anchors, so at a floor of one, one crypt in nine comes

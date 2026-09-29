@@ -421,8 +421,13 @@ const TAVERN_STOREROOM: PlaceProfile = {
  * 3. **The pillars.** `growPillars` needs an interior of 9x9, so a room is only
  *    ever columned from 11x11 up (`floorplan.ts`). The `minSize` below starts
  *    there on purpose, so that a crypt asked for with pillars always has room
- *    for them. The hall's 12x10 does not: it is a cell short on height, and a
- *    12x10 hall that asks for pillars silently gets none.
+ *    for them. The hall's 12x10 does not: it is a cell short on height, and the
+ *    cost is bigger than its floor. `jitterSize` moves each side by a cell, so
+ *    a **small** dungeon hall that asks for pillars comes back with none on
+ *    **205 of 600 seeds — 34%** — every one of them a seed that landed on
+ *    height 10, and nothing anywhere says so. Out of scope for this front by
+ *    agreement, and measured here so that whoever picks it up starts with the
+ *    number.
  *
  * No stairs, and that is a statement rather than an omission. Every other room
  * in this project that a person walks down into offers a staircase; a crypt is
@@ -443,23 +448,39 @@ const DUNGEON_CRYPT: PlaceProfile = {
   floorMaterials: ['stone_floor', 'flagstone'],
   wallMaterials: { stone_floor: 'stone_wall', flagstone: 'stone_wall' },
   defaultWallMaterial: 'stone_wall',
-  // Two, and it is the floor rather than a preference. `anchorOrder` fills the
-  // order by drawing from the three below, so at `min: 1` one crypt in nine
-  // comes back holding nothing but its votive brazier — a lit sconce, which
-  // reads as no particular room. At two, any draw takes two of three and so
-  // cannot miss both the sarcophagus and the bone niche, which are the two
-  // pieces that say *crypt* on the map. The "few pieces of furniture" half of
-  // what the person asked for is not bought here at all; it is bought by
-  // `groupsPerHundredCells` below, which is where furniture is counted.
+  // Two rather than one, and it buys exactly one thing: with all three anchors
+  // in the draw, `min: 1` leaves one crypt in nine holding nothing but its
+  // votive brazier — a lit sconce on a wall, which reads as no particular room.
+  //
+  // **It is not what keeps the room from coming back bare.** That is the
+  // sarcophagus carrying no feature word, below, and the difference matters
+  // because the arithmetic here is about a set of three that the ordinary case
+  // does not have: `anchorOrder` drops an anchor whose feature is in
+  // `excluded`, and the archetypal description of a crypt is a dark one, which
+  // scores the `hearth` noul low enough to be read as a refusal. The brazier is
+  // then out of the draw before `min` is consulted at all.
+  //
+  // The "few pieces of furniture" half of what the person asked for is not
+  // bought here either; it is bought by `groupsPerHundredCells` below, which is
+  // where furniture is counted.
   anchorRange: { min: 2, max: 3 },
   anchors: [
-    // No feature word, so it can never be refused and can never be asked for by
-    // name. It is the piece that keeps the walls from coming back bare when
-    // everything featured is excluded — the same job `weapon_rack` does in the
-    // dungeon hall.
+    // **No feature word, and that is the net.** `anchorOrder` refuses an anchor
+    // whose feature is in `excluded`, and a featureless anchor can never be in
+    // `excluded`, so this is the one piece of the room that no description can
+    // take away — the same job `weapon_rack` does in the dungeon hall. It is
+    // also what actually carried the map this front exists for: that
+    // description excluded `hearth` along with `stairs`, so the brazier never
+    // entered the draw and the crypt came back as a sarcophagus and a bone
+    // niche.
     { assetId: 'sarcophagus', footprint: { w: 3, h: 2 }, placement: 'wall' },
     { assetId: 'bone_niche', footprint: { w: 4, h: 1 }, placement: 'wall', feature: 'shelving' },
     {
+      // The only light this room has, and it is worth saying that the room
+      // usually has none: a crypt described the archetypal way is described as
+      // dark, `hearth` is read as refused, and the brazier is dropped — so
+      // `Scene.lights` comes back empty. That is the honest reading of the
+      // sentence and not a fault; the v1 renderer draws no light anyway.
       assetId: 'votive_brazier',
       footprint: { w: 2, h: 1 },
       placement: 'wall',

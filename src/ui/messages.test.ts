@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Params, Place } from '../core/types';
-import { roomsFor } from '../generator/profiles';
+import type { Building, Params, Place } from '../core/types';
+import { BUILDINGS, roomsFor } from '../generator/profiles';
 import { SceneValidationError } from '../generator/validate';
 import {
   CLUTTER_NOT_A_NUMBER,
@@ -205,7 +205,21 @@ describe('an entry becomes a sentence', () => {
     // arrive. A plain lookup would answer the prototype member, and the line
     // above the map would read `Desenhei o mais próximo: “function Object() {
     // [native code] }”`.
-    for (const key of ['constructor', '__proto__', 'toString', 'valueOf', 'hasOwnProperty']) {
+    //
+    // The two-part keys are not decoration. `PLACE_NAMES` is nested now, so a
+    // bare word never reaches the lookup at all — it has no underscore and
+    // `placeWord` returns it before splitting. Only a `building_room` shape
+    // gets as far as the table, and each of these reaches a different one of
+    // the two guards: `constructor_name` answers the string `"Object"` from
+    // `Object.name` if the building axis is unguarded, and `tavern___proto__`
+    // answers `Object.prototype` itself — printed as `[object Object]` — if the
+    // room axis is.
+    const keys = [
+      'constructor', '__proto__', 'toString', 'valueOf', 'hasOwnProperty',
+      'constructor_name', 'toString_hall', 'tavern___proto__', 'tavern_constructor',
+      'valueOf_hall', 'dungeon_hasOwnProperty',
+    ];
+    for (const key of keys) {
       expect(describeEntry(entry(PLACE_NOT_IN_VOCABULARY, key))).toBe(
         'A descrição não parece ser nenhum dos lugares que o gerador conhece. ' +
           `Desenhei o mais próximo: “${key}”.`,
@@ -458,13 +472,13 @@ describe('the line under a finished map', () => {
   });
 
   it('has a name for every pair the generator declares', () => {
-    // This is the check that took over from the exact `Record` in
-    // `messages.ts`. The key type there was every building crossed with every
-    // room, and `crypt` ended that — a dungeon has one and a tavern does not,
-    // so keeping the cross-product exact would have meant writing a name for
-    // `tavern_crypt`. What the type can no longer say, this says better,
-    // because it reads the matrix instead of approximating it.
-    const declared = (['tavern', 'dungeon'] as const).flatMap((building) =>
+    // The check standing in for the room axis's compile-time exactness in
+    // `messages.ts` — the building axis keeps its own, because `PLACE_NAMES` is
+    // nested and exact there. Both ends are read out of `BUILDINGS`: a list of
+    // buildings written out here would have gone stale the same way the flat
+    // key did, and then this test would be approximating the matrix instead of
+    // reading it.
+    const declared = (Object.keys(BUILDINGS) as Building[]).flatMap((building) =>
       roomsFor(building).map((room) => ({ building, room })),
     );
     expect(declared.length).toBe(PLACE_TYPES.length);

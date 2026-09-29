@@ -114,18 +114,18 @@ function featureWord(detail: string): string {
  * a string, so an unrecognised one is shown as it came instead of dropped, the
  * same way `featureWord` does.
  *
- * `Object.hasOwn` for the reason `isKnownCode` states: a plain lookup would
- * answer a prototype member for `constructor` or `toString`.
+ * The detail is one string and `PLACE_NAMES` is nested, so it has to be cut in
+ * two. It is cut at the **first** underscore because the building is the axis
+ * that is closed and exact, so it is the half worth reading first — **not**
+ * because the last would be wrong today: no building and no room contains an
+ * underscore, and the mutation to `lastIndexOf` survives the whole suite. A
+ * detail with no underscore at all is not a pair and is shown as it came,
+ * which is why a bare `toString` never reaches `placeName` — though
+ * `constructor_name` does, and `placeName` is what stops it.
  */
 function placeWord(detail: string): string {
-  // `Object.hasOwn` first and the `??` second, not the `??` alone. The table is
-  // `Partial` since `crypt` made the matrix sparse, so a plain lookup now types
-  // as `string | undefined` and `?? detail` looks like the whole answer — but
-  // `PLACE_NAMES['toString']` is a function rather than `undefined`, walks past
-  // the `??`, and is concatenated into the notice.
-  const name = Object.hasOwn(PLACE_NAMES, detail)
-    ? PLACE_NAMES[detail as `${Building}_${RoomKind}`]
-    : undefined;
+  const cut = detail.indexOf('_');
+  const name = cut === -1 ? undefined : placeName(detail.slice(0, cut), detail.slice(cut + 1));
   return name ?? detail;
 }
 
@@ -550,29 +550,51 @@ export function describeModelProgress(progress: ModelProgress): string {
 /**
  * The seven supported building and room pairs, in Portuguese.
  *
- * **It used to be an exact `Record` over every building crossed with every
- * room, and `crypt` is what ended that.** The cross-product was only ever a
- * correct description of this table while every building had every room; a
- * dungeon has a crypt and a tavern does not, so keeping it exact would have
- * meant writing `tavern_crypt: 'Cripta de taverna'` — a name for a place
- * nothing can produce, sitting in the one table a person reads from.
+ * **Exact in the building, sparse in the room**, which is the shape the matrix
+ * actually has: every building is declared, and each declares only the rooms it
+ * holds. A dungeon has a crypt and a tavern does not, so a flat key of every
+ * building crossed with every room stopped describing this table the moment
+ * `crypt` existed — kept exact, it would have demanded a name for
+ * `tavern_crypt`, a place nothing can produce, in the one table a person reads
+ * from.
  *
- * What the exactness bought was that a place added upstream stopped this file
- * compiling rather than reaching the screen as `tavern_cellar`. That guarantee
- * moves into `describeResult`, which throws, and `placeWord` already showed an
- * unrecognised detail as it came. `messages.test.ts` holds the table against
- * every pair `roomsFor` declares, which is the check the type can no longer
- * make and is the stronger one: it knows which pairs exist.
+ * Nesting is what keeps both properties instead of trading one for the other.
+ * A **building** added upstream still stops this file compiling, the way the
+ * flat key used to, and it is the same shape `ROOM_CRITERIA` in
+ * `jev/questions.ts` and `ROOM_TEMPLATES` in `local/templates.ts` are written
+ * in — three tables keyed on a building and a room, one form between them.
+ * Only the **room** axis gives up its compile-time check, because only that
+ * axis is sparse, and `describeResult` throws in its place.
  */
-const PLACE_NAMES: Readonly<Partial<Record<`${Building}_${RoomKind}`, string>>> = {
-  tavern_hall: 'Salão de taverna',
-  tavern_room: 'Quarto de taverna',
-  tavern_storeroom: 'Depósito de taverna',
-  dungeon_hall: 'Salão da masmorra',
-  dungeon_room: 'Cela da masmorra',
-  dungeon_storeroom: 'Arsenal da masmorra',
-  dungeon_crypt: 'Cripta da masmorra',
+const PLACE_NAMES: Readonly<Record<Building, Readonly<Partial<Record<RoomKind, string>>>>> = {
+  tavern: {
+    hall: 'Salão de taverna',
+    room: 'Quarto de taverna',
+    storeroom: 'Depósito de taverna',
+  },
+  dungeon: {
+    hall: 'Salão da masmorra',
+    room: 'Cela da masmorra',
+    storeroom: 'Arsenal da masmorra',
+    crypt: 'Cripta da masmorra',
+  },
 };
+
+/**
+ * The Portuguese name for a pair, or nothing.
+ *
+ * `Object.hasOwn` on **both** axes, for the reason `isKnownCode` states: these
+ * are object literals, so `PLACE_NAMES['toString']` is a function rather than
+ * `undefined` and `PLACE_NAMES.tavern['__proto__']` is an object. Both walk
+ * past a `??`, and the first would be concatenated into a notice.
+ */
+function placeName(building: string, room: string): string | undefined {
+  if (!Object.hasOwn(PLACE_NAMES, building)) {
+    return undefined;
+  }
+  const rooms = PLACE_NAMES[building as Building];
+  return Object.hasOwn(rooms, room) ? rooms[room as RoomKind] : undefined;
+}
 
 /**
  * The line under a finished map.
@@ -582,17 +604,16 @@ const PLACE_NAMES: Readonly<Partial<Record<`${Building}_${RoomKind}`, string>>> 
  * dimensions are the renderer's business and mean nothing at a table.
  *
  * @throws {TypeError} if `PLACE_NAMES` has no name for the pair. This is the
- *                     guard that took over from the exact `Record` — see
- *                     `PLACE_NAMES`. Without it the line reads "undefined,
- *                     17×15 casas", which is a place name a person cannot tell
- *                     from a rendering bug, under a map that is otherwise
- *                     correct.
+ *                     guard standing in for the room axis's compile-time check
+ *                     — see `PLACE_NAMES`, which keeps the building axis's.
+ *                     Without it the line reads "undefined, 17×15 casas", which
+ *                     is a place name a person cannot tell from a rendering
+ *                     bug, under a map that is otherwise correct.
  */
 export function describeResult(params: Params): string {
-  const id = `${params.place.building}_${params.place.room}` as const;
-  const name = PLACE_NAMES[id];
+  const name = placeName(params.place.building, params.place.room);
   if (name === undefined) {
-    throw new TypeError(`no name for the place '${id}'`);
+    throw new TypeError(`no name for the place '${params.place.building}_${params.place.room}'`);
   }
   return `${name}, ${String(params.size.w)}×${String(params.size.h)} casas, semente ${String(params.seed)}.`;
 }

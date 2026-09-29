@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { createRng } from '../core/prng';
+import { buildFloorplan } from './floorplan';
+import { isPillar } from './materials';
+import { paramsFor } from './test-fixtures';
 import { featureSuits, featuresFor } from '../interpreter/vocabulary';
 import type { Feature } from '../interpreter/vocabulary';
 import { materialColor } from '../assets/palette';
@@ -23,6 +26,7 @@ import {
   ROTATIONS,
   wallMaterialFor,
 } from './profiles';
+import type { ShapeName } from './profiles';
 
 const PLACE_TYPES: Place[] = [
   { building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' },
@@ -101,6 +105,15 @@ describe('building and room composition', () => {
     expect(crypt.scatter.map((slot) => slot.assetId)).toEqual([
       'bone', 'skull', 'rubble', 'shard', 'dust',
     ]);
+    // The sarcophagus carries **no feature word**, and that is the net rather
+    // than a detail of the table. `anchorOrder` drops an anchor whose feature is
+    // in `excluded`, and a featureless one can never be in `excluded`, so this
+    // is the single piece that cannot be refused. It is also what actually
+    // saved the map this front exists for: "catacumba **escura**" scores the
+    // `hearth` noul low enough to be read as a refusal, which takes the brazier
+    // out of the draw before it starts. Give it a feature and the crypt becomes
+    // refusable down to nothing.
+    expect(crypt.anchors.find((anchor) => anchor.assetId === 'sarcophagus')?.feature).toBeUndefined();
     for (const guardRoomThing of ['war_table', 'guard_stool', 'weapon_rack', 'stone_stairs']) {
       expect(idsOf(crypt)).not.toContain(guardRoomThing);
     }
@@ -117,34 +130,76 @@ describe('building and room composition', () => {
     expect(profileFor({ building: 'dungeon', room: 'hall' }).groupsPerHundredCells.min).toBe(2);
   });
 
-  it('gives the crypt room for the pillars it is allowed to grow', () => {
-    // `growPillars` needs an interior of 9x9, so nothing under 11x11 is ever
-    // columned. The hall is allowed pillars and its floor is 12x10 — a cell
-    // short on height — so a hall built at its own minimum asks for pillars and
-    // silently gets none. The crypt's floor starts where the pillars do, which
-    // is why it carries a geometry of its own rather than the hall's, and the
-    // description that put this room in the vocabulary asked for pillars.
-    const crypt = profileFor({ building: 'dungeon', room: 'crypt' });
+  it('grows pillars in the smallest crypt there is, and in no hall that small', () => {
+    // **Built, not asserted about the table.** Written as `minSize.h >= 11` this
+    // passed with `MIN_INTERIOR_FOR_PILLARS` moved from 9x9 to 10x10 — the very
+    // constant the crypt's floor is chosen against, and the load-bearing
+    // premise of its having a geometry of its own. So it asks stage one for the
+    // plan and counts what came out.
+    //
+    // The hall is the other half and it is a real defect, left out of scope by
+    // agreement: its floor is 12x10, an interior of 10x8, and eight is under
+    // the nine `growPillars` wants. **Every** seed of 600 builds a 12x10 hall
+    // that asked for pillars and got none, and it is not only the floor —
+    // `jitterSize` moves each side a cell, so a *small* dungeon hall asking for
+    // pillars comes back bare on **205 of 600 seeds, 34%**, every one of them
+    // the seeds that landed on height 10.
+    // Forty is chosen against the grammar rather than for comfort: the plan is
+    // one of four shapes, and both invariants below hold shape by shape, so a
+    // sweep only has to see each of them several times.
+    const seeds = Array.from({ length: 40 }, (_, i) => i + 1);
+    const counts = (place: Place): number[] => {
+      const profile = profileFor(place);
+      return seeds.map((seed) => {
+        const params = paramsFor(place, { size: profile.minSize, features: [PILLARS_FEATURE], doorCount: 1 });
+        const { floorplan } = buildFloorplan(params, profile, createRng(seed));
+        // `isPillar` rather than a rule written again here: it is the one stage
+        // two paints by, so this counts the pillars the map will actually show.
+        let grown = 0;
+        for (let y = 0; y < floorplan.size.h; y += 1) {
+          for (let x = 0; x < floorplan.size.w; x += 1) {
+            if (isPillar(floorplan.cells, floorplan.size, { x, y })) {
+              grown += 1;
+            }
+          }
+        }
+        return grown;
+      });
+    };
 
-    expect(crypt.allowPillars).toBe(true);
-    expect(crypt.minSize.w).toBeGreaterThanOrEqual(11);
-    expect(crypt.minSize.h).toBeGreaterThanOrEqual(11);
+    const crypt = counts({ building: 'dungeon', room: 'crypt' });
+    expect(`crypt at its floor, seeds with no pillar: ${String(crypt.filter((n) => n === 0).length)}`)
+      .toBe('crypt at its floor, seeds with no pillar: 0');
+    expect(profileFor({ building: 'dungeon', room: 'crypt' }).allowPillars).toBe(true);
+
+    const hall = counts({ building: 'dungeon', room: 'hall' });
+    expect(`hall at its floor, seeds with a pillar: ${String(hall.filter((n) => n > 0).length)}`)
+      .toBe('hall at its floor, seeds with a pillar: 0');
   });
 
   it('offers the crypt every feature it can hold, and no staircase', () => {
     // The two sides of a feature have to agree: a word that names an anchor is
     // only offered where that anchor is declared, and a word answered by stage
-    // one is offered where the shape allows it. Nothing checks that but this.
+    // one is offered where the plan can answer it. Nothing checks that but this.
+    //
+    // The second half is read off `shapes` and `allowPillars` rather than from a
+    // pair of words written out here. Written out, it said `alcove` was answered
+    // by the plan whether or not the plan offered the shape — so taking
+    // `'alcove'` out of the crypt's `shapes` left this green while every request
+    // for a burial recess vanished off the map with nothing recorded.
     const place: Place = { building: 'dungeon', room: 'crypt' };
     const crypt = profileFor(place);
-    const shapeFeatures = new Set([PILLARS_FEATURE, ALCOVE_FEATURE]);
+    const answeredByPlan = new Set<string>([
+      ...(crypt.allowPillars ? [PILLARS_FEATURE] : []),
+      ...(crypt.shapes.includes(ALCOVE_FEATURE as ShapeName) ? [ALCOVE_FEATURE] : []),
+    ]);
     const anchored = new Set(
       crypt.anchors.map((anchor) => anchor.feature).filter((feature) => feature !== undefined),
     );
 
     expect(featuresFor(place)).toEqual(['hearth', 'pillars', 'alcove', 'shelving']);
     for (const feature of featuresFor(place)) {
-      expect(`${feature}: ${String(shapeFeatures.has(feature) || anchored.has(feature))}`).toBe(`${feature}: true`);
+      expect(`${feature}: ${String(answeredByPlan.has(feature) || anchored.has(feature))}`).toBe(`${feature}: true`);
     }
     expect([...anchored].every((feature) => featureSuits(feature as Feature, place))).toBe(true);
     // Named on its own, because it is the one absence that is a decision: every
