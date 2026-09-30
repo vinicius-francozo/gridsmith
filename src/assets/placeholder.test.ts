@@ -169,6 +169,8 @@ describe('MATERIAL_VARIANTS', () => {
       library_wall: 3,
       slate_floor: 3,
       slate_wall: 3,
+      gravel_floor: 3,
+      shoring_wall: 3,
     });
   });
 });

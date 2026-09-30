@@ -117,7 +117,11 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // a laboratory that is also a hearth. **Not the observatory** — a chamber
     // whose point is seeing out of it is lit by what it is pointed at, and its
     // geometry declares no slot a fire would fit.
-    { building: 'tower', room: 'laboratory' }],
+    { building: 'tower', room: 'laboratory' },
+    // Both rooms of the mine. A gallery and a winding house are each a place
+    // somebody works a shift in, and the lamp on the wall is the only light
+    // either of them has.
+    { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' }],
   /**
    * A flight up or down, to the rooms above or the cellar below.
    *
@@ -138,7 +142,9 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     { building: 'library', room: 'reading' },
     // Both, and in this building the stair is the building: the laboratory's
     // corner stair is the one the observatory's comes up from.
-    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' }],
+    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' },
+    // Up to the surface, from both. In this building the stair is the way out.
+    { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' }],
   /**
    * Columns carrying a span too wide for bare joists. A hall is that wide, and
    * so is a crypt, whose vault is the reason it has them.
@@ -172,7 +178,12 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // Both: the laboratory has all four shapes and the observatory has
     // `alcove`. A recess off a laboratory is where the thing nobody wants to
     // look at is kept.
-    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' }],
+    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' },
+    // The gallery, because it is the guest room's geometry and that geometry
+    // offers `alcove` — a recess off a gallery is a worked-out pocket of ore.
+    // **Not the winding house**: its shapes are `rectangle` and `l_shape`, so
+    // asking it for a recess is answered with a conflict rather than silently.
+    { building: 'mine', room: 'room' }],
   /**
    * Racks along a wall, for casks or for a guest's belongings — and, in a
    * crypt, the tiers of a bone niche, which is a shelf holding the dead.
@@ -191,7 +202,9 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     { building: 'library', room: 'reading' }, { building: 'library', room: 'archive' },
     // Both rooms of the tower declare one: the instruments have to stand
     // somewhere, and in this building that somewhere is a shelf.
-    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' }],
+    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' },
+    // The tool rack, in both rooms of the mine.
+    { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' }],
   /** Stacked sleeping berths. A room to sleep in, and nowhere else. */
   bunks: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
   /**

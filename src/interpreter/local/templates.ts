@@ -77,6 +77,7 @@ export const BUILDING_TEMPLATE: ChoiceTemplate<Building> = {
     temple: 'templo',
     library: 'biblioteca',
     tower: 'torre de mago',
+    mine: 'mina',
   },
 };
 
@@ -150,6 +151,7 @@ export const ROOM_TEMPLATES: Readonly<Record<Building, RoomTemplateSource>> = {
   temple: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('temple'); } },
   library: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('library'); } },
   tower: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('tower'); } },
+  mine: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('mine'); } },
 };
 
 /** How lit the place is. */

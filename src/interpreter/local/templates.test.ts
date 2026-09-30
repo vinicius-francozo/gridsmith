@@ -27,7 +27,9 @@ import type { ChoiceTemplate } from './templates';
  * and the template would move together without anybody noticing; these lines
  * are what makes that a failing test instead.
  */
-const BUILDINGS: Building[] = ['tavern', 'dungeon', 'forge', 'temple', 'library', 'tower'];
+const BUILDINGS: Building[] = [
+  'tavern', 'dungeon', 'forge', 'temple', 'library', 'tower', 'mine',
+];
 // Two lists, because the matrix is sparse: a dungeon has a crypt and a tavern
 // does not. One list over every `RoomKind` would have asked the tavern for a
 // label it must not have.
@@ -37,6 +39,7 @@ const FORGE_ROOMS: RoomKind[] = ['smithy', 'room'];
 const TEMPLE_ROOMS: RoomKind[] = ['hall', 'room'];
 const LIBRARY_ROOMS: RoomKind[] = ['reading', 'archive'];
 const TOWER_ROOMS: RoomKind[] = ['laboratory', 'observatory'];
+const MINE_ROOMS: RoomKind[] = ['room', 'hoist'];
 const LIGHTS: Light[] = ['dark', 'dim', 'bright'];
 const CONDITIONS: Condition[] = ['tidy', 'lived_in', 'disordered', 'ruined'];
 const SIZE_HINTS = ['small', 'medium', 'large'];
@@ -92,6 +95,7 @@ describe('every template covers its closed vocabulary', () => {
     expect(Object.keys(ROOM_TEMPLATES.temple.labels).sort()).toEqual([...TEMPLE_ROOMS].sort());
     expect(Object.keys(ROOM_TEMPLATES.library.labels).sort()).toEqual([...LIBRARY_ROOMS].sort());
     expect(Object.keys(ROOM_TEMPLATES.tower.labels).sort()).toEqual([...TOWER_ROOMS].sort());
+    expect(Object.keys(ROOM_TEMPLATES.mine.labels).sort()).toEqual([...MINE_ROOMS].sort());
   });
 
   it('asks about all three lights', () => {
@@ -220,6 +224,10 @@ describe('the wording handed to the classifier', () => {
       laboratory: 'laboratório da torre',
       observatory: 'observatório da torre',
     });
+    expect(ROOM_TEMPLATES.mine.labels).toEqual({
+      room: 'galeria da mina',
+      hoist: 'casa de guincho',
+    });
     expect(BUILDING_TEMPLATE.labels).toEqual({
       tavern: 'taverna',
       dungeon: 'masmorra',
@@ -227,6 +235,7 @@ describe('the wording handed to the classifier', () => {
       temple: 'templo',
       library: 'biblioteca',
       tower: 'torre de mago',
+      mine: 'mina',
     });
     expect(LIGHT_TEMPLATE.labels).toEqual({
       dark: 'escuridão total, não há luz nenhuma',

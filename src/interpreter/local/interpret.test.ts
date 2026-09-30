@@ -72,13 +72,13 @@ const TAVERN_ROOMS = roomTemplateFor('tavern');
 const DUNGEON_ROOMS = roomTemplateFor('dungeon');
 
 const CERTAIN_BUILDING: Record<Building, number> = {
-  tavern: 0.9, dungeon: 0.1, forge: 0, temple: 0, library: 0, tower: 0,
+  tavern: 0.9, dungeon: 0.1, forge: 0, temple: 0, library: 0, tower: 0, mine: 0,
 };
 // Scored over every room there is; `outputFor` only reads the ones the template
 // it is given declares, so this one answer serves both buildings.
 const CERTAIN_HALL: Record<RoomKind, number> = {
   hall: 0.9, room: 0.07, storeroom: 0.03, crypt: 0.01,
-  smithy: 0, reading: 0, archive: 0, laboratory: 0, observatory: 0,
+  smithy: 0, reading: 0, archive: 0, laboratory: 0, observatory: 0, hoist: 0,
 };
 const CERTAIN_DIM: Record<Light, number> = { dark: 0.2, dim: 0.7, bright: 0.1 };
 const CERTAIN_DISORDER: Record<Condition, number> = {
@@ -436,10 +436,10 @@ function stubPipeline(answers: Answers = {}): { pipeline: ZeroShotPipeline; asks
 describe('classifying a whole description', () => {
   it('chooses dungeon before asking for a room and validates the pair', async () => {
     const { pipeline, asks } = stubPipeline({
-      building: { tavern: 0.1, dungeon: 0.9, forge: 0, temple: 0, library: 0, tower: 0 },
+      building: { tavern: 0.1, dungeon: 0.9, forge: 0, temple: 0, library: 0, tower: 0, mine: 0 },
       room: {
         hall: 0.1, room: 0.8, storeroom: 0.1, crypt: 0,
-        smithy: 0, reading: 0, archive: 0, laboratory: 0, observatory: 0,
+        smithy: 0, reading: 0, archive: 0, laboratory: 0, observatory: 0, hoist: 0,
       },
     });
     const result = await classify('uma cela de pedra com um catre', pipeline);

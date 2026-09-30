@@ -97,10 +97,9 @@ export const QUESTIONS = {
    * sentence of the 46 at all, its mean mass falling from 0.065 to 0.007.
    *
    * **Every figure in this paragraph is a property of the finished set of ten,
-   * and six of the ten are in the table below.** The measurement was taken on
+   * and seven of the ten are in the table below.** The measurement was taken on
    * all ten criteria at once, because that is the question the project is being
-   * built towards; `mine`, `ship`, `apothecary` and `den` arrive with the next
-   * front. So the numbers describe what this question will do when it is
+   * built towards; `ship`, `apothecary` and `den` are what is still missing. So the numbers describe what this question will do when it is
    * complete, not what it does today, and the difference is not cosmetic — a
    * choice is a competition, and a criterion that is absent cannot take a
    * sentence from the ones that are here.
@@ -124,11 +123,11 @@ export const QUESTIONS = {
    * **Only one of those two is reachable from this file as it stands**, and the
    * asymmetry is worth naming rather than leaving to be rediscovered:
    * `apothecary` is not a criterion here yet, so `p07` cannot go to it today —
-   * it goes wherever six criteria send it, which this measurement does not say.
-   * `p15` goes to `tower`, which is here. The six-criterion set has no
-   * measurement of its own and none was taken: it is a state the project passes
-   * through between two fronts, and fitting wording to it would be fitting
-   * wording to a week.
+   * it goes wherever the criteria present send it, which this measurement does
+   * not say. `p15` goes to `tower`, which is here. No partial set has a
+   * measurement of its own and none was taken: they are states the project
+   * passes through between two fronts, and fitting wording to one would be
+   * fitting wording to a week.
    *
    * **The ruler for reading any number in this file.** Repeatability over ten
    * sentences: the choice is identical 10 of 10 runs, mean |Δ| 0.012, worst
@@ -144,6 +143,7 @@ export const QUESTIONS = {
       temple: 'Um templo, igreja ou santuário de culto',
       library: 'Uma biblioteca ou um arquivo de livros',
       tower: 'A torre de um mago ou feiticeiro',
+      mine: 'Uma mina ou escavação de extração',
     },
   },
   /**
@@ -163,15 +163,15 @@ export const QUESTIONS = {
    * *instruction* redistributes probability mass, and the list belongs in the
    * criteria where a noul can hold it without making the words compete.
    *
-   * **The list names ten buildings and four of them do not exist yet.** Mina,
-   * navio, botica and antro arrive with the next front, and the sentence is not
-   * trimmed to six because it was measured as this sentence — dropping the two
-   * the user cut was itself remeasured rather than assumed harmless, which is
-   * the reason to be careful about dropping four more. What it costs until then
-   * is the notice: a description of a ship is read as in the catalogue and is
-   * built as the nearest building there is, with nothing said. That is a worse
-   * failure than a false notice and it is temporary, so it is written here
-   * rather than traded silently for a sentence nobody has measured.
+   * **The list names ten buildings and three of them do not exist yet.** Navio,
+   * botica and antro arrive with the rest of this front, and the sentence is not
+   * trimmed because it was measured as this sentence — dropping the two the user
+   * cut was itself remeasured rather than assumed harmless, which is the reason
+   * to be careful about dropping any more. What it costs until then is the
+   * notice: a description of a ship is read as in the catalogue and is built as
+   * the nearest building there is, with nothing said. That is a worse failure
+   * than a false notice and it is temporary, so it is written here rather than
+   * traded silently for a sentence nobody has measured.
    */
   out_of_vocabulary: {
     type: 'noul',

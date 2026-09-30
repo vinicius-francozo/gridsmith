@@ -171,6 +171,15 @@ const PROFILES: Readonly<Record<RoomKind, PlaceProfile>> = {
     sizes: { small: { w: 10, h: 10 }, medium: { w: 13, h: 10 }, large: { w: 13, h: 13 } },
     doors: { min: 1, max: 1 },
   },
+  // The winding house, against its own 8x8 floor and 13x12 ceiling. The
+  // smithy's arrangement — small and medium apart on width, medium and large
+  // on height — for the smithy's reason: three cells on one side is what
+  // `jitterSize` cannot close, and holding both sides apart in a room this
+  // small costs a hint its range to vary in.
+  hoist: {
+    sizes: { small: { w: 9, h: 9 }, medium: { w: 12, h: 9 }, large: { w: 12, h: 12 } },
+    doors: { min: 1, max: 2 },
+  },
 };
 
 /** What a place is when the description said nothing about size. */

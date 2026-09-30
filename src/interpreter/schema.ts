@@ -60,9 +60,12 @@ import { FEATURES } from './vocabulary';
  * `schema.test.ts` is the net, and it holds all three copies — these two and
  * `read.ts`'s — against the registries at run time.
  */
-export const BUILDING_ENUM = z.enum(['tavern', 'dungeon', 'forge', 'temple', 'library', 'tower']);
+export const BUILDING_ENUM = z.enum([
+  'tavern', 'dungeon', 'forge', 'temple', 'library', 'tower', 'mine',
+]);
 export const ROOM_ENUM = z.enum([
   'hall', 'room', 'storeroom', 'crypt', 'smithy', 'reading', 'archive', 'laboratory', 'observatory',
+  'hoist',
 ]);
 
 export const constraintsSchema = z
@@ -90,7 +93,8 @@ export const constraintsSchema = z
         'temple: hall, the nave with its altar and pews, and room, the sacristy the vestments are kept in. ' +
         'library: reading, the reading room with its shelves and lecterns, and archive, the stacks. ' +
         'tower: laboratory, a mage\'s working floor with a summoning circle on it, and observatory, ' +
-        'the chamber at the top of the stair.',
+        'the chamber at the top of the stair. ' +
+        'mine: room, the digging gallery with its ore cart, and hoist, the winding house over the shaft.',
     ),
     sizeHint: z
       .enum(['small', 'medium', 'large'])

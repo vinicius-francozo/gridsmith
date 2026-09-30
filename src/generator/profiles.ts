@@ -131,6 +131,32 @@ export const MATERIALS: Record<string, MaterialDef> = {
   library_wall: { variants: 3, rotatable: false },
   slate_floor: { variants: 3, rotatable: true },
   slate_wall: { variants: 3, rotatable: false },
+  // **The four last buildings, and the ruler they were named against had
+  // 1.53 left in it.** The comment above `forge_floor` records the two rules;
+  // what it could not record is that the margin the first of those rules has
+  // is now almost spent. `PILLAR_MATERIAL` clears the worst floor in the
+  // vocabulary by 29.53 against a ruler of 28, so a name measuring anywhere in
+  // between passes and narrows it for whoever comes next.
+  //
+  // So each floor added here was measured before it was used, and each was
+  // **rejected until it cleared 29.53** rather than until it cleared 28 —
+  // which is why the margin is still exactly 1.53. `gravel_floor` measures
+  // **33.01** against the pillar and 42.5 against `stone_wall`, the second
+  // being the other pinned figure a floor can move (`profiles.test.ts` holds
+  // the nearest floor to the old wall material at 21.4).
+  //
+  // **The name that fails is not the one a reader would guess.**
+  // `mine_floor` — the obvious name for this material — measures 32.4 against
+  // the pillar and **20.3 against `stone_wall`**, under that second pin. It
+  // would have gone in unmeasured and taken the regression anchor with it, the
+  // way `temple_marble` would have gone in at 24.2 a front earlier.
+  //
+  // Walls are held to neither floor rule — `everyFloorShade` reads
+  // `floorMaterials` only — so `shoring_wall` carries the variant spread and
+  // nothing else: 9.16, under `stone_floor`'s 10.2, which is still the widest
+  // in the project.
+  gravel_floor: { variants: 3, rotatable: true },
+  shoring_wall: { variants: 3, rotatable: false },
   // See `PILLAR_MATERIAL`. One variant and no rotation: the variant ladder
   // exists so that a floor of two hundred cells does not read as one flat
   // sheet, and a room has four pillars — a pillar drawn in three shades would
@@ -1031,6 +1057,65 @@ export const ROOM_REGISTRY = {
     // works on by starlight is a floor somebody keeps clear.
     scatterChance: 0.08,
   },
+  /**
+   * The winding house over a mine shaft: the drum, the rope, and the cart that
+   * comes up on the end of it.
+   *
+   * **The winch is a group of one part at its own footprint**, which is the
+   * anvil's rule applied for the fifth time rather than a decision taken again:
+   * an anchor needs a wall behind it (`anchorCandidates` asks `backsOnto`), and
+   * a winding drum stands over the shaft with the rope running down it. What
+   * goes against the walls is the tool rack, the lamp, the ore cart and the
+   * stair.
+   *
+   * Four slots against an `anchorRange` of two or three, so the room is never
+   * all four at once — the crypt's arithmetic, and here it buys the same thing:
+   * the cart is the one slot carrying no word, so a description that refuses
+   * the lamp and the rack still leaves the piece the room is told apart by.
+   *
+   * No pillars and no `alcove`. 8x8 is three cells under the 11x11
+   * `growPillars` needs, so declaring them would be the hall's silent defect
+   * copied into a room built after it was measured; and a recess off a machine
+   * floor is where the shaft is, which is not a place to walk into.
+   */
+  hoist: {
+    minSize: { w: 8, h: 8 },
+    maxSize: { w: 13, h: 12 },
+    // The door to the gallery, and the one the rope comes in by.
+    doorRange: { min: 1, max: 2 },
+    shapes: ['rectangle', 'l_shape'],
+    allowPillars: false,
+    anchorRange: { min: 2, max: 3 },
+    anchors: [
+      { footprint: { w: 4, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 3 }, placement: 'corner' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+    ],
+    // The reading room's numbers. A winding house is a floor kept clear enough
+    // to work the drum on, and the drum is the one group of the two that
+    // matters.
+    groupsPerHundredCells: { min: 2, max: 5 },
+    groups: [
+      {
+        id: 'pulley_winch',
+        size: { w: 2, h: 2 },
+        parts: [{ offset: { x: 0, y: 0 }, footprint: { w: 2, h: 2 } }],
+      },
+      {
+        id: 'timber_stack',
+        size: { w: 2, h: 2 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 2, h: 1 } },
+          { offset: { x: 0, y: 1 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 1 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    // The crypt's, and for the neighbouring reason: what a winding house has
+    // underfoot is the spoil that came up the shaft with the ore.
+    scatterChance: 0.2,
+  },
 } satisfies Record<string, RoomGeometry>;
 
 /**
@@ -1747,6 +1832,95 @@ export const BUILDING_REGISTRY = {
           name: 'Observatório da torre',
           criterion: 'O observatório no alto da torre, com a esfera armilar e as cartas celestes',
           label: 'observatório da torre',
+        },
+      },
+    },
+  },
+  /**
+   * The mine. A gallery cut into the rock, and the winding house over the shaft
+   * it is cut from.
+   *
+   * **The palette ladder's fourth rung is `wood` and its third is `stone`, and
+   * the order of those two is the whole of what keeps a bone niche out of this
+   * building.** `dungeon` was the obvious third rung — a mine is underground,
+   * dark and full of iron, and it would have drawn the wall torch this
+   * catalogue has and nothing else uses. It also draws `bone_niche` at the 4x1
+   * `shelving` slot, ahead of the shelf run, because the niche is the only
+   * `shelving` piece carrying `dungeon`. A tool rack is what a gallery has; an
+   * ossuary is not. So the torch stays unreached, which is written down in the
+   * report for this front rather than quietly repaired here.
+   *
+   * The gallery reuses the guest room's geometry, and what it buys is the ore
+   * cart's slot already dimensioned: `storage` at 2x1 is what the wardrobe and
+   * the lockers stand in, and `mine` is the rung nothing else carries. It costs
+   * the 2x3 at index 1 — the bunks — which is `null` here for the reason it is
+   * `null` in the cell and in the shop front.
+   */
+  mine: {
+    assetTags: ['mine', 'iron', 'stone', 'wood'],
+    rooms: {
+      room: {
+        floorMaterials: ['gravel_floor', 'dirt_floor'],
+        wallMaterials: { gravel_floor: 'shoring_wall', dirt_floor: 'shoring_wall' },
+        defaultWallMaterial: 'shoring_wall',
+        anchors: [
+          // Up to the surface. `stairs` at 2x3 is the stair the whole project
+          // shares, and `stone` ahead of `wood` is what makes it the cut one
+          // rather than the inn's.
+          { concept: 'stairs', feature: 'stairs' },
+          // The bunks. Nobody sleeps at the face.
+          null,
+          // **The ore cart, and the room's net.** `storage` carries no word in
+          // `CONCEPTS`, so no description can refuse it — which this room needs,
+          // because its other three anchors can all be refused and the cart is
+          // the piece the gallery is told apart by.
+          { concept: 'storage' },
+          // The tool rack.
+          { concept: 'shelving', feature: 'shelving' },
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 4, colorHex: '#ffb46b' } },
+        ],
+        groups: [['crate_small', 'barrel']],
+        // The rock that came down, the scrap off the tools, and the dust it all
+        // lies in. No `bedding` and no `crockery`: nothing is slept on or drunk
+        // from at the face.
+        scatterLadder: [
+          { tags: ['masonry'], weight: 3 },
+          { tags: ['iron'], weight: 2 },
+          { tags: ['grime'], weight: 2 },
+        ],
+        words: {
+          name: 'Galeria da mina',
+          criterion: 'A galeria de escavação da mina, com o carrinho de minério e a rocha cortada',
+          label: 'galeria da mina',
+        },
+      },
+      hoist: {
+        floorMaterials: ['gravel_floor'],
+        wallMaterials: { gravel_floor: 'shoring_wall' },
+        defaultWallMaterial: 'shoring_wall',
+        anchors: [
+          { concept: 'shelving', feature: 'shelving' },
+          { concept: 'stairs', feature: 'stairs' },
+          // The cart again, and it is the same piece on purpose: the cart is
+          // what goes down the gallery and comes up the shaft, so the building
+          // has it at both ends. The crypt's sarcophagus is the precedent for
+          // one piece standing in two slots; this is one piece standing in two
+          // rooms.
+          { concept: 'storage' },
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 4, colorHex: '#ffb46b' } },
+        ],
+        groups: [['pulley_winch'], ['crate', 'crate_small', 'crate_small']],
+        // Scrap first here rather than stone: what a winding house drops is
+        // what the gear is made of.
+        scatterLadder: [
+          { tags: ['iron'], weight: 3 },
+          { tags: ['masonry'], weight: 2 },
+          { tags: ['grime'], weight: 1 },
+        ],
+        words: {
+          name: 'Casa de guincho da mina',
+          criterion: 'A casa de guincho da mina, com o sarilho e o poço por onde sobe o minério',
+          label: 'casa de guincho',
         },
       },
     },
