@@ -27,12 +27,26 @@ import type { Place } from '../core/types';
  * keeps, which is a behaviour nobody asked for and no measurement covers.
  *
  * What it costs is that `bed`, `weapons` and `tomb` are the first to be dropped
- * when the budget bites — and the budget does bite, in the one place it already
- * did before they existed. A guest room's floor is 6x6 at its smallest, which
- * is a budget of two, and asking for every word that place offers already lost
- * `bunks` on 128 of 1200 resolves and `shelving` on 42 before this line grew.
- * It is `CELLS_PER_FEATURE` in `resolve.ts` that decides that, not this order,
- * and it is left alone here because it is the same number for every room.
+ * when the budget bites — and the budget does bite, in the **two** places it
+ * already bit before they existed. Both are the rooms people sleep in: they
+ * share a geometry whose floor is 6x6 at its smallest, which is a budget of
+ * two. Asking for every word each place offers, over 1200 resolves — three size
+ * hints by four hundred seeds — and counting how often each word is the one
+ * dropped:
+ *
+ * | | before | now |
+ * | --- | --- | --- |
+ * | tavern guest room | 128 (`bunks`) · 42 (`shelving`) | **297 (`bed`)** · 128 · 42 |
+ * | dungeon cell | 42 (`bunks`) | **128 (`bed`)** · 42 |
+ *
+ * So `bed` is dropped in both, and in both it is dropped ahead of the words
+ * that were there first — which is what appending buys and what it costs. The
+ * cell triples along with the guest room, and naming only one of them is how
+ * this paragraph read for a round. `weapons` and `tomb` are never cut, on 0 of
+ * 1200 each: the dungeon hall and the crypt have a budget of thirteen.
+ *
+ * It is `CELLS_PER_FEATURE` in `resolve.ts` that decides all of that, not this
+ * order, and it is left alone here because it is the same number for every room.
  */
 export const FEATURES = [
   'bar', 'hearth', 'stairs', 'pillars', 'alcove', 'shelving', 'bunks',

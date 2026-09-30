@@ -193,6 +193,20 @@ export const QUESTIONS = {
   // the eight sentences that do ask for a bed moved 0.930 to 0.920 — and moves
   // the other nine nouls by 0.0061 on average over 153 observations. It is the
   // same shape `feature_bunks` uses from the other side.
+  //
+  // **One ressalva on where the rest of this word's evidence comes from.** The
+  // second wording was measured on seventeen sentences. The full sweep of the
+  // corpora was run with the **first** one and carries it that way in its own
+  // record, and that sweep is what every `|allowed|` figure in this project is
+  // computed from. The two written down in `generator/profiles.ts` — the crypt
+  // and the dungeon hall — do not read this word's column at all, because
+  // neither room declares a `bed` slot. The two that do are the guest room and
+  // the cell, and their figures carry the **first** wording.
+  //
+  // Nothing in them should move: the change takes the bunk sentences from 0.97
+  // to 0.42, and an exclusion is read at 0.05 — none of the seventeen comes
+  // within 0.37 of it. But the lastro is the first wording, and that is said
+  // here rather than assumed.
   feature_bed: {
     type: 'noul',
     instructions: 'O lugar tem uma cama?',

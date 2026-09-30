@@ -759,13 +759,26 @@ describe('the two dials over the group layer', () => {
     // takes the brazier out before the draw starts; `shelving` going the same
     // way would take the bone niche too.
     //
-    // **The list is the whole vocabulary and has to stay that way.** Written as
-    // the seven it was, admitting `tomb` left this green while it stopped
-    // testing anything: the word was not in the list, so the slot that now
-    // carries it was never refused and the room came back with two
-    // sarcophagi — one of them refusable — instead of the one that cannot be.
-    // The ten are written out rather than imported for the reason the file's
-    // own fixtures are: both sides moving together assert nothing.
+    // **The list is the whole vocabulary and has to stay that way**, and the
+    // two states it was measured in are worth separating, because they say
+    // different things and reading one for the other is how a comment goes
+    // wrong (see the count `templates.ts` shipped, "two" beside a sentence
+    // naming three, for four rounds).
+    //
+    // - With the word given to `tomb` and **this slot not yet added**, the list
+    //   of seven left this test **green** while it had stopped testing
+    //   anything: `tomb` was not in it, so the only wordless slot in the room
+    //   had just become a worded one, nothing held the wall up, and the
+    //   assertion still passed. That state is what the ten are for.
+    // - At **HEAD**, with the net in place, the list of seven turns this test
+    //   **red** — `anchor/sarcophagus anchor/sarcophagus` against the one the
+    //   assertion asks for, because the slot the word names goes unrefused and
+    //   is drawn beside the net.
+    //
+    // So the update was necessary, and the green belongs to the intermediate
+    // state, not to the one in the tree. The ten are written out rather than
+    // imported for the reason the file's own fixtures are: both sides moving
+    // together assert nothing.
     const everyFeature = [
       'bar', 'hearth', 'stairs', 'pillars', 'alcove', 'shelving', 'bunks',
       'bed', 'weapons', 'tomb',

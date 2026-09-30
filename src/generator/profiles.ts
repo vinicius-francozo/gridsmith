@@ -457,12 +457,19 @@ type RoomFilling = {
    * One entry per slot the geometry declares, in the geometry's order — or
    * `null` where this building leaves the slot empty.
    *
-   * The length still has to match, and `profileFor` still says so, because the
-   * two lists are paired by index: a filling one short would shift every slot
-   * after it onto the wrong footprint. `null` says *this building does not put
-   * anything here* without moving the ones that follow, which is the same shape
-   * `Partial` gives the room axis above — a dungeon has a crypt and a tavern
-   * does not — one level further in.
+   * The length still has to match, and `profileFor` still says so. The
+   * alternative — deleting the entry — is what would shift every slot after it
+   * onto the wrong footprint, and that hazard belongs to the alternative and
+   * not to this. `null` says *this building does not put anything here*, which
+   * is the same shape `Partial` gives the room axis above — a dungeon has a
+   * crypt and a tavern does not — one level further in.
+   *
+   * **It holds at any index, and that is by construction rather than by luck.**
+   * `profileFor` pairs the two lists and filters afterwards, so an empty slot in
+   * the middle drops out with the ones on either side of it still on their own
+   * footprints. Checked at index 0, 2 and 4 of the guest room: the anchors that
+   * come back are `ROOMS.room.anchors` minus that index, each time. The one in
+   * use today happens to be last, and nothing rests on that.
    *
    * There is one today, and it is the dungeon cell's fire. The geometry these
    * two rooms share was drawn for a guest room, and a guest room has a hearth;
@@ -1000,21 +1007,48 @@ export const BUILDING_REGISTRY = {
           // 41 both ways, so a net there would be furniture bought against a
           // risk that did not turn up.
           //
-          // **What it costs is visible and is not small.** The library has one
-          // `tomb` anchor at 3x2, so this slot and the one above both draw the
-          // sarcophagus: over 400 seeds with nothing asked for, 130 crypts hold
-          // two of them, and 197 do when the description asks for a tomb by
-          // name. And the refusal only half works — "sem túmulos" still leaves a
+          // **What it costs is visible and is not small.** Every figure below is
+          // 400 seeds at this room's largest floor, 18x16, `light: 'dark'`, one
+          // door, nothing excluded — the counts move with the floor and the
+          // configuration is part of them.
+          //
+          // *The sarcophagus twice.* The library has one `tomb` anchor at 3x2,
+          // so this slot and the one above draw the same piece: 130 of 400
+          // crypts hold two of them with nothing asked for, and 197 do when the
+          // description asks for a tomb by name. It is never four anchors —
+          // `anchorRange.max` is three and only three of these four carry a
+          // word, so the one path that can overrun the range cannot reach the
+          // fourth. The repeated piece is always the sarcophagus.
+          //
+          // *The refusal only half works.* "sem túmulos" still leaves a
           // sarcophagus standing on 333 of 400 seeds, against 369 when nothing
           // is refused, because this slot is not the one the word names.
+          //
+          // *And the room goes dark more often, which is the cost that nearly
+          // went unwritten.* This slot competes for the same two or three places
+          // `anchorRange` allows, and the piece it pushes out is often the
+          // votive brazier — the crypt's only anchor carrying a light. Bare
+          // `Scene.lights` goes from **66 of 400 to 151 of 400**, the brazier
+          // from 334 to 249 and the bone niche from 326 to 267; asking for
+          // `tomb` by name takes the dark crypts to 197 of 400. On the 14x12
+          // fixture the generator's own tests build, it is 4 of 24 seeds against
+          // 9 of 24.
+          //
+          // **The user was asked and accepted it: the dark crypt stays.** It is
+          // not a consequence of choosing this footprint either — the 4x1
+          // alternative below pays exactly the same, 151 of 400 and 197 of 400
+          // and 9 of 24, to the seed. Darkness is the price of having a net at
+          // all, and the room was already the one the project describes as
+          // usually unlit.
           //
           // The alternative measured beside it was a second 4x1 slot, which
           // draws the bone niche instead: it makes "sem túmulos" take the
           // sarcophagus away completely, and pays for it by doubling the bone
-          // niche on 271 of 400 seeds and by making **`shelving`**'s refusal
-          // the half-working one, since the niche is what that word names. A
-          // word admitted this front can afford to be the one that pays;
-          // `shelving` was measured against a corpus that assumed it worked.
+          // niche on 141 of 400 seeds with nothing asked and 271 of 400 when
+          // tombs are refused, and by making **`shelving`**'s refusal the
+          // half-working one, since the niche is what that word names. A word
+          // admitted this front can afford to be the one that pays; `shelving`
+          // was measured against a corpus that assumed it worked.
           { concept: 'tomb' },
         ],
         groups: [
