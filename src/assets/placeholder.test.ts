@@ -171,6 +171,8 @@ describe('MATERIAL_VARIANTS', () => {
       slate_wall: 3,
       gravel_floor: 3,
       shoring_wall: 3,
+      deck_floor: 3,
+      hull_wall: 3,
     });
   });
 });

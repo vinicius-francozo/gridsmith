@@ -28,7 +28,7 @@ import type { ChoiceTemplate } from './templates';
  * are what makes that a failing test instead.
  */
 const BUILDINGS: Building[] = [
-  'tavern', 'dungeon', 'forge', 'temple', 'library', 'tower', 'mine',
+  'tavern', 'dungeon', 'forge', 'temple', 'library', 'tower', 'mine', 'ship',
 ];
 // Two lists, because the matrix is sparse: a dungeon has a crypt and a tavern
 // does not. One list over every `RoomKind` would have asked the tavern for a
@@ -40,6 +40,7 @@ const TEMPLE_ROOMS: RoomKind[] = ['hall', 'room'];
 const LIBRARY_ROOMS: RoomKind[] = ['reading', 'archive'];
 const TOWER_ROOMS: RoomKind[] = ['laboratory', 'observatory'];
 const MINE_ROOMS: RoomKind[] = ['room', 'hoist'];
+const SHIP_ROOMS: RoomKind[] = ['room', 'cabin'];
 const LIGHTS: Light[] = ['dark', 'dim', 'bright'];
 const CONDITIONS: Condition[] = ['tidy', 'lived_in', 'disordered', 'ruined'];
 const SIZE_HINTS = ['small', 'medium', 'large'];
@@ -96,6 +97,7 @@ describe('every template covers its closed vocabulary', () => {
     expect(Object.keys(ROOM_TEMPLATES.library.labels).sort()).toEqual([...LIBRARY_ROOMS].sort());
     expect(Object.keys(ROOM_TEMPLATES.tower.labels).sort()).toEqual([...TOWER_ROOMS].sort());
     expect(Object.keys(ROOM_TEMPLATES.mine.labels).sort()).toEqual([...MINE_ROOMS].sort());
+    expect(Object.keys(ROOM_TEMPLATES.ship.labels).sort()).toEqual([...SHIP_ROOMS].sort());
   });
 
   it('asks about all three lights', () => {
@@ -228,6 +230,10 @@ describe('the wording handed to the classifier', () => {
       room: 'galeria da mina',
       hoist: 'casa de guincho',
     });
+    expect(ROOM_TEMPLATES.ship.labels).toEqual({
+      room: 'porão do navio',
+      cabin: 'camarote do capitão',
+    });
     expect(BUILDING_TEMPLATE.labels).toEqual({
       tavern: 'taverna',
       dungeon: 'masmorra',
@@ -236,6 +242,7 @@ describe('the wording handed to the classifier', () => {
       library: 'biblioteca',
       tower: 'torre de mago',
       mine: 'mina',
+      ship: 'navio',
     });
     expect(LIGHT_TEMPLATE.labels).toEqual({
       dark: 'escuridão total, não há luz nenhuma',

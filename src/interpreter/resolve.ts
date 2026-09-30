@@ -180,6 +180,13 @@ const PROFILES: Readonly<Record<RoomKind, PlaceProfile>> = {
     sizes: { small: { w: 9, h: 9 }, medium: { w: 12, h: 9 }, large: { w: 12, h: 12 } },
     doors: { min: 1, max: 2 },
   },
+  // The great cabin, against its own 8x7 floor and 12x11 ceiling. One door,
+  // which makes the range a point rather than a band — the third entry in this
+  // table to say so, and the three say it for three unrelated reasons.
+  cabin: {
+    sizes: { small: { w: 9, h: 8 }, medium: { w: 12, h: 8 }, large: { w: 12, h: 11 } },
+    doors: { min: 1, max: 1 },
+  },
 };
 
 /** What a place is when the description said nothing about size. */

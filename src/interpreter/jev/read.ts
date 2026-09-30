@@ -145,7 +145,7 @@ export type BuildingReading = Omit<Constraints, 'place'> & { building: Building;
  * `schema.test.ts` can hold it to the registry alongside the other two.
  */
 export const BUILDING_ANSWER = z.enum([
-  'tavern', 'dungeon', 'forge', 'temple', 'library', 'tower', 'mine',
+  'tavern', 'dungeon', 'forge', 'temple', 'library', 'tower', 'mine', 'ship',
 ]);
 
 export function readBuildingAnswers(body: unknown): BuildingReading {

@@ -157,6 +157,11 @@ export const MATERIALS: Record<string, MaterialDef> = {
   // in the project.
   gravel_floor: { variants: 3, rotatable: true },
   shoring_wall: { variants: 3, rotatable: false },
+  // Boards laid fore and aft, so no rotation, for `wood_plank`'s reason: a deck
+  // has a grain and a seam, and spinning the tile breaks both. 30.89 against
+  // the pillar, 35.6 against `stone_wall`, spread 8.95.
+  deck_floor: { variants: 3, rotatable: false },
+  hull_wall: { variants: 3, rotatable: false },
   // See `PILLAR_MATERIAL`. One variant and no rotation: the variant ladder
   // exists so that a floor of two hundred cells does not read as one flat
   // sheet, and a room has four pillars — a pillar drawn in three shades would
@@ -1116,6 +1121,55 @@ export const ROOM_REGISTRY = {
     // underfoot is the spoil that came up the shaft with the ore.
     scatterChance: 0.2,
   },
+  /**
+   * The great cabin in a ship's stern: the chart table under the windows, the
+   * berth, and the locker the instruments live in.
+   *
+   * **One door, and it is the third room in the project to say so.** The guest
+   * room has one because that is what makes it a place you can be cornered in,
+   * the observatory because there is nowhere else for a door at the top of a
+   * tower to go, and this one because a cabin opens onto the companionway and
+   * onto nothing else. The three reasons are unrelated and each is written
+   * where it applies.
+   *
+   * `alcove` is on the shape list and it is the one room where the recess is a
+   * *stated* part of the ship: a quarter gallery off the stern. No pillars —
+   * 8x7 is nowhere near the 11x11 `growPillars` needs, and a beam is not a
+   * column.
+   */
+  cabin: {
+    minSize: { w: 8, h: 7 },
+    maxSize: { w: 12, h: 11 },
+    doorRange: { min: 1, max: 1 },
+    shapes: ['rectangle', 'alcove'],
+    allowPillars: false,
+    anchorRange: { min: 2, max: 3 },
+    anchors: [
+      { footprint: { w: 2, h: 3 }, placement: 'wall' },
+      { footprint: { w: 3, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+    ],
+    groupsPerHundredCells: { min: 2, max: 5 },
+    groups: [
+      {
+        id: 'chart_table',
+        size: { w: 2, h: 2 },
+        parts: [{ offset: { x: 0, y: 0 }, footprint: { w: 2, h: 2 } }],
+      },
+      {
+        id: 'sea_chest',
+        size: { w: 2, h: 1 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    // The reading room's. Everything in a cabin is stowed, because everything
+    // in a cabin has been at sea.
+    scatterChance: 0.1,
+  },
 } satisfies Record<string, RoomGeometry>;
 
 /**
@@ -1315,7 +1369,7 @@ export const BUILDING_REGISTRY = {
           // light and is lost to `excluded`, not to the table — so the two
           // cases are different and only this comment says so.
           //
-          // **Six of fifteen as of the observatory.** The nave declares an altar
+          // **Seven of nineteen as of the ship.** The nave declares an altar
           // where the halls declare a fire and has no 2x1 slot to put a sconce
           // in; the archive declares no fire on purpose, because a room full of
           // parchment is the one room in this project that should not have one;
@@ -1325,7 +1379,10 @@ export const BUILDING_REGISTRY = {
           // set and not of the room: it is what `Scene.lights` comes back empty
           // for at every dark seed. (It read "four of nine" for one commit,
           // which counted the rooms right and the pairs wrong: the temple made
-          // it four of eleven.)
+          // it four of eleven.) Neither room of the mine is one of them — a
+          // gallery and a winding house each declare a lamp — and the ship
+          // brings exactly one, the hold, for the archive's reason: a hold is
+          // where an open flame is what sinks the ship.
           null,
         ],
         groups: [['prison_desk', 'guard_stool']],
@@ -1921,6 +1978,90 @@ export const BUILDING_REGISTRY = {
           name: 'Casa de guincho da mina',
           criterion: 'A casa de guincho da mina, com o sarilho e o poço por onde sobe o minério',
           label: 'casa de guincho',
+        },
+      },
+    },
+  },
+  /**
+   * The ship. The hold below and the great cabin aft.
+   *
+   * **The hold is the first room in the project to fill one geometry slot twice
+   * with the same concept at the same footprint, one of them worded and one of
+   * them not.** The guest room's geometry offers two 2x1 slots; `weapons` at
+   * that footprint is the cannon and nothing else in the catalogue, so both are
+   * the gun, and a broadside is what a gun deck has. Refusing "armas" takes one
+   * gun away and leaves the other — the crypt's arrangement exactly, and here
+   * it costs nothing at all, because the piece the room is told apart by is the
+   * piece that stays.
+   *
+   * **It declares no fire, and that is the archive's decision rather than an
+   * omission.** A hold is where an open flame is the thing that sinks the ship;
+   * the room's only slots for one are the two the guns stand in, and a lantern
+   * is not worth a gun. So this is the seventh pair in the project whose own
+   * furniture gives off no light — see the count on the cell's empty slot.
+   *
+   * `wood` ahead of `iron` on the ladder, and the order is load-bearing in one
+   * place: `storage` at 2x1 is four pieces now, and `iron` first would have
+   * furnished the captain's locker with the mine's ore cart.
+   */
+  ship: {
+    assetTags: ['ship', 'wood', 'iron', 'stone'],
+    rooms: {
+      room: {
+        floorMaterials: ['deck_floor'],
+        wallMaterials: { deck_floor: 'hull_wall' },
+        defaultWallMaterial: 'hull_wall',
+        anchors: [
+          // The companion ladder up to the deck. 2x3, which is what the guest
+          // room's bed slot is and what makes this reuse work.
+          { concept: 'stairs', feature: 'stairs' },
+          // The bunks. The crew sleep forward, not in the cargo.
+          null,
+          { concept: 'weapons', feature: 'weapons' },
+          // The cargo shelf.
+          { concept: 'shelving', feature: 'shelving' },
+          // **The second gun, and the room's net.** Same concept, same
+          // footprint, no word — so it is the piece no description takes away.
+          { concept: 'weapons' },
+        ],
+        groups: [['barrel', 'crate_small']],
+        // Sacking, the dunnage a cargo is packed in, and the chain that lashes
+        // it down. No crockery and no glass: what is drunk from is aft.
+        scatterLadder: [
+          { tags: ['storage'], weight: 3 },
+          { tags: ['bedding'], weight: 2 },
+          { tags: ['iron'], weight: 1 },
+        ],
+        words: {
+          name: 'Porão do navio',
+          criterion: 'O porão de carga do navio, com os canhões e a carga estivada',
+          label: 'porão do navio',
+        },
+      },
+      cabin: {
+        floorMaterials: ['deck_floor'],
+        wallMaterials: { deck_floor: 'hull_wall' },
+        defaultWallMaterial: 'hull_wall',
+        anchors: [
+          { concept: 'bed', feature: 'bed' },
+          { concept: 'shelving', feature: 'shelving' },
+          // The instrument locker, and the room's net: `storage` carries no
+          // word in `CONCEPTS`.
+          { concept: 'storage' },
+          // The stern lantern. Narrow, because a light in a wooden hull is kept
+          // small on purpose.
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 4, colorHex: '#ffd9a0' } },
+        ],
+        groups: [['chart_table'], ['crate_small', 'barrel']],
+        scatterLadder: [
+          { tags: ['glass'], weight: 3 },
+          { tags: ['crockery'], weight: 2 },
+          { tags: ['bedding'], weight: 1 },
+        ],
+        words: {
+          name: 'Camarote do navio',
+          criterion: 'O camarote do capitão, com a mesa de cartas e o beliche à popa',
+          label: 'camarote do capitão',
         },
       },
     },

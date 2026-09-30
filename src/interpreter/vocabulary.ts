@@ -121,7 +121,11 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // Both rooms of the mine. A gallery and a winding house are each a place
     // somebody works a shift in, and the lamp on the wall is the only light
     // either of them has.
-    { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' }],
+    { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' },
+    // The stern lantern. **Not the hold**: a hold is where an open flame sinks
+    // the ship, and the room declares no slot for one, so "uma lanterna no
+    // porão" is answered the way a fire in the archive is.
+    { building: 'ship', room: 'cabin' }],
   /**
    * A flight up or down, to the rooms above or the cellar below.
    *
@@ -144,7 +148,10 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // corner stair is the one the observatory's comes up from.
     { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' },
     // Up to the surface, from both. In this building the stair is the way out.
-    { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' }],
+    { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' },
+    // The companion ladder up out of the hold. The cabin opens onto the
+    // companionway rather than onto a stair of its own.
+    { building: 'ship', room: 'room' }],
   /**
    * Columns carrying a span too wide for bare joists. A hall is that wide, and
    * so is a crypt, whose vault is the reason it has them.
@@ -183,7 +190,10 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // offers `alcove` — a recess off a gallery is a worked-out pocket of ore.
     // **Not the winding house**: its shapes are `rectangle` and `l_shape`, so
     // asking it for a recess is answered with a conflict rather than silently.
-    { building: 'mine', room: 'room' }],
+    { building: 'mine', room: 'room' },
+    // The hold has the guest room's shapes; the cabin declares `alcove` of its
+    // own, and there it is a quarter gallery off the stern.
+    { building: 'ship', room: 'room' }, { building: 'ship', room: 'cabin' }],
   /**
    * Racks along a wall, for casks or for a guest's belongings — and, in a
    * crypt, the tiers of a bone niche, which is a shelf holding the dead.
@@ -204,7 +214,9 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // somewhere, and in this building that somewhere is a shelf.
     { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' },
     // The tool rack, in both rooms of the mine.
-    { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' }],
+    { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' },
+    // The cargo shelf and the cabin's book shelf.
+    { building: 'ship', room: 'room' }, { building: 'ship', room: 'cabin' }],
   /** Stacked sleeping berths. A room to sleep in, and nowhere else. */
   bunks: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
   /**
@@ -213,7 +225,10 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
    * than another word for the same piece — `anchor/bunk_beds` deliberately
    * carries no `bed` tag, so the two never resolve to each other.
    */
-  bed: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
+  bed: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' },
+    // The captain's berth. **Not the hold**, whose bunk slot is `null`: the
+    // crew sleep forward, not in the cargo.
+    { building: 'ship', room: 'cabin' }],
   /**
    * Arms kept in the room: a rack, an armoury stand, weapons out of a rack.
    * The dungeon hall is the only place whose profile declares one.
@@ -222,7 +237,11 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // The blade display. A weapons word in a smith's shop is the most ordinary
     // thing a person could ask for, and it resolves to the one `weapons` anchor
     // in the catalogue at 3x1.
-    { building: 'forge', room: 'room' }],
+    { building: 'forge', room: 'room' },
+    // The guns. `weapons` at 2x1 is the cannon and nothing else in the
+    // catalogue, and the hold declares that slot twice — one with this word on
+    // it and one without, so refusing arms leaves a broadside of one.
+    { building: 'ship', room: 'room' }],
   /** Somewhere the dead are kept: a sarcophagus, a grave slab, a bone niche. */
   tomb: [{ building: 'dungeon', room: 'crypt' }],
 };
