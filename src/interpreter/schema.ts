@@ -25,11 +25,37 @@ import { roomsFor } from '../generator/profiles';
 
 import { FEATURES } from './vocabulary';
 
+/**
+ * The two halves of a place, as the vocabulary a model's answer is held to.
+ *
+ * **Written out by hand, and exported so that a test can hold them to the
+ * registry.** They cannot be derived from `BUILDING_REGISTRY` and
+ * `ROOM_REGISTRY` the way `Building` and `RoomKind` are: `zodOutputFormat`
+ * sends an enum to the model inside the JSON Schema `description` rather than
+ * as grammar, so these strings are also the only place the model is *told* what
+ * the words are, and a list assembled at import time is a list nobody can read
+ * in the file it is sent from.
+ *
+ * The cost of writing them out is that nothing stops them going stale. The
+ * *room* half is caught by the compiler, through `schema.test.ts`'s mutual
+ * assignability check — a room added to the registry widens `Constraints` and
+ * `ParsedConstraints` stops accepting it. **The building half is not caught by
+ * anything**, in either copy: a `Building` the enum omits is still a narrower
+ * type than `Building`, so every assignment still compiles and `npm run build`
+ * is clean. What happens instead is that the Jev engine refuses the answer at
+ * `read.ts` and the Claude engine is never told the word exists.
+ *
+ * `schema.test.ts` is the net, and it holds all three copies — these two and
+ * `read.ts`'s — against the registries at run time.
+ */
+export const BUILDING_ENUM = z.enum(['tavern', 'dungeon']);
+export const ROOM_ENUM = z.enum(['hall', 'room', 'storeroom', 'crypt']);
+
 export const constraintsSchema = z
   .object({
     place: z.object({
-      building: z.enum(['tavern', 'dungeon']),
-      room: z.enum(['hall', 'room', 'storeroom', 'crypt']),
+      building: BUILDING_ENUM,
+      room: ROOM_ENUM,
     }).refine((place) => roomsFor(place.building).includes(place.room), {
       message: 'The room is unavailable in this building.',
     }).describe(

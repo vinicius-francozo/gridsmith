@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Constraints } from '../core/types';
-import { BUILDINGS } from '../generator/profiles';
+import { BUILDING_REGISTRY, BUILDINGS, ROOM_REGISTRY } from '../generator/profiles';
 
-import { constraintsSchema } from './schema';
+import { BUILDING_ANSWER } from './jev/read';
+import { BUILDING_ENUM, constraintsSchema, ROOM_ENUM } from './schema';
 import type { ParsedConstraints } from './schema';
 
 /** A complete, valid answer, used as the base for the rejection cases. */
@@ -28,6 +29,66 @@ describe('mirroring the frozen type', () => {
     const roundTrip: ParsedConstraints = fromFrozen;
 
     expect(roundTrip).toEqual(valid);
+  });
+});
+
+/**
+ * The three enums that are written out by hand, and the registries they have to
+ * agree with.
+ *
+ * **All three in one place on purpose.** They are one invariant — *a word in
+ * the registry is a word every reader admits* — and splitting it across
+ * `schema.test.ts` and `read.test.ts` is how half of it would be maintained and
+ * half forgotten. The one that is easiest to forget is the one furthest from
+ * this file.
+ */
+const HAND_WRITTEN = [
+  { where: 'schema.ts BUILDING_ENUM', options: BUILDING_ENUM.options, declared: Object.keys(BUILDING_REGISTRY) },
+  { where: 'schema.ts ROOM_ENUM', options: ROOM_ENUM.options, declared: Object.keys(ROOM_REGISTRY) },
+  { where: 'jev/read.ts BUILDING_ANSWER', options: BUILDING_ANSWER.options, declared: Object.keys(BUILDING_REGISTRY) },
+] as const;
+
+describe('the vocabulary the enums are written out in', () => {
+  it('admits every building and every room the registry declares', () => {
+    // **This is the one check between a new building and a silent failure in
+    // production.** `Building` and `RoomKind` are derived from the registries
+    // (`core/types.ts`), and every *exact* `Record` keyed on them stops
+    // compiling until it is answered — which is what `profiles.test.ts` proves
+    // and what carried the crypt front. A `z.enum` written out by hand is not
+    // one of those: a list short of a word is a narrower union, every
+    // assignment still compiles, and `npm run build` is clean.
+    //
+    // What the omission costs is invisible from here and different in each
+    // engine. On Jev, `read.ts` refuses the answer and the request is lost. On
+    // Claude, `zodOutputFormat` sends the enum as a hint in the JSON Schema
+    // description, so the model is simply never told the word exists and can
+    // never emit it. Neither path throws anything a test of that engine would
+    // catch, because neither engine is asked about a building it was not
+    // offered.
+    //
+    // Compared as sets and reported as sorted lists, because the enums are read
+    // by people and the registries by `Object.keys` — an order that differs is
+    // not a defect and a word that is missing is.
+    for (const { where, options, declared } of HAND_WRITTEN) {
+      expect(`${where}: ${[...options].sort().join(' ')}`).toBe(
+        `${where}: ${[...declared].sort().join(' ')}`,
+      );
+    }
+  });
+
+  it('holds the two copies of the building list to each other', () => {
+    // They are two lists of the same thing in two files, and the check above
+    // would pass on both being stale in the same way only if the registry were
+    // stale too. This one says the cheaper thing directly, so that a diff that
+    // updates one and not the other names the file it forgot.
+    expect([...BUILDING_ANSWER.options].sort()).toEqual([...BUILDING_ENUM.options].sort());
+  });
+
+  it('sweeps something, so an empty registry could not pass it quietly', () => {
+    expect(HAND_WRITTEN).toHaveLength(3);
+    for (const { where, declared } of HAND_WRITTEN) {
+      expect(`${where}: ${String(declared.length > 0)}`).toBe(`${where}: true`);
+    }
   });
 });
 

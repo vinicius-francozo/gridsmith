@@ -126,11 +126,31 @@ export function furnishingFromScore(score: number): number {
  */
 export type BuildingReading = Omit<Constraints, 'place'> & { building: Building; outOfVocabulary: number };
 
+/**
+ * The buildings this engine will accept an answer of — the second hand-written
+ * copy of `schema.ts`'s `BUILDING_ENUM`, and the one the compiler cannot reach
+ * at all.
+ *
+ * It is a copy rather than the import because the two refuse at different
+ * moments and for different reasons: this one screens `choice`, a bare string
+ * that came off the wire before anything has been assembled, and names the
+ * question in the error. `constraintsSchema` screens the whole assembled
+ * object, two functions later.
+ *
+ * **What a stale copy here costs is a refusal, not a wrong map**, and that is
+ * the better of the two failures — `readRoomAnswers` would otherwise ask Jev to
+ * choose a room of a building this reader never admitted. It is still invisible
+ * to `npm run build`: the parsed value is narrower than `Building`, so every
+ * assignment below compiles. Hoisted out of the function so that
+ * `schema.test.ts` can hold it to the registry alongside the other two.
+ */
+export const BUILDING_ANSWER = z.enum(['tavern', 'dungeon']);
+
 export function readBuildingAnswers(body: unknown): BuildingReading {
   const answers = answersOf(body, Object.keys(QUESTIONS));
 
   const building = read(answers, 'building', choiceSchema);
-  const parsedBuilding = z.enum(['tavern', 'dungeon']).safeParse(building.choice);
+  const parsedBuilding = BUILDING_ANSWER.safeParse(building.choice);
   if (!parsedBuilding.success) {
     throw new JevUnusableAnswerError(`building: ${describeIssues(parsedBuilding.error)}`, { cause: parsedBuilding.error });
   }
