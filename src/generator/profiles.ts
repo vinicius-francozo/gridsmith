@@ -435,7 +435,22 @@ type RoomFilling = {
   floorMaterials: string[];
   wallMaterials: Record<string, string>;
   defaultWallMaterial: string;
-  anchors: Pick<AnchorSpec, 'concept' | 'feature' | 'light'>[];
+  /**
+   * One entry per slot the geometry declares, in the geometry's order — or
+   * `null` where this building leaves the slot empty.
+   *
+   * The length still has to match, and `profileFor` still says so, because the
+   * two lists are paired by index: a filling one short would shift every slot
+   * after it onto the wrong footprint. `null` says *this building does not put
+   * anything here* without moving the ones that follow, which is the same shape
+   * `Partial` gives the room axis above — a dungeon has a crypt and a tavern
+   * does not — one level further in.
+   *
+   * There is one today, and it is the dungeon cell's fire. The geometry these
+   * two rooms share was drawn for a guest room, and a guest room has a hearth;
+   * a cell has what the dungeon leaves it, and that is not a fire.
+   */
+  anchors: (Pick<AnchorSpec, 'concept' | 'feature' | 'light'> | null)[];
   groups: string[][];
   /** What this room's floor is strewn with. See `PlaceProfile.scatterLadder`. */
   scatterLadder: ScatterRung[];
@@ -842,7 +857,30 @@ export const BUILDING_REGISTRY = {
           { concept: 'bunks', feature: 'bunks' },
           { concept: 'storage' },
           { concept: 'shelving', feature: 'shelving' },
-          { concept: 'hearth', light: { radiusCells: 4, colorHex: '#ffb46b' } },
+          // **The guest room's fire, and a cell does not have one.** The slot
+          // is the geometry's and the geometry is shared, so it stays in the
+          // list and stays empty rather than being taken out from under the
+          // tavern.
+          //
+          // It used to hold a hearth with no feature word on it, and that made
+          // `vocabulary.ts` a lie in the one direction a person can see:
+          // `FEATURE_PLACES` does not list `hearth` for this room, so "uma cela
+          // com uma lareira" comes back `FEATURE_NOT_IN_PLACE` — the interface
+          // saying a fire does not belong in this kind of place — while the
+          // fill could draw one anyway, because an anchor with no feature is
+          // never filtered. Emptying the slot is what makes the message true,
+          // and it is the direction the room's own comment already pointed in.
+          //
+          // **The cost is that the cell now has no light source at all.** This
+          // was its only anchor carrying one, so `scene.lights` comes back
+          // empty at every dark seed. Counted rather than assumed, because the
+          // count is worse than the front that made this change believed: the
+          // two store rooms already declare no light-bearing anchor at all, so
+          // this makes **three** of the seven rooms unlit by their own
+          // furniture. The crypt is not one of them — its brazier carries a
+          // light and is lost to `excluded`, not to the table — so the two
+          // cases are different and only this comment says so.
+          null,
         ],
         groups: [['prison_desk', 'guard_stool']],
         // A cell has only what the dungeon itself leaves: bone, chain and
@@ -1050,7 +1088,8 @@ export function profileFor(place: Place): PlaceProfile {
   if (filling.anchors.length !== geometry.anchors.length ||
       filling.groups.length !== geometry.groups.length ||
       geometry.groups.some((group, index) => filling.groups[index].length !== group.parts.length) ||
-      filling.anchors.some((slot) => !slot.concept) || filling.groups.some((group) => group.some((id) => !id))) {
+      filling.anchors.some((slot) => slot !== null && !slot.concept) ||
+      filling.groups.some((group) => group.some((id) => !id))) {
     throw new Error(`invalid slot filling for '${place.building}_${place.room}'`);
   }
   // A slot may be asked for by the word that names its concept, or by no word
@@ -1060,7 +1099,7 @@ export function profileFor(place: Place): PlaceProfile {
   // make "sem lareira" take the beds out of the room. Nothing else checks it —
   // `feature` is the building's to declare and `CONCEPTS` is the project's.
   for (const slot of filling.anchors) {
-    if (slot.feature !== undefined && slot.feature !== featureOf(slot.concept)) {
+    if (slot !== null && slot.feature !== undefined && slot.feature !== featureOf(slot.concept)) {
       throw new Error(
         `feature '${slot.feature}' does not ask for concept '${slot.concept}' in '${place.building}_${place.room}'`,
       );
@@ -1074,7 +1113,13 @@ export function profileFor(place: Place): PlaceProfile {
     defaultWallMaterial: filling.defaultWallMaterial,
     assetTags: filling.assetTags ?? building.assetTags,
     scatterLadder: filling.scatterLadder,
-    anchors: geometry.anchors.map((slot, index) => ({ ...slot, ...filling.anchors[index] })),
+    // Paired by index and *then* thinned, never the other way round: a slot
+    // this building leaves empty drops out here, and the ones after it keep the
+    // footprints they were drawn with.
+    anchors: geometry.anchors
+      .map((slot, index) => ({ slot, filled: filling.anchors[index] }))
+      .filter((pair): pair is { slot: typeof pair.slot; filled: NonNullable<typeof pair.filled> } => pair.filled !== null)
+      .map(({ slot, filled }) => ({ ...slot, ...filled })),
     groups: geometry.groups.map((group, groupIndex) => ({
       ...group,
       parts: group.parts.map((slot, index) => ({
