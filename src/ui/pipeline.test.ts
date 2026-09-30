@@ -208,7 +208,7 @@ describe('one seed, one map', () => {
       { interpreter: fakeInterpreter(example.constraints), library: library(), target: recorder().target },
     );
 
-    const expected = generate(resolve(example.constraints, 4242), createRng(4242));
+    const expected = generate(resolve(example.constraints, 4242), createRng(4242), library());
 
     expect(stable(result.scene)).toBe(stable(expected));
   });
@@ -272,9 +272,17 @@ describe('a failure keeps the type the interface needs', () => {
     // The renderer validates the library it is handed. If the pipeline
     // swallowed that, a map would come back drawn entirely in magenta and
     // nothing would say why.
+    //
+    // `query` answers honestly and only `get` lies. The generator asks the
+    // library which variant fills each concept a profile names and refuses an
+    // empty answer of its own, one layer before the renderer is reached — so a
+    // stub that refused every query would make this test pass on the wrong
+    // error. The contract this is about is the one between a `PlacedProp` and
+    // the `AssetDef` behind it, and `get` is the half that carries it.
+    const honest = createPlaceholderLibrary();
     const broken: AssetLibrary = {
       get: () => ({ id: 'anchor/bar_counter', kind: 'tile', footprint: { w: 5, h: 2 }, tags: [], againstWall: true }),
-      query: () => [],
+      query: (tags, kind) => honest.query(tags, kind),
       bitmap: () => Promise.reject(new Error('no art here')),
     };
 

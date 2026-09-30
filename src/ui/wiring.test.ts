@@ -39,6 +39,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createRng } from '../core/prng';
 import type { AssetLibrary, Constraints, Interpreter, Place, Scene } from '../core/types';
+import { createPlaceholderLibrary } from '../assets/placeholder';
 import { generate } from '../generator/generate';
 import { resolve } from '../interpreter/resolve';
 import { featuresFor } from '../interpreter/vocabulary';
@@ -300,7 +301,7 @@ function sceneFor(place: Place, seed: number): Scene {
     },
     seed,
   );
-  return generate(params, createRng(seed));
+  return generate(params, createRng(seed), createPlaceholderLibrary());
 }
 
 function mapStore(initial?: string): KeyStore & { items: Map<string, string> } {

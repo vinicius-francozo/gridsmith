@@ -6,27 +6,43 @@
  * reached through the conversion helpers in `src/core/grid.ts`.
  */
 
+import type { BUILDING_REGISTRY, ROOM_REGISTRY } from '../generator/profiles';
+
 export type Cell = { x: number; y: number };        // integers, grid cells
 export type Size = { w: number; h: number };        // in cells
 export type Facing = 'n' | 'e' | 's' | 'w';
 
-export type Building = 'tavern' | 'dungeon';
 /**
- * The kinds of room the generator can build.
+ * The buildings and the kinds of room the generator can build.
  *
- * Not every building has every one of them, and `crypt` is the first that is
- * not shared: it exists in a dungeon and nowhere else. `BUILDINGS` in
- * `src/generator/profiles.ts` is the matrix, `roomsFor` reads it, and every
- * table keyed on a building and a room is sparse for the same reason.
+ * **Both are read off the registry rather than written down here**, and the
+ * import that does it is the one place in the project where a contract points
+ * at a stage instead of the other way round. It is deliberate, and it costs
+ * nothing at run time: `import type` is erased, `profiles.ts` imports only
+ * types from this file, and so neither module is on the other's runtime graph.
  *
- * `crypt` is here because a description of a catacomb used to land in `hall`,
+ * What it buys is that the words have **one** definition. Written out here they
+ * were a second list that had to agree with `ROOMS` and `BUILDINGS` by hand,
+ * and the agreement was unchecked in the only direction that matters: a room
+ * added to the registry and forgotten here would simply never be reachable.
+ * Derived, adding a room is adding an entry to `ROOMS`, and every exact
+ * `Record<RoomKind, …>` in the project stops compiling until it answers — which
+ * is the net that caught the hole in `CODE_PHRASES`.
+ *
+ * Not every building has every room, and `crypt` is the first that is not
+ * shared: it exists in a dungeon and nowhere else. `BUILDINGS` is the matrix,
+ * `roomsFor` reads it, and every table keyed on a building and a room is sparse
+ * for the same reason.
+ *
+ * `crypt` exists because a description of a catacomb used to land in `hall`,
  * which in a dungeon is the guard room — the person asked for a burial chamber
  * and was handed a war table and four guard stools. Nothing warned him: the
  * out-of-vocabulary notice asks about the *building*, and a catacomb genuinely
  * is a dungeon, so the loss happened one level down, where the nearest of three
  * rooms simply won.
  */
-export type RoomKind = 'hall' | 'room' | 'storeroom' | 'crypt';
+export type Building = keyof typeof BUILDING_REGISTRY;
+export type RoomKind = keyof typeof ROOM_REGISTRY;
 export type Place = { building: Building; room: RoomKind };
 export type Light = 'dark' | 'dim' | 'bright';
 export type Condition = 'tidy' | 'lived_in' | 'disordered' | 'ruined';

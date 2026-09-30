@@ -1,3 +1,9 @@
+import { spawnSync } from 'node:child_process';
+import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { createRng } from '../core/prng';
@@ -7,8 +13,8 @@ import { paramsFor } from './test-fixtures';
 import { featureSuits, featuresFor } from '../interpreter/vocabulary';
 import type { Feature } from '../interpreter/vocabulary';
 import { materialColor } from '../assets/palette';
-import { MATERIAL_VARIANTS, PLACEHOLDER_CATALOG } from '../assets/placeholder';
-import type { Place, Size } from '../core/types';
+import { createPlaceholderLibrary, MATERIAL_VARIANTS, PLACEHOLDER_CATALOG } from '../assets/placeholder';
+import type { AssetDef, Place, Size } from '../core/types';
 import {
   ALCOVE_FEATURE,
   PILLAR_MATERIAL,
@@ -20,13 +26,29 @@ import {
   pickRotation,
   PILLARS_FEATURE,
   profileFor,
+  resolveAssets,
   roomsFor,
   BUILDINGS,
-  ROOM_KINDS,
+  ROOMS,
   ROTATIONS,
   wallMaterialFor,
 } from './profiles';
-import type { ShapeName } from './profiles';
+import type { ResolvedProfile, ShapeName } from './profiles';
+
+const library = createPlaceholderLibrary();
+
+/**
+ * A profile with its variants drawn, the way `generate` hands one to the
+ * stages.
+ *
+ * Every slot the seven rooms declare settles to exactly one candidate once the
+ * concept, the footprint and the room's palette ladder have been applied —
+ * measured, and the tests below name the pieces — so this needs no seed of its
+ * own and nothing here depends on which one it uses.
+ */
+function resolved(place: Place): ResolvedProfile {
+  return resolveAssets(profileFor(place), library, createRng(1));
+}
 
 const PLACE_TYPES: Place[] = [
   { building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' },
@@ -55,10 +77,16 @@ describe('building and room composition', () => {
       expect(tavern.anchors.map(({ footprint, placement }) => ({ footprint, placement }))).toEqual(
         dungeon.anchors.map(({ footprint, placement }) => ({ footprint, placement })),
       );
-      expect(tavern.anchors.map((anchor) => anchor.assetId)).not.toEqual(
-        dungeon.anchors.map((anchor) => anchor.assetId),
+      // **The concepts may well be the same; the pieces are not.** A guest
+      // room and a cell both hold a bed, a set of bunks, somewhere to put
+      // things, a shelf and a fire — the three shared rooms declare the same
+      // concepts in the same slots for both buildings — and what separates
+      // them is which variant the palette prefers. That is the whole of what
+      // this front moved, so it is read off the resolved profile.
+      expect(resolved({ building: 'tavern', room }).anchors.map((anchor) => anchor.assetId)).not.toEqual(
+        resolved({ building: 'dungeon', room }).anchors.map((anchor) => anchor.assetId),
       );
-      expect(ROOM_KINDS[room].groupsPerHundredCells).toEqual(tavern.groupsPerHundredCells);
+      expect(ROOMS[room].groupsPerHundredCells).toEqual(tavern.groupsPerHundredCells);
     }
   });
 
@@ -73,6 +101,45 @@ describe('building and room composition', () => {
     }
   });
 
+  it('refuses a slot asked for by a word that names another concept', () => {
+    // `anchorOrder` reads `feature` and nothing else: a requested one goes to
+    // the front of the draw, an excluded one is out of it at every seed. So a
+    // slot whose word does not name its own concept is a request answered by
+    // the wrong furniture — "sem lareira" taking the beds out of a room —
+    // and nothing else in the project compares the two. `feature` is the
+    // building's to declare and `CONCEPTS` is the project's, so no type can
+    // hold them together.
+    const filling = BUILDINGS.dungeon.rooms.room!;
+    const original = filling.anchors;
+    filling.anchors = original.map((slot, index) =>
+      index === 0 ? { ...slot, feature: 'hearth' } : slot,
+    );
+    try {
+      expect(() => profileFor({ building: 'dungeon', room: 'room' }))
+        .toThrow("feature 'hearth' does not ask for concept 'bed' in 'dungeon_room'");
+    } finally {
+      filling.anchors = original;
+    }
+  });
+
+  it('refuses a word for a concept nothing can ask for', () => {
+    // The other direction, and the reason `CONCEPTS` lists the four wordless
+    // concepts at all. A featureless anchor is the piece of a room no
+    // description can take away — the sarcophagus, the weapon rack — and
+    // giving `tomb` a word would make the crypt refusable down to nothing.
+    const filling = BUILDINGS.dungeon.rooms.crypt!;
+    const original = filling.anchors;
+    filling.anchors = original.map((slot, index) =>
+      index === 0 ? { ...slot, feature: 'shelving' } : slot,
+    );
+    try {
+      expect(() => profileFor({ building: 'dungeon', room: 'crypt' }))
+        .toThrow("feature 'shelving' does not ask for concept 'tomb' in 'dungeon_crypt'");
+    } finally {
+      filling.anchors = original;
+    }
+  });
+
   it('furnishes the crypt with the dead and the hall with the guard', () => {
     // The whole point of the room existing. A description of a catacomb used to
     // resolve to the hall, and the hall's filling is what the person saw: a war
@@ -82,11 +149,11 @@ describe('building and room composition', () => {
     // different label on the line underneath it.
     //
     // Furniture only. The two rooms do share scatter — bone, rubble and dust
-    // are litter on a dungeon floor wherever that floor is, and a crypt earns
-    // `skull` and `shard` on top of them rather than instead of them. It is the
-    // pieces that carry a label a person reads that have to differ.
-    const crypt = profileFor({ building: 'dungeon', room: 'crypt' });
-    const hall = profileFor({ building: 'dungeon', room: 'hall' });
+    // are litter on a dungeon floor wherever that floor is, and both rooms ask
+    // the library for the same `debris`. What differs is the weighting, below.
+    // It is the pieces that carry a label a person reads that have to differ.
+    const crypt = resolved({ building: 'dungeon', room: 'crypt' });
+    const hall = resolved({ building: 'dungeon', room: 'hall' });
 
     const idsOf = (profile: typeof crypt): string[] => [
       ...profile.anchors.map((anchor) => anchor.assetId),
@@ -102,9 +169,26 @@ describe('building and room composition', () => {
     ]);
     const hallIds = new Set(idsOf(hall));
     expect(idsOf(crypt).filter((id) => hallIds.has(id))).toEqual([]);
-    expect(crypt.scatter.map((slot) => slot.assetId)).toEqual([
-      'bone', 'skull', 'rubble', 'shard', 'dust',
-    ]);
+    // Scatter is a pool the library answers with now, not a list of ids, so
+    // what is held is the *shape* of the pool: bone on the heaviest rung, the
+    // broken floor the description that made this room asked for below it, the
+    // skull below that — the order the room was written with — and nothing
+    // from outside a burial chamber on the floor at all.
+    const debris = new Map(crypt.scatter.map((slot) => [slot.assetId, slot.weight]));
+    expect(`bone ${String(debris.get('bone'))}, rubble ${String(debris.get('rubble'))}, shard ${String(debris.get('shard'))}, skull ${String(debris.get('skull'))}, dust ${String(debris.get('dust'))}`)
+      .toBe('bone 4, rubble 3, shard 2, skull 2, dust 2');
+    // The five pieces this room was written with, at the five weights it was
+    // written with, and no sixth. The broken chain arrives on any rung broad
+    // enough to be answered by `['dungeon', 'debris']`, and nobody is chained
+    // up in a crypt.
+    expect([...debris.keys()].sort()).toEqual(['bone', 'dust', 'rubble', 'shard', 'skull']);
+    // A catacomb has no stable and no archer. Both used to arrive here, and
+    // both are pieces the library answers `debris` with — which is why the
+    // ladder is rungs of its own and not one tag for every dungeon room.
+    for (const elsewhere of ['straw', 'loose_arrow']) {
+      expect(`${elsewhere} in the crypt: ${String(debris.has(elsewhere))}`)
+        .toBe(`${elsewhere} in the crypt: false`);
+    }
     // The sarcophagus carries **no feature word**, and that is the net rather
     // than a detail of the table. `anchorOrder` drops an anchor whose feature is
     // in `excluded`, and a featureless one can never be in `excluded`, so this
@@ -188,7 +272,7 @@ describe('building and room composition', () => {
     // `'alcove'` out of the crypt's `shapes` left this green while every request
     // for a burial recess vanished off the map with nothing recorded.
     const place: Place = { building: 'dungeon', room: 'crypt' };
-    const crypt = profileFor(place);
+    const crypt = resolved(place);
     const answeredByPlan = new Set<string>([
       ...(crypt.allowPillars ? [PILLARS_FEATURE] : []),
       ...(crypt.shapes.includes(ALCOVE_FEATURE as ShapeName) ? [ALCOVE_FEATURE] : []),
@@ -210,10 +294,314 @@ describe('building and room composition', () => {
   });
 
   it('fills the dungeon hearth feature with a hearth instead of a torch', () => {
-    const hall = profileFor({ building: 'dungeon', room: 'hall' });
-    const room = profileFor({ building: 'dungeon', room: 'room' });
+    const hall = resolved({ building: 'dungeon', room: 'hall' });
+    const room = resolved({ building: 'dungeon', room: 'room' });
     expect(hall.anchors.find((anchor) => anchor.feature === 'hearth')?.assetId).toBe('stone_hearth');
     expect(room.anchors.find((anchor) => anchor.assetId === 'wall_torch')?.feature).toBeUndefined();
+  });
+});
+
+/**
+ * A catalogue holding one anchor per slot of the tavern hall, all three tagged
+ * with a word no palette in the project names.
+ *
+ * `againstWall` and the footprints are the hall's, because `resolveAssets`
+ * answers a slot with the assets carrying its concept **at its footprint** —
+ * a catalogue whose sizes did not match would fail for the other reason.
+ */
+function catalogueTaggedOnly(tag: string): AssetDef[] {
+  return [
+    { id: 'anchor/counter', kind: 'anchor', footprint: { w: 5, h: 2 }, tags: ['bar', tag], againstWall: true },
+    { id: 'anchor/firebox', kind: 'anchor', footprint: { w: 3, h: 2 }, tags: ['hearth', tag], againstWall: true },
+    { id: 'anchor/steps', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['stairs', tag], againstWall: true },
+  ];
+}
+
+describe('a concept resolved into a variant', () => {
+  const TAVERN_HALL: Place = { building: 'tavern', room: 'hall' };
+
+  it('furnishes one guest-room geometry in wood for a tavern and in iron for a dungeon', () => {
+    // **The whole of what this front bought.** The two rooms declare the same
+    // five concepts in the same five slots — the geometry is shared, and
+    // `ROOMS` holds it once — and the building's palette is the only thing
+    // that separates a guest room from a cell. Before this, each building
+    // wrote out five asset ids of its own.
+    const tavern = profileFor({ building: 'tavern', room: 'room' });
+    const dungeon = profileFor({ building: 'dungeon', room: 'room' });
+    expect(tavern.anchors.map((anchor) => anchor.concept)).toEqual(
+      dungeon.anchors.map((anchor) => anchor.concept),
+    );
+    expect(resolved({ building: 'tavern', room: 'room' }).anchors.map((anchor) => anchor.assetId)).toEqual([
+      'bed', 'bunk_beds', 'wardrobe', 'shelf_row_short', 'hearth_small',
+    ]);
+    expect(resolved({ building: 'dungeon', room: 'room' }).anchors.map((anchor) => anchor.assetId)).toEqual([
+      'cot', 'iron_bunks', 'lockers', 'wall_rack', 'wall_torch',
+    ]);
+  });
+
+  it('reads the palette as a ladder, most particular tag first', () => {
+    // A flat set cannot do this, and that is measured rather than argued. A
+    // tavern needs `stone` to tell `hearth` from `stone_hearth` at 3x2, where
+    // neither is wooden, and needs *not* `stone` to tell `stairs_up` from
+    // `stone_stairs` at 2x3, where one of them is. No single set of tags
+    // separates both; `['wood', 'stone']` in that order separates both.
+    const hall = resolved(TAVERN_HALL);
+    // The hall declares no ladder of its own, so this is the building's,
+    // reached through the fallback in `profileFor`. It used to carry a third
+    // word, `tableware`, which no anchor in the catalogue has ever had: it was
+    // there to weigh a taproom's litter, and the debris ladder took that job
+    // over two commits ago.
+    expect(hall.assetTags).toEqual(['wood', 'stone']);
+    expect(hall.anchors.map((anchor) => anchor.assetId)).toEqual([
+      'bar_counter', 'hearth', 'stairs_up',
+    ]);
+    // And the room that needs a ladder of its own. `bone_niche`,
+    // `votive_brazier` and `sarcophagus` are each behind a dungeon piece at
+    // their footprint, so the building's `dungeon` would furnish the crypt as
+    // a guard room.
+    expect(resolved({ building: 'dungeon', room: 'crypt' }).assetTags).toEqual(['tomb', 'stone']);
+    expect(resolved({ building: 'dungeon', room: 'storeroom' }).assetTags).toEqual([
+      'weapons', 'dungeon', 'stone',
+    ]);
+  });
+
+  it('still hands over a piece no rung of the palette prefers', () => {
+    // **Preference, not filter**, and this is the half that is easy to lose.
+    // The person asked to be able to ask for what is not typical of the
+    // building; if the palette narrowed the candidates instead of ordering
+    // them, a concept whose every variant is off-palette would come back with
+    // nothing at all and the map would be short a piece with nothing said.
+    //
+    // It is the same answer `resolve.ts` gives a feature that does not fit —
+    // leave it out and record it — and `anchorOrder` gives an excluded one.
+    const stranger = createPlaceholderLibrary(catalogueTaggedOnly('brass'));
+    const profile = resolveAssets(profileFor(TAVERN_HALL), stranger, createRng(1));
+    expect(profile.anchors.map((anchor) => anchor.assetId)).toEqual(['counter', 'firebox', 'steps']);
+  });
+
+  it('prefers the rung that does match, when one does', () => {
+    // The other side of the same line: with a candidate on the palette and a
+    // candidate off it, the palette is what decides — otherwise the test above
+    // would pass just as well on a resolver that ignored `assetTags`.
+    const both = createPlaceholderLibrary([
+      ...catalogueTaggedOnly('brass'),
+      { id: 'anchor/oak_firebox', kind: 'anchor', footprint: { w: 3, h: 2 }, tags: ['hearth', 'wood'], againstWall: true },
+    ]);
+    const profile = resolveAssets(profileFor(TAVERN_HALL), both, createRng(1));
+    expect(profile.anchors[1].assetId).toBe('oak_firebox');
+  });
+
+  it('refuses a concept the library answers with nothing at that footprint', () => {
+    // `rng.pick([])` hands back `undefined`, which `assetIdFor` turns into the
+    // id `anchor/undefined`: a prop the renderer cannot draw, on a scene that
+    // passes `validateScene` in full, with nothing before it having refused.
+    const empty = createPlaceholderLibrary([]);
+    expect(() => resolveAssets(profileFor(TAVERN_HALL), empty, createRng(1)))
+      .toThrow("no anchor for concept 'bar' at 5x2");
+  });
+});
+
+/** Every piece of debris the marking library declares, by its own name. */
+function cataloguedDebris(): string[] {
+  return PLACEHOLDER_CATALOG
+    .filter((asset) => asset.kind === 'scatter')
+    .map((asset) => asset.id.slice(asset.id.indexOf('/') + 1));
+}
+
+/** What `place` strews its floor with, as a share of the weight on it. */
+function floorOf(place: Place): Map<string, number> {
+  const scatter = resolved(place).scatter;
+  const total = scatter.reduce((sum, slot) => sum + slot.weight, 0);
+  return new Map(scatter.map((slot) => [slot.assetId, slot.weight / total]));
+}
+
+describe('the debris the catalogue offers', () => {
+  it('leaves no piece in the catalogue that no room can strew', () => {
+    // **Catalogue to room, and the direction is the point.** Every other test
+    // of this layer reads a profile and checks that what it names exists — so
+    // when `scatter/stool` stopped being named by anything, nothing went red.
+    // It carries `['seating', 'wood']`, no room asked for either, and a piece
+    // that had been 2 of the 9 weight on a taproom floor went to zero in
+    // silence over 400 seeds.
+    //
+    // A piece nobody strews is not a bug in itself; a piece nobody strews and
+    // nobody notices is. This is the noticing.
+    const strewn = new Set(PLACE_TYPES.flatMap((place) => [...floorOf(place).keys()]));
+    const catalogued = cataloguedDebris();
+    expect(catalogued.length).toBeGreaterThan(0);
+    expect(catalogued.filter((name) => !strewn.has(name))).toEqual([]);
+  });
+
+});
+
+/**
+ * What each of the seven floors comes out as: the piece, the weight, in order.
+ *
+ * **These are the weights each room was written with in `main`**, read off
+ * `TAVERN_HALL.scatter` and its neighbours at `482a206`, where a room named its
+ * debris as a list of asset ids. The claim this front makes is that the
+ * mechanism changed and the floors did not, and this is that claim written
+ * down once, for all seven.
+ *
+ * It is not a restatement of the table it checks. A room declares *tags* and a
+ * weight per rung; this is what the library answers with, so a tag misspelled,
+ * a tag moved in `placeholder.ts`, a rung reweighted, reordered or dropped,
+ * and a piece landing on the wrong rung all change it.
+ */
+const FLOORS: Readonly<Record<string, string>> = {
+  tavern_hall: 'mug 4, stool 2, bottle 2, straw 1',
+  tavern_room: 'mug 3, bottle 2, straw 1',
+  tavern_storeroom: 'sack 3, straw 3, shard 2',
+  dungeon_hall: 'bone 4, broken_chain 2, rubble 2, dust 1',
+  dungeon_room: 'bone 3, broken_chain 2, dust 1',
+  dungeon_storeroom: 'loose_arrow 3, dust 3, rubble 2',
+  dungeon_crypt: 'bone 4, rubble 3, skull 2, shard 2, dust 2',
+};
+
+describe('the seven floors, one by one', () => {
+  it('strews each room with the pieces and the weights it was written with', () => {
+    // **All seven, because two of them had no floor of their own and nobody
+    // noticed.** The tests below each name the rooms they are about — the
+    // stool's taproom, the mug against the bottle, the bone against the dust,
+    // the guest room against the cellar — and when those tests were swapped
+    // over two rounds, the tavern cellar and the dungeon store room fell
+    // between them. Measured rather than read: dropping the arsenal's
+    // `weapons` rung from 3 to 1, which makes the loose arrow the lightest
+    // thing on the floor of the room it is named for instead of the heaviest,
+    // left the whole suite green at 1166 passed; so did dropping the cellar's
+    // `storage` rung from 3 to 1.
+    //
+    // A test per room would have the same hole the next time the tests move.
+    // One table cannot: a room added to `PLACE_TYPES` with no row here is the
+    // first thing this reports.
+    const unwritten = PLACE_TYPES.filter(
+      (place) => !Object.hasOwn(FLOORS, `${place.building}_${place.room}`),
+    );
+    expect(`rooms with no floor written down: ${unwritten.join(', ')}`)
+      .toBe('rooms with no floor written down: ');
+    expect(Object.keys(FLOORS)).toHaveLength(PLACE_TYPES.length);
+
+    for (const place of PLACE_TYPES) {
+      const key = `${place.building}_${place.room}`;
+      const floor = resolved(place).scatter
+        .map((slot) => `${slot.assetId} ${String(slot.weight)}`)
+        .join(', ');
+      expect(`${key}: ${floor}`).toBe(`${key}: ${FLOORS[key]}`);
+    }
+  });
+});
+
+describe('the debris a room is strewn with, piece by piece', () => {
+  it('keeps the stool on the taproom floor, at the share it was written with', () => {
+    // Named on its own, because the sweep above is satisfied by one room
+    // anywhere holding it and this is the room it belongs to. `scatter/stool`
+    // carries `['seating', 'wood']` and nothing else, so no `clutter` or
+    // `debris` rung reaches it; a taproom with one broad tag drew it zero
+    // times in 400 seeds where the room was written for 2 of its 9 weight.
+    const floor = floorOf({ building: 'tavern', room: 'hall' });
+    const share = floor.get('stool');
+    expect(share).toBeDefined();
+    expect(`stool on the taproom floor: ${(share! * 100).toFixed(1)}%`)
+      .toBe('stool on the taproom floor: 22.2%');
+  });
+
+  it('gives the mug the taproom floor, and the bone the dungeon\u2019s', () => {
+    // **The two pieces the catalogue could not name, and now can.** A mug and
+    // a bottle were both `['tableware', 'clutter']`; a bone, a broken chain
+    // and a pinch of dust were all `['dungeon', 'debris']`. Pieces carrying
+    // the same words move together at any weight, so the emblem of each of
+    // these floors was pulled down to the average of its neighbours: over 400
+    // seeds the taproom drew 27% mugs against 27% bottles where it was written
+    // for 45% against 21%, and the cell drew 31% bone behind 35% chain and 34%
+    // dust where it was written for 46%.
+    const only = (place: Place): string[] => {
+      const scatter = resolved(place).scatter;
+      const top = Math.max(...scatter.map((slot) => slot.weight));
+      return scatter.filter((slot) => slot.weight === top).map((slot) => slot.assetId).sort();
+    };
+    expect(only({ building: 'tavern', room: 'hall' })).toEqual(['mug']);
+    expect(only({ building: 'tavern', room: 'room' })).toEqual(['mug']);
+    for (const room of ['hall', 'room', 'crypt'] as const) {
+      expect(`dungeon ${room}: ${only({ building: 'dungeon', room }).join()}`)
+        .toBe(`dungeon ${room}: bone`);
+    }
+    // And the margin, which a heaviest-piece check on its own would let
+    // collapse to a single unit of weight.
+    const taproom = floorOf({ building: 'tavern', room: 'hall' });
+    expect(taproom.get('mug')).toBe(2 * taproom.get('bottle')!);
+    const cell = floorOf({ building: 'dungeon', room: 'room' });
+    expect(cell.get('bone')).toBeGreaterThan(cell.get('broken_chain')!);
+    expect(cell.get('broken_chain')).toBeGreaterThan(cell.get('dust')!);
+  });
+
+  it('never lets the dust be the heaviest thing in a room somebody died in', () => {
+    // The symptom the round before this one left behind, and the one a reader
+    // notices first: a cell whose floor is mostly dust reads as an empty room,
+    // not as a cell. It was the heaviest piece in all three of these.
+    for (const room of ['hall', 'room', 'crypt'] as const) {
+      const floor = floorOf({ building: 'dungeon', room });
+      const dust = floor.get('dust');
+      // Still on the floor — a dungeon without dust is not the fix — just not
+      // the most of it.
+      expect(dust, room).toBeDefined();
+      // Compared as numbers and not as rounded percentages, which is a trap
+      // this test fell into first: with the cell on one broad rung the dust
+      // and the bone are equal by construction, and two equal shares print
+      // the same string. A tie is the failure, so a tie has to be visible.
+      const heaviest = Math.max(...floor.values());
+      expect(`dungeon ${room}: the dust is the heaviest thing on the floor — ${String(dust === heaviest)}`)
+        .toBe(`dungeon ${room}: the dust is the heaviest thing on the floor — false`);
+    }
+  });
+
+  it('keeps a piece on the first rung it stands on, not the last', () => {
+    // **Inert as the seven ladders stand, and exercised here on purpose.**
+    // Once the catalogue grew a word for what each piece is, every rung of
+    // every room came out disjoint from every other in that room, so no room's
+    // floor can tell the three readings apart any more. Written against a
+    // room's ladder this test would have gone quiet without going red.
+    //
+    // The rule still decides the next piece added to the catalogue: a jug is
+    // crockery and clutter both, and which of the two a taproom weighs it by
+    // is the line this covers.
+    const overlapping = {
+      ...profileFor({ building: 'tavern', room: 'hall' }),
+      scatterLadder: [
+        { tags: ['crockery'], weight: 4 },
+        { tags: ['clutter'], weight: 1 },
+      ],
+    };
+    const floor = new Map(resolveAssets(overlapping, library, createRng(1)).scatter.map(
+      (slot) => [slot.assetId, slot.weight],
+    ));
+    // The mug stands on both rungs; the bottle and the sack stand only on the
+    // second. Summing would put the mug at 5, taking the last would put it at
+    // 1, and both would say a taproom's crockery weighs what its sweepings do.
+    expect(`mug ${String(floor.get('mug'))}, bottle ${String(floor.get('bottle'))}, sack ${String(floor.get('sack'))}`)
+      .toBe('mug 4, bottle 1, sack 1');
+  });
+
+  it('tells a guest room and a cellar apart, which one tag could not', () => {
+    // Both rooms asked for `clutter` and nothing else, so both came back the
+    // same five pieces at the same flat weight: two floors a person could not
+    // tell apart in a building where one holds beds and the other barrels.
+    //
+    // Measured as total variation distance between the two weight
+    // distributions — half the sum of the absolute differences, 0 for two
+    // identical floors and 1 for two that share no piece. The flat pair
+    // measured 0.05 over 400 seeds; these share only their straw.
+    const room = floorOf({ building: 'tavern', room: 'room' });
+    const cellar = floorOf({ building: 'tavern', room: 'storeroom' });
+    const apart = [...new Set([...room.keys(), ...cellar.keys()])]
+      .reduce((sum, name) => sum + Math.abs((room.get(name) ?? 0) - (cellar.get(name) ?? 0)), 0) / 2;
+    expect(`guest room against cellar: ${apart.toFixed(2)}`).toBe('guest room against cellar: 0.83');
+
+    // And the guest room is swept. `straw` and `shard` were the same two words
+    // as each other, so asking for the rushes asked for the broken floor tile
+    // too, and an inn's let room came back 13% rubbish over 400 seeds. It is
+    // the cellar that has broken tiles.
+    expect([...room.keys()].sort()).toEqual(['bottle', 'mug', 'straw']);
+    expect([...cellar.keys()].sort()).toEqual(['sack', 'shard', 'straw']);
   });
 });
 
@@ -492,7 +880,7 @@ describe('profile furniture', () => {
 
   it('gives every scatter prop a positive weight', () => {
     for (const place of PLACE_TYPES) {
-      for (const spec of profileFor(place).scatter) {
+      for (const spec of resolved(place).scatter) {
         expect(spec.weight).toBeGreaterThan(0);
       }
     }
@@ -679,7 +1067,7 @@ describe('the asset vocabulary the profiles declare', () => {
   function declarations(): { assetId: string; footprint: Size; where: string }[] {
     const found: { assetId: string; footprint: Size; where: string }[] = [];
     for (const place of PLACE_TYPES) {
-      const profile = profileFor(place);
+      const profile = resolved(place);
       for (const spec of profile.anchors) {
         found.push({ assetId: spec.assetId, footprint: spec.footprint, where: `${place} anchor` });
       }
@@ -744,5 +1132,147 @@ describe('the asset vocabulary the profiles declare', () => {
       expect(kind, assetId).toBeDefined();
       expect(catalog.get(kind!.id)?.footprint).toEqual(footprint);
     }
+  });
+});
+
+/**
+ * The project root, found from this file rather than from the working
+ * directory, which vitest does not promise.
+ */
+const ROOT = resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/** The line `ROOM_REGISTRY` is closed with, and so where a room is inserted. */
+const REGISTRY_END = '} satisfies Record<string, RoomGeometry>;';
+
+/** A room with a legal geometry and nothing else — the cheapest one that compiles. */
+const EXTRA_ROOM = `  bunkhouse: {
+    minSize: { w: 6, h: 6 }, maxSize: { w: 8, h: 8 },
+    doorRange: { min: 1, max: 1 }, shapes: ['rectangle'], allowPillars: false,
+    anchorRange: { min: 0, max: 0 }, anchors: [],
+    groupsPerHundredCells: { min: 0, max: 0 }, groups: [],
+    scatterChance: 0,
+  },
+`;
+
+/**
+ * Every file that stops compiling when `bunkhouse` is added to the registry.
+ *
+ * Four tables, and the point of naming them one by one rather than counting
+ * them is that the list is the guarantee. `PROFILES` is the only one in
+ * production code; the other three are tests, and they are no less the net for
+ * it — `GENERATOR_BOUNDS` is what holds the resolver's size bands to the
+ * geometry the generator will actually build, the two in `interpret.test.ts`
+ * are the scores a room choice is stubbed with, and `schema.test.ts` is the
+ * mutual assignability that ties `constraintsSchema`'s own room enum, which is
+ * written out by hand in `schema.ts`, to `RoomKind`.
+ */
+const EXACT_ON_ROOM_KIND = [
+  'src/interpreter/local/interpret.test.ts',
+  'src/interpreter/resolve.test.ts',
+  'src/interpreter/resolve.ts',
+  'src/interpreter/schema.test.ts',
+];
+
+/**
+ * `npm run typecheck` over a copy of the project with one more room in the
+ * registry, and the files it refuses.
+ *
+ * The copy is what makes this safe to run beside the rest of the suite: the
+ * checkout is never written to, so a crash here cannot leave a broken
+ * `profiles.ts` behind for the next test file. `node_modules` is linked rather
+ * than copied, because it is the one part that is large and the one part the
+ * patch does not touch.
+ */
+function filesRefusingAnExtraRoom(): string[] {
+  const root = mkdtempSync(join(tmpdir(), 'gridsmith-exhaustiveness-'));
+  try {
+    for (const entry of ['src', 'api']) {
+      cpSync(join(ROOT, entry), join(root, entry), { recursive: true });
+    }
+    for (const entry of ['tsconfig.json', 'vite.config.ts']) {
+      cpSync(join(ROOT, entry), join(root, entry));
+    }
+    symlinkSync(join(ROOT, 'node_modules'), join(root, 'node_modules'));
+
+    const profiles = join(root, 'src', 'generator', 'profiles.ts');
+    const source = readFileSync(profiles, 'utf8');
+    // The insertion point has to be there and be unique, or the patch would be
+    // a no-op and this test would report a compiling project as proof that
+    // nothing needs an entry.
+    expect(source.split(REGISTRY_END)).toHaveLength(2);
+    writeFileSync(profiles, source.replace(REGISTRY_END, EXTRA_ROOM + REGISTRY_END));
+
+    const run = spawnSync(
+      process.execPath,
+      [join(ROOT, 'node_modules', 'typescript', 'lib', 'tsc.js'), '--noEmit', '-p', join(root, 'tsconfig.json')],
+      { cwd: root, encoding: 'utf8' },
+    );
+    // Read as blocks rather than as lines: `tsc` puts the detail of a nested
+    // mismatch on indented continuation lines, and for `schema.test.ts` the new
+    // room is named only down there.
+    const reported = new Set<string>();
+    let file: string | undefined;
+    let block = '';
+    const close = (): void => {
+      if (file === undefined) {
+        return;
+      }
+      // Every refusal has to be about the new room. One that is not would be a
+      // project that does not compile for some other reason, and this test
+      // would read it as the net biting.
+      expect(block).toContain('bunkhouse');
+      reported.add(file);
+    };
+    for (const line of `${run.stdout}${run.stderr}`.split('\n')) {
+      const match = /^(\S+?)\(\d+,\d+\): error/.exec(line);
+      if (match !== null) {
+        close();
+        file = match[1];
+        block = line;
+        continue;
+      }
+      block += line;
+    }
+    close();
+    return [...reported].sort();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+describe('the exhaustiveness the registry is derived for', () => {
+  it('stops every exact table compiling until a new room has an entry', () => {
+    // **This is what the collapse was not allowed to cost.** `RoomKind` used to
+    // be a union written out in `core/types.ts`; it is now `keyof typeof
+    // ROOM_REGISTRY`, and the fear with deriving a type from data is that the
+    // data stops being checked. It does not: a room added to the registry
+    // widens `RoomKind`, and every `Record<RoomKind, …>` that is exact rather
+    // than `Partial` refuses to compile until it has been answered. That is the
+    // net that caught the hole in `CODE_PHRASES` and the one that forced the
+    // crypt front to touch everything it needed to.
+    //
+    // It is checked by compiling rather than by reading the types, because the
+    // property is the compiler's answer and nothing else can stand in for it.
+    // `typescript@7` ships no JS compiler API — `import ts from 'typescript'`
+    // hands back `{ version, versionMajorMinor }` — so this runs the same `tsc`
+    // `npm run typecheck` runs, over a copy of the project.
+    expect(filesRefusingAnExtraRoom()).toEqual(EXACT_ON_ROOM_KIND);
+  });
+
+  it('leaves the sparse tables alone, because a tavern has no crypt', () => {
+    // The other half, and it is a decision rather than an oversight.
+    // `BUILDINGS.rooms` is `Partial`, and so were the three tables of words
+    // this front folded into it: the matrix of buildings against rooms has a
+    // hole in it, and an exact key would have demanded wording for
+    // `tavern_crypt`, a place nothing can produce. So the *room* axis of a
+    // building cannot be checked by the compiler and is checked by `profileFor`
+    // and by the throws in `roomQuestionFor` and `roomTemplateFor` instead —
+    // which is why none of those files is in the list above, and why the words
+    // moving onto the filling was worth doing: a room a building declares now
+    // carries its wording or is not an object at all.
+    for (const file of EXACT_ON_ROOM_KIND) {
+      expect(file.startsWith('src/interpreter/')).toBe(true);
+    }
+    expect(EXACT_ON_ROOM_KIND).not.toContain('src/generator/profiles.ts');
   });
 });

@@ -186,9 +186,18 @@ describe('the two place choices', () => {
     // room's hypothesis is built by substituting `undefined` into the template,
     // the classifier scores `"O cômodo é undefined."` like any other premise,
     // and it can win: `bestOf` always returns a room and never a refusal.
+    //
+    // **The room that used to reach this guard cannot any more.** The labels
+    // used to be a table of their own in `templates.ts`; a room added to
+    // `BUILDINGS` and forgotten there compiled, and this test used to be
+    // written as exactly that — a stray room with a real filling behind it. The
+    // label now lives on the filling, so the only room without one is a filling
+    // carrying no `words` at all, which the type forbids and the cast below is
+    // the measure of.
     const rooms = BUILDINGS.dungeon.rooms;
     const stray = 'bunkhouse' as RoomKind;
-    BUILDINGS.dungeon.rooms = { ...rooms, [stray]: rooms.hall };
+    const wordless = { ...rooms.hall!, words: undefined } as unknown as typeof rooms.hall;
+    BUILDINGS.dungeon.rooms = { ...rooms, [stray]: wordless };
     try {
       expect(() => roomTemplateFor('dungeon')).toThrow("no room label for 'dungeon_bunkhouse'");
     } finally {

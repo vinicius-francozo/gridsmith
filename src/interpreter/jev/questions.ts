@@ -26,8 +26,8 @@
  * lives in the interface (`codes.ts:1-17`).
  */
 
-import type { Building, Condition, Constraints, Light, RoomKind } from '../../core/types';
-import { roomsFor } from '../../generator/profiles';
+import type { Building, Condition, Constraints, Light } from '../../core/types';
+import { placeWords, roomsFor } from '../../generator/profiles';
 import type { Feature } from '../vocabulary';
 
 /** A proposition, answered with a calibrated probability. */
@@ -176,55 +176,17 @@ export const QUESTIONS = {
 export type QuestionName = keyof typeof QUESTIONS;
 
 /**
- * What each room of each building reads as, for the second request.
- *
- * `Partial` in the room, and the matrix is sparse on purpose: a dungeon has a
- * crypt and a tavern does not. The list of rooms a building really has lives in
- * `BUILDINGS` (`generator/profiles.ts`) and is read through `roomsFor`, so this
- * table is asked only for pairs that exist — and `roomQuestionFor` throws for
- * one that exists and has no criterion here, which is the guarantee the exact
- * `Record` used to give and this shape cannot.
- */
-const ROOM_CRITERIA: Readonly<Record<Building, Partial<Readonly<Record<RoomKind, string>>>>> = {
-  tavern: {
-    hall: 'Salão comum da taverna, com mesas, balcão e fregueses',
-    room: 'Quarto de hóspedes da taverna, com cama',
-    storeroom: 'Depósito, porão ou adega da taverna, com barris e mantimentos',
-  },
-  dungeon: {
-    hall: 'Sala comum ou da guarda da masmorra',
-    room: 'Cela ou quarto da masmorra, com catre',
-    storeroom: 'Arsenal ou depósito da masmorra, com armas e caixotes',
-    // **Measured, and the other three were left alone because measuring said
-    // to.** The corpus is 15 sentences — six of a crypt, nine controls of the
-    // other three rooms — in `corpus-cripta-jev.md`, beside the canonical ruler
-    // outside this repository for the reason that one gives. On the three
-    // criteria as they stood, all six crypt sentences missed, and the
-    // instructive part is where they went: four of the six landed in `room`,
-    // the cell. The description that started this front is the exception and
-    // landed in `hall` at 0.78, which is the guard room the person was handed.
-    //
-    // With this line the six come back `crypt` at 0.99 or better, the nine
-    // controls are unmoved, and the two traps hold: a guard room with bones on
-    // its floor keeps `hall` at 0.96 with `crypt` at 0.04, and a dungeon room
-    // with stone pillars at 0.96 against 0.02. Bone and pillar on their own do
-    // not move the choice.
-    //
-    // A longer wording was tried alongside a reworded `hall` ("onde os vivos se
-    // reúnem"), and it scored the same 14/15 while taking `hall` down to 0.83
-    // and 0.82 on those same two traps. It is the lesson `FEATURE_THRESHOLD`'s
-    // neighbours already record: enriching the wording redistributes
-    // probability mass instead of adding coverage. The crypt sentences were
-    // already at 0.99, so there was nothing to buy and only neighbours to
-    // spend.
-    crypt: 'Cripta, catacumba ou tumba: câmara funerária com sarcófagos, ossadas e nichos',
-  },
-};
-
-/**
  * The second request: which room of `building` the description is.
  *
- * @throws {Error} if `building` declares a room that has no criterion above.
+ * The criteria are not a table in this file any more. Each one lives on the
+ * room's own entry in the registry (`BUILDINGS` in `generator/profiles.ts`),
+ * beside the name the interface prints and the label the local engine scores,
+ * so a room a building declares carries its wording or does not compile. What
+ * that cannot reach is a pair arriving from outside the type system, which is
+ * what the throw below is still for.
+ *
+ * @throws {Error} if `building` declares a room the registry has no criterion
+ *                 for.
  *                 The alternative is an `undefined` criterion travelling into
  *                 the request body, where `JSON.stringify` drops the key
  *                 entirely — so Jev would be asked to choose between the rooms
@@ -235,7 +197,7 @@ const ROOM_CRITERIA: Readonly<Record<Building, Partial<Readonly<Record<RoomKind,
 export function roomQuestionFor(building: Building): { room: JevChoiceQuestion } {
   const criteria: Record<string, string> = {};
   for (const room of roomsFor(building)) {
-    const criterion = ROOM_CRITERIA[building][room];
+    const criterion = placeWords(building, room)?.criterion;
     if (criterion === undefined) {
       throw new Error(`no room criterion for '${building}_${room}'`);
     }

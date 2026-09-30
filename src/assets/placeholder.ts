@@ -125,7 +125,15 @@ export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   { id: 'anchor/hearth_small', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['hearth', 'stone', 'light'], againstWall: true },
   { id: 'anchor/stairs_up', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['stairs', 'wood'], againstWall: true },
   { id: 'anchor/bed', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['bed', 'furniture', 'wood'], againstWall: true },
-  { id: 'anchor/bunk_beds', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['bunks', 'bed', 'furniture', 'wood'], againstWall: true },
+  // **`bed` is deliberately not on this one, and its absence is the whole of
+  // what makes `bed` a concept a room can ask for.** The generator resolves an
+  // anchor by querying the concept and the slot's footprint, and `bed` at 2x3
+  // otherwise matched `bed`, `cot` **and** these: three assets, of which two
+  // carry `wood` and `furniture`, so no tag a tavern could prefer tells the
+  // guest bed from the bunks. A room that declares both — the guest room does —
+  // could then have drawn the same bunks into both of its slots. `iron_bunks`,
+  // the dungeon's, never carried `bed`; this is the two being made to agree.
+  { id: 'anchor/bunk_beds', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['bunks', 'furniture', 'wood'], againstWall: true },
   { id: 'anchor/wardrobe', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['storage', 'furniture', 'wood'], againstWall: true },
   { id: 'anchor/shelf_row', kind: 'anchor', footprint: { w: 4, h: 1 }, tags: ['shelving', 'storage', 'wood'], againstWall: true },
   { id: 'anchor/shelf_row_short', kind: 'anchor', footprint: { w: 3, h: 1 }, tags: ['shelving', 'storage', 'wood'], againstWall: true },
@@ -168,18 +176,43 @@ export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   { id: 'group/funerary_urn', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['tomb', 'storage'], againstWall: false },
 
   // Scatter: one-cell litter, strewn over the floor.
-  { id: 'scatter/mug', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['tableware', 'clutter'], againstWall: false },
+  //
+  // **Each of these carries a word for what it *is*, beside the words for
+  // where it belongs**, and the second kind was not enough on its own. A room
+  // asks for its floor as a ladder of tag rungs (`scatterLadder` in
+  // `generator/profiles.ts`), and a rung can only ask for a conjunction — so
+  // two pieces carrying the same tags and nothing else can never be told
+  // apart, at any weight, in any room. Three did: `bone`, `broken_chain` and
+  // `dust` were all `['dungeon', 'debris']`, and a crypt written for 31% bone
+  // drew 19% of each of the three, measured over 400 seeds. `mug` and `bottle`
+  // were both `['tableware', 'clutter']`, and a taproom written for 45% mugs
+  // against 21% bottles drew 27% of each.
+  //
+  // So `remains`, `iron`, `grime`, `crockery`, `glass`, `bedding` and
+  // `masonry` are here, one word for one kind of thing, each with room in it
+  // for pieces this catalogue does not have yet — a jug is crockery, a manacle
+  // is iron, soot is grime. `remains` is the one carried by two, because a
+  // skull and a bone are the same kind of thing; the crypt tells them apart by
+  // asking for `['remains', 'dungeon']` and `['tomb']`, which is the
+  // conjunction doing the work a third word would otherwise have to.
+  { id: 'scatter/mug', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['tableware', 'clutter', 'crockery'], againstWall: false },
   { id: 'scatter/stool', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['seating', 'wood'], againstWall: false },
-  { id: 'scatter/bottle', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['tableware', 'clutter'], againstWall: false },
-  { id: 'scatter/straw', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['clutter', 'debris'], againstWall: false },
+  { id: 'scatter/bottle', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['tableware', 'clutter', 'glass'], againstWall: false },
+  { id: 'scatter/straw', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['clutter', 'debris', 'bedding'], againstWall: false },
   { id: 'scatter/sack', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['storage', 'clutter'], againstWall: false },
-  { id: 'scatter/shard', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['clutter', 'debris'], againstWall: false },
-  { id: 'scatter/bone', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['dungeon', 'debris'], againstWall: false },
-  { id: 'scatter/broken_chain', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['dungeon', 'debris'], againstWall: false },
-  { id: 'scatter/rubble', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['stone', 'debris'], againstWall: false },
-  { id: 'scatter/dust', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['dungeon', 'debris'], againstWall: false },
+  // `stone` alongside the other two, and it is what a shard of broken floor
+  // is. `shard` and `straw` carried the same two tags and nothing else, so no
+  // rung of a room's debris ladder could ask for one without the other — and
+  // the crypt, whose own description asked for "cacos de piso quebrado", could
+  // only have had its shards by being strewn with straw as well. `rubble` was
+  // already the stone piece; this makes the pair say the same thing.
+  { id: 'scatter/shard', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['clutter', 'debris', 'stone'], againstWall: false },
+  { id: 'scatter/bone', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['dungeon', 'debris', 'remains'], againstWall: false },
+  { id: 'scatter/broken_chain', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['dungeon', 'debris', 'iron'], againstWall: false },
+  { id: 'scatter/rubble', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['stone', 'debris', 'masonry'], againstWall: false },
+  { id: 'scatter/dust', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['dungeon', 'debris', 'grime'], againstWall: false },
   { id: 'scatter/loose_arrow', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['weapons', 'debris'], againstWall: false },
-  { id: 'scatter/skull', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['tomb', 'debris'], againstWall: false },
+  { id: 'scatter/skull', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['tomb', 'debris', 'remains'], againstWall: false },
 ];
 
 /**
