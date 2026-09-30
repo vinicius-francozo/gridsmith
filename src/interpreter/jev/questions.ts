@@ -70,22 +70,116 @@ export type JevQuestion = JevNoulQuestion | JevChoiceQuestion | JevScoreQuestion
  * so that the thirteen names a response is read by are visible in one place.
  */
 export const QUESTIONS = {
+  /**
+   * **This question had never been exercised with more than two options and is
+   * being taken to ten.** Every criterion in it is measured, including the two
+   * that were here before, and the numbers below are what chose these words
+   * rather than describing them afterwards.
+   *
+   * **The shape that wins is the shortest one that names the place.** Every
+   * criterion the plan for this front proposed carried a clause naming what is
+   * *inside* the building, and every one of those clauses cost sentences:
+   *
+   * - `forge` as `'…onde se trabalha metal no fogo e na bigorna'` scores the
+   *   canonical ruler's own negation control, *"Não há fogo aqui, só cinzas
+   *   frias"*, at **0.81**. Naming the fire pulls a sentence that denies one.
+   * - `ship` as `'…com porão de carga'` takes the trap sentence
+   *   `porao-verbo-2` to **0.51** — the future of *pôr* against *porão*, the
+   *   hold, which is the collision `read.ts` names in its own header.
+   * - `temple` as `'…com altar e lugar de culto'` takes three crypt sentences,
+   *   `k05` at **0.93**, because the building is chosen before the room and a
+   *   catacomb reads as a place of the dead whichever way it is worded.
+   *
+   * **`dungeon` gains the word `cripta`, and it is the only criterion here that
+   * existed before and changed.** The user approved it. With it the dungeon is
+   * back to 15 of 15 and the six funerary sentences close — `k02` and `k03` at
+   * 1.00, `k06` 0.99, `k04` 0.96, `k05` 0.80 — and `temple` stops winning any
+   * sentence of the 46 at all, its mean mass falling from 0.065 to 0.007.
+   *
+   * **Every figure in this paragraph is a property of the finished set of ten,
+   * and six of the ten are in the table below.** The measurement was taken on
+   * all ten criteria at once, because that is the question the project is being
+   * built towards; `mine`, `ship`, `apothecary` and `den` arrive with the next
+   * front. So the numbers describe what this question will do when it is
+   * complete, not what it does today, and the difference is not cosmetic — a
+   * choice is a competition, and a criterion that is absent cannot take a
+   * sentence from the ones that are here.
+   *
+   * Over the 46: **36 of 46** for the ten, against 38 of 46 on today's two
+   * options and 27 of 46 on the twelve the plan proposed. Two buildings were
+   * cut by the user rather than reworded, because there was no wording that
+   * repaired them.
+   *
+   * **The two sentences the project answers today and will answer wrongly**,
+   * measured and named rather than left to be found: `p07`, *"A despensa da
+   * cozinha, com prateleiras de sacos e potes"*, goes to `apothecary` at 0.73,
+   * and `p15`, *"Um aposento privado com cama de dossel e uma escrivaninha"*,
+   * goes to `tower`. Both are the manor's absence rather than a wording defect
+   * — a rich bedroom and a larder have nowhere else to go once the building
+   * with the writing desk and the building with the pots on shelves are the
+   * nearest two — and `tower` and `apothecary` are already in the minimal
+   * shape. Recovering them means moving `tavern`, which is the user's to
+   * decide.
+   *
+   * **Only one of those two is reachable from this file as it stands**, and the
+   * asymmetry is worth naming rather than leaving to be rediscovered:
+   * `apothecary` is not a criterion here yet, so `p07` cannot go to it today —
+   * it goes wherever six criteria send it, which this measurement does not say.
+   * `p15` goes to `tower`, which is here. The six-criterion set has no
+   * measurement of its own and none was taken: it is a state the project passes
+   * through between two fronts, and fitting wording to it would be fitting
+   * wording to a week.
+   *
+   * **The ruler for reading any number in this file.** Repeatability over ten
+   * sentences: the choice is identical 10 of 10 runs, mean |Δ| 0.012, worst
+   * 0.05. A difference of up to 0.05 on one sentence is noise.
+   */
   building: {
     type: 'choice',
     instructions: 'Que tipo de construção o texto descreve?',
     criteria: {
       tavern: 'Uma taverna ou estalagem para hóspedes, comida e bebida',
-      dungeon: 'Uma masmorra, calabouço, prisão ou fortaleza subterrânea',
+      dungeon: 'Uma masmorra, calabouço, prisão, cripta ou fortaleza subterrânea',
+      forge: 'Uma ferraria, forja ou oficina de ferreiro',
+      temple: 'Um templo, igreja ou santuário de culto',
+      library: 'Uma biblioteca ou um arquivo de livros',
+      tower: 'A torre de um mago ou feiticeiro',
     },
   },
+  /**
+   * **Reworded, measured, and the measurement is the reason it is not simply
+   * the old sentence with ten more nouns in it.**
+   *
+   * Over 87 sentences, false notices fall from **31 of 87 to 0 of 87** and the
+   * highest answer over all 87 falls from 0.98 to 0.72, so
+   * `OUT_OF_VOCABULARY_THRESHOLD` holds at 0.75 without being re-fitted. On the
+   * 46 of the building corpus the same comparison is **0 of 46 against 21 of
+   * 46**, with the same 0.72 ceiling.
+   *
+   * The obvious alternative — keep today's instruction and scale the list —
+   * was measured beside it and **failed**: 7 of 18 over the threshold against 0
+   * of 18 for this. It is `feature_pillars`' lesson reproduced on the building
+   * axis, and the one written above `feature_bar` below: enriching the
+   * *instruction* redistributes probability mass, and the list belongs in the
+   * criteria where a noul can hold it without making the words compete.
+   *
+   * **The list names ten buildings and four of them do not exist yet.** Mina,
+   * navio, botica and antro arrive with the next front, and the sentence is not
+   * trimmed to six because it was measured as this sentence — dropping the two
+   * the user cut was itself remeasured rather than assumed harmless, which is
+   * the reason to be careful about dropping four more. What it costs until then
+   * is the notice: a description of a ship is read as in the catalogue and is
+   * built as the nearest building there is, with nothing said. That is a worse
+   * failure than a false notice and it is temporary, so it is written here
+   * rather than traded silently for a sentence nobody has measured.
+   */
   out_of_vocabulary: {
     type: 'noul',
-    instructions:
-      'O texto descreve uma construção que NÃO é taverna nem masmorra?',
+    instructions: 'O texto descreve um tipo de construção que não está no catálogo?',
     criteria: {
-      true: 'É outro tipo de construção ou espaço — uma ferraria, um pátio, uma floresta, qualquer coisa fora desta lista',
+      true: 'É outro tipo de construção ou espaço — um pátio, um mercado, uma floresta, um estábulo, qualquer coisa fora do catálogo',
       false:
-        'É uma taverna ou uma masmorra',
+        'É uma taverna, uma masmorra, uma ferraria, um templo, uma biblioteca, uma torre de mago, uma mina, um navio, uma botica ou um antro de ladrões',
     },
   },
   light: {

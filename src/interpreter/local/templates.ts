@@ -73,6 +73,10 @@ export const BUILDING_TEMPLATE: ChoiceTemplate<Building> = {
   labels: {
     tavern: 'taverna',
     dungeon: 'masmorra',
+    forge: 'ferraria',
+    temple: 'templo',
+    library: 'biblioteca',
+    tower: 'torre de mago',
   },
 };
 
@@ -142,6 +146,10 @@ function labelsOf(building: Building): Readonly<Partial<Record<RoomKind, string>
 export const ROOM_TEMPLATES: Readonly<Record<Building, RoomTemplateSource>> = {
   tavern: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('tavern'); } },
   dungeon: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('dungeon'); } },
+  forge: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('forge'); } },
+  temple: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('temple'); } },
+  library: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('library'); } },
+  tower: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('tower'); } },
 };
 
 /** How lit the place is. */

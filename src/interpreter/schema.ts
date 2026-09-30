@@ -25,11 +25,51 @@ import { roomsFor } from '../generator/profiles';
 
 import { FEATURES } from './vocabulary';
 
+/**
+ * The two halves of a place, as the vocabulary a model's answer is held to.
+ *
+ * **Written out by hand, and exported so that a test can hold them to the
+ * registry.** They cannot be derived from `BUILDING_REGISTRY` and
+ * `ROOM_REGISTRY` the way `Building` and `RoomKind` are: `zodOutputFormat`
+ * sends an enum to the model inside the JSON Schema `description` rather than
+ * as grammar, so these strings are also the only place the model is *told* what
+ * the words are, and a list assembled at import time is a list nobody can read
+ * in the file it is sent from.
+ *
+ * The cost of writing them out is that nothing stops them going stale, and the
+ * three copies are not equally exposed — measured by removing a word from each
+ * and running `tsc`:
+ *
+ * - **`ROOM_ENUM` is caught by the compiler**, through `schema.test.ts`'s
+ *   mutual assignability check: a room added to the registry widens
+ *   `Constraints` and `ParsedConstraints` stops accepting it.
+ * - **`BUILDING_ENUM` is caught the same way**, by the same two lines. A
+ *   building the enum omits makes `Constraints` unassignable to
+ *   `ParsedConstraints` on `place.building`, and `npm run typecheck` fails.
+ * - **`read.ts`'s copy is caught by nothing.** Its parsed value is *narrower*
+ *   than `Building`, so every assignment there compiles with a word missing,
+ *   `npm run typecheck` is clean and so is `npm run build`.
+ *
+ * So it is the third that the run-time check below exists for, and the first
+ * two are held by it as well rather than being trusted to a compiler error in a
+ * test file. `npm run build` is clean for all three, which is the property that
+ * makes any of them shippable while wrong. What happens instead is that the Jev
+ * engine refuses the answer at `read.ts` and the Claude engine is never told the
+ * word exists.
+ *
+ * `schema.test.ts` is the net, and it holds all three copies — these two and
+ * `read.ts`'s — against the registries at run time.
+ */
+export const BUILDING_ENUM = z.enum(['tavern', 'dungeon', 'forge', 'temple', 'library', 'tower']);
+export const ROOM_ENUM = z.enum([
+  'hall', 'room', 'storeroom', 'crypt', 'smithy', 'reading', 'archive', 'laboratory', 'observatory',
+]);
+
 export const constraintsSchema = z
   .object({
     place: z.object({
-      building: z.enum(['tavern', 'dungeon']),
-      room: z.enum(['hall', 'room', 'storeroom', 'crypt']),
+      building: BUILDING_ENUM,
+      room: ROOM_ENUM,
     }).refine((place) => roomsFor(place.building).includes(place.room), {
       message: 'The room is unavailable in this building.',
     }).describe(
@@ -41,9 +81,16 @@ export const constraintsSchema = z
       // supported combination" and says which they are — this is the only place
       // the model is told, since `zodOutputFormat` sends these as a hint in the
       // JSON Schema description rather than as grammar the API enforces.
-      'The building and its room. A tavern has hall, room or storeroom. A dungeon has those three ' +
-        'and crypt, the burial chamber: a catacomb, tomb or ossuary, with sarcophagi and bone niches. ' +
-        'There is no crypt in a tavern.',
+      'The building and the room inside it. The matrix is sparse: each building has only the rooms ' +
+        'listed for it, and a pair that is not listed is refused outright. ' +
+        'tavern: hall, room, storeroom. ' +
+        'dungeon: hall, room, storeroom, crypt — the burial chamber, a catacomb or ossuary with ' +
+        'sarcophagi and bone niches. ' +
+        'forge: smithy, the fire and the anvil, and room, the shop front where the blades are shown. ' +
+        'temple: hall, the nave with its altar and pews, and room, the sacristy the vestments are kept in. ' +
+        'library: reading, the reading room with its shelves and lecterns, and archive, the stacks. ' +
+        'tower: laboratory, a mage\'s working floor with a summoning circle on it, and observatory, ' +
+        'the chamber at the top of the stair.',
     ),
     sizeHint: z
       .enum(['small', 'medium', 'large'])

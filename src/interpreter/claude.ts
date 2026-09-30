@@ -21,7 +21,7 @@ import type { Constraints, Interpreter } from '../core/types';
 import { normalizeUnresolved } from './codes';
 import { classifyRequestFailure, detectRuntime, MissingApiKeyError, UnusableResponseError } from './errors';
 import type { Runtime } from './errors';
-import { constraintsSchema } from './schema';
+import { BUILDING_ENUM, constraintsSchema } from './schema';
 import { FEATURES } from './vocabulary';
 
 /** The model this interpreter is written against. */
@@ -55,9 +55,29 @@ const MAX_TOKENS = 16000;
  */
 const EFFORT = 'low';
 
+/**
+ * **The fourth hand-written list of buildings**, and the one no table in this
+ * project points at.
+ *
+ * `schema.ts` has two — the enum and the sentence describing it — `jev/read.ts`
+ * has a third, and this sentence is the fourth. It said "a tavern or dungeon
+ * room" while the enum beneath it offered more, which is a prompt telling the
+ * model the vocabulary is smaller than the schema it is answering in. Built
+ * from the enum instead, it cannot say that again: `BUILDING_ENUM.options` is
+ * the same list `zodOutputFormat` sends, so the sentence and the schema are one
+ * list read twice rather than two lists kept in step.
+ *
+ * Derived rather than held to the registry by a test, unlike the other three,
+ * and the difference is what each one is for. Those three are what the model is
+ * *offered*; getting one of them wrong loses a word. This is framing, and a
+ * framing that lists the words is worth exactly as much as the list is current.
+ */
+const BUILDING_LIST = BUILDING_ENUM.options.join(', ');
+
 const SYSTEM_PROMPT = [
-  'You turn a spoken description of a tavern or dungeon room into the closed set of constraints a',
-  'battlemap generator understands. The description is what a game master said at the table,',
+  `You turn a spoken description of a room into the closed set of constraints a`,
+  `battlemap generator understands. The buildings it can draw a room of are: ${BUILDING_LIST}.`,
+  'The description is what a game master said at the table,',
   'so it is short, it may be in any language, and it is often incomplete.',
   '',
   'Fill every required field. When the description does not say, choose what the place itself',

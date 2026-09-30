@@ -120,6 +120,57 @@ const PROFILES: Readonly<Record<RoomKind, PlaceProfile>> = {
     // Sealed. One way in, and at most a second one broken open later.
     doors: { min: 1, max: 2 },
   },
+  /**
+   * The smithy, against its own 9x8 floor and 14x12 ceiling.
+   *
+   * **The three bands are separated on one side by three cells, never on both,
+   * and that is deliberate rather than the best that would fit.** `jitterSize`
+   * moves each side by a cell, so two bands three apart on *any* side can never
+   * hand back the same rectangle — and holding both sides apart in a room this
+   * small would have cost one of the three hints a range to vary in, which is
+   * the other thing `resolve.test.ts` asks for. So small and medium are apart
+   * on width, medium and large on height, and small and large on both.
+   *
+   * The small band sits a cell above the generator's floor rather than on it,
+   * which every band in this table does: `resolve` is held to never *ask* for
+   * less than the generator will build, and a band on the floor jitters under
+   * it.
+   */
+  smithy: {
+    sizes: { small: { w: 10, h: 9 }, medium: { w: 13, h: 9 }, large: { w: 13, h: 12 } },
+    doors: { min: 1, max: 2 },
+  },
+  // The reading room, against its own 9x8 floor and 15x13 ceiling. Wider than
+  // the smithy on every hint, because the room it has to hold is a room people
+  // sit down in rather than stand up in.
+  reading: {
+    sizes: { small: { w: 10, h: 9 }, medium: { w: 13, h: 10 }, large: { w: 14, h: 13 } },
+    doors: { min: 1, max: 2 },
+  },
+  // The stacks, against 7x7 and 12x11 — **the smallest bands in the table**,
+  // and the only ones whose small hint is square. A 7x7 footprint is a 5x5
+  // floor, which is what the 4x1 shelf run is dimensioned against.
+  archive: {
+    sizes: { small: { w: 8, h: 8 }, medium: { w: 11, h: 8 }, large: { w: 11, h: 11 } },
+    doors: { min: 1, max: 2 },
+  },
+  // The laboratory, against 11x11 and 16x15. **The small band starts at 12x12
+  // for the crypt's reason and no other**: 11x11 is exactly where `growPillars`
+  // becomes possible, and a band sitting on that line jitters under it — so a
+  // laboratory asked for small and asked for columns would sometimes get none
+  // and say nothing.
+  laboratory: {
+    sizes: { small: { w: 12, h: 12 }, medium: { w: 15, h: 12 }, large: { w: 15, h: 15 } },
+    doors: { min: 1, max: 2 },
+  },
+  // The observatory, against 9x9 and 14x13. One door, which makes the range a
+  // point rather than a band — the second place in this table to say so, after
+  // the guest room, and for an unrelated reason: there is nowhere for a second
+  // door at the top of a tower to lead.
+  observatory: {
+    sizes: { small: { w: 10, h: 10 }, medium: { w: 13, h: 10 }, large: { w: 13, h: 13 } },
+    doors: { min: 1, max: 1 },
+  },
 };
 
 /** What a place is when the description said nothing about size. */

@@ -160,6 +160,15 @@ describe('MATERIAL_VARIANTS', () => {
       plaster_wall: 2,
       timber_wall: 2,
       tufa_column: 1,
+      forge_floor: 3,
+      forge_wall: 3,
+      mosaic_floor: 3,
+      sanctum_wall: 3,
+      oak_floor: 3,
+      archive_floor: 3,
+      library_wall: 3,
+      slate_floor: 3,
+      slate_wall: 3,
     });
   });
 });

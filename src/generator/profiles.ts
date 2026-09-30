@@ -94,6 +94,43 @@ export const MATERIALS: Record<string, MaterialDef> = {
   stone_wall: { variants: 3, rotatable: false },
   plaster_wall: { variants: 2, rotatable: false },
   timber_wall: { variants: 2, rotatable: false },
+  // **A building's own stone, and the name is the whole of the colour.**
+  // `materialColor` derives a hue, a saturation and a lightness ladder from the
+  // name by FNV-1a, so nothing is authored here — but the name still has to be
+  // *chosen*, because two of the derivation's outputs are load-bearing and
+  // neither is obvious from reading one:
+  //
+  // 1. **A floor has to stay 28 ΔE2000 clear of `tufa_column`**, the colour
+  //    every pillar in the project is painted. `profiles.test.ts` measures it
+  //    over every shade of every floor any profile can pave with, and names
+  //    under the ruler are common — `temple_marble`, the name the plan for this
+  //    front suggested, lands at 24.2 and would have failed.
+  // 2. **Three variants of one material must stay under the widest spread the
+  //    vocabulary already has**, 10.2, or the ruler that separates "a different
+  //    material" from "the same stone cut differently" moves under everybody.
+  //
+  // Measured for each name below before it was used: worst case against the
+  // pillar 29.5 (`slate_floor`), widest variant spread 9.8 (`mosaic_floor`),
+  // so `stone_floor`'s 10.2 is still the widest in the project.
+  //
+  // Three variants each rather than four, and it is the cheap half of the
+  // second rule: the ladder steps the lightness four points a rung, so three
+  // rungs span eight points where four span twelve.
+  forge_floor: { variants: 3, rotatable: true },
+  forge_wall: { variants: 3, rotatable: false },
+  // Not rotatable, and it is the one of these that is a judgement rather than a
+  // measurement: a mosaic has a pattern with a top, and spinning the tile would
+  // break the figure it is a tile of. `wood_plank` is refused rotation for the
+  // same reason — the grain — and `flagstone` is allowed it.
+  mosaic_floor: { variants: 3, rotatable: false },
+  sanctum_wall: { variants: 3, rotatable: false },
+  // Boards, so no rotation, for `wood_plank`'s reason. The archive is flagged
+  // and may be spun.
+  oak_floor: { variants: 3, rotatable: false },
+  archive_floor: { variants: 3, rotatable: true },
+  library_wall: { variants: 3, rotatable: false },
+  slate_floor: { variants: 3, rotatable: true },
+  slate_wall: { variants: 3, rotatable: false },
   // See `PILLAR_MATERIAL`. One variant and no rotation: the variant ladder
   // exists so that a floor of two hundred cells does not read as one flat
   // sheet, and a room has four pillars — a pillar drawn in three shades would
@@ -300,12 +337,23 @@ export type ScatterRung = { tags: string[]; weight: number };
  * (`crate`, `barrel`, `supply_crate`, `sack`), so somebody writing "caixotes
  * empilhados" would be handed the wardrobe that happens to be the concept's one
  * anchor. What it needs is a mechanism that promotes a group, not a word.
+ *
+ * **`altar` and `ladder` are two more wordless ones, and they are wordless for
+ * the reason `storage` is not.** Each is the one piece its room cannot be
+ * talked out of — the altar in a nave, the stepladder in an archive — and the
+ * crypt's fourth slot is the precedent for what a room without one costs: every
+ * anchor refusable, and bare walls on a description that merely reads as dark.
+ * Giving either of them a word is possible and is a separate decision, because
+ * a word in `FEATURES` is a word the prompt offers and the admission bench has
+ * to measure.
  */
 export const CONCEPTS = {
+  altar: {},
   bar: { feature: 'bar' },
   bed: { feature: 'bed' },
   bunks: { feature: 'bunks' },
   hearth: { feature: 'hearth' },
+  ladder: {},
   shelving: { feature: 'shelving' },
   stairs: { feature: 'stairs' },
   storage: {},
@@ -724,6 +772,265 @@ export const ROOM_REGISTRY = {
     // answers with, so there is somewhere for it to land.
     scatterChance: 0.2,
   },
+  /**
+   * The forge floor of a smithy. The fire, the tools, and an anvil standing in
+   * the middle of it.
+   *
+   * **The anvil is a group and not an anchor, and that decision is the one the
+   * next six rooms copy.** An anchor needs a wall behind it (`anchorCandidates`
+   * asks `backsOnto`), and an anvil is the one thing in a smithy that is
+   * emphatically not against one — it is walked around. The slots a room fills
+   * against its walls are the fire, the tool rack and the coal bin; the piece
+   * the room is *told apart by* stands on the floor, in a group of one part at
+   * the piece's own footprint.
+   *
+   * No pillars, and it is the rule rather than a judgement: `allowPillars: true`
+   * under 11x11 is a room that asks for columns and is handed none in silence
+   * (`floorplan.ts`, `MIN_INTERIOR_FOR_PILLARS`), which is the defect the hall
+   * carries on 205 of 600 seeds. A smithy is a workshop under a low roof, so
+   * the honest answer is the one that costs nothing: no columns, and
+   * `FEATURE_PLACES` says so.
+   *
+   * `alcove` is off the shape list for the same reason it is off the store
+   * room's: a recess is where a smithy would put its fire, and the fire already
+   * has a wall.
+   */
+  smithy: {
+    minSize: { w: 9, h: 8 },
+    maxSize: { w: 14, h: 12 },
+    // A wide front onto the street and a door to the yard the fuel comes in by.
+    doorRange: { min: 1, max: 2 },
+    shapes: ['rectangle', 'l_shape'],
+    allowPillars: false,
+    anchorRange: { min: 2, max: 3 },
+    anchors: [
+      { footprint: { w: 3, h: 2 }, placement: 'wall' },
+      { footprint: { w: 4, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+    ],
+    // Above the hall's 2, because a smithy with nothing on its floor has no
+    // anvil in it, and the anvil is the one group of the two that matters.
+    groupsPerHundredCells: { min: 3, max: 6 },
+    groups: [
+      {
+        id: 'anvil',
+        size: { w: 1, h: 1 },
+        parts: [{ offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } }],
+      },
+      {
+        id: 'quench_bench',
+        size: { w: 2, h: 1 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    scatterChance: 0.18,
+  },
+  /**
+   * The reading room of a library: shelves on two walls, a fire, and lecterns
+   * standing out on the floor where the light is.
+   *
+   * **Two `shelving` slots at two footprints, and only one of them carries the
+   * word.** The long run and the short run are different pieces in the
+   * catalogue, so the room gets both; giving the second the word as well would
+   * make "sem prateleiras" empty the room, and leaving it wordless makes it the
+   * piece no description can take away. That is the crypt's fourth slot used on
+   * purpose rather than discovered afterwards.
+   *
+   * `alcove` is on the shape list and pillars are not: a reading nook is
+   * exactly what a recess off this room is, and the ceiling is a floor of books
+   * rather than a vault.
+   */
+  reading: {
+    minSize: { w: 9, h: 8 },
+    maxSize: { w: 15, h: 13 },
+    doorRange: { min: 1, max: 2 },
+    shapes: ['rectangle', 'alcove'],
+    allowPillars: false,
+    anchorRange: { min: 2, max: 3 },
+    anchors: [
+      { footprint: { w: 4, h: 1 }, placement: 'wall' },
+      { footprint: { w: 3, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 3 }, placement: 'corner' },
+    ],
+    // The guest room's numbers rather than the hall's: a reading room with four
+    // tables in it is a refectory.
+    groupsPerHundredCells: { min: 2, max: 5 },
+    groups: [
+      {
+        id: 'lectern',
+        size: { w: 1, h: 1 },
+        parts: [{ offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } }],
+      },
+      {
+        id: 'reading_desk',
+        size: { w: 2, h: 1 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    // The lowest in the project. A library is swept, and the two rooms it has
+    // are the two that most need their floor readable.
+    scatterChance: 0.1,
+  },
+  /**
+   * The stacks. Tighter and taller than the reading room, and the one room in
+   * the project that declares **no fire at all on purpose**: a chamber full of
+   * parchment is where an open flame is a mistake rather than an omission.
+   *
+   * Its smallest footprint is 7x7, the smallest of any room here — smaller than
+   * the guest room's 6x6 only in that it is square — which is what makes the
+   * 4x1 shelf run the longest thing that will stand in it.
+   */
+  archive: {
+    minSize: { w: 7, h: 7 },
+    maxSize: { w: 12, h: 11 },
+    doorRange: { min: 1, max: 2 },
+    shapes: ['rectangle', 'l_shape'],
+    allowPillars: false,
+    anchorRange: { min: 2, max: 3 },
+    anchors: [
+      // **1x3, and the only anchor in the project deeper than it is wide.** `w`
+      // runs along the wall and `h` is the depth away from it, so this is one
+      // cell of wall and three of floor: a ladder leaning into the room off the
+      // stack it serves.
+      { footprint: { w: 1, h: 3 }, placement: 'wall' },
+      { footprint: { w: 4, h: 1 }, placement: 'wall' },
+      { footprint: { w: 3, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+    ],
+    // The store room's numbers. What an archive is, is full.
+    groupsPerHundredCells: { min: 3, max: 7 },
+    groups: [
+      {
+        id: 'scroll_boxes',
+        size: { w: 2, h: 2 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 2, h: 1 } },
+          { offset: { x: 0, y: 1 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 1 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+      {
+        id: 'copy_desk',
+        size: { w: 2, h: 1 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    scatterChance: 0.14,
+  },
+  /**
+   * A wizard's working floor. **The only room this front gives pillars to**,
+   * and the only one that can honestly have them: `minSize` is 11x11, which is
+   * where `growPillars` becomes possible at all (`floorplan.ts`,
+   * `MIN_INTERIOR_FOR_PILLARS` is 9x9 and the wall ring eats one a side).
+   *
+   * That is the crypt's rule applied rather than restated, and it is the whole
+   * reason this room is 11x11 and not 10x10. The three halls are a cell short
+   * of it and pay 205 of 600 seeds for the shortfall, silently. A room that
+   * declares `allowPillars` has to be able to grow them at its own floor or the
+   * declaration is a promise to nobody.
+   *
+   * All four shapes, because this is the one room of the four whose walls are
+   * allowed to be strange.
+   */
+  laboratory: {
+    minSize: { w: 11, h: 11 },
+    maxSize: { w: 16, h: 15 },
+    doorRange: { min: 1, max: 2 },
+    shapes: ['rectangle', 'l_shape', 't_shape', 'alcove'],
+    allowPillars: true,
+    anchorRange: { min: 2, max: 3 },
+    anchors: [
+      { footprint: { w: 4, h: 1 }, placement: 'wall' },
+      { footprint: { w: 3, h: 2 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 3 }, placement: 'corner' },
+    ],
+    // **The lowest `min` of any room but the crypt, and three groups rather
+    // than two.** Both are about the same piece: the summoning circle is 3x3
+    // and is drawn from the same list as the other two, so a `min` of 2 and a
+    // list of 2 would carpet a laboratory in chalk figures. Three templates put
+    // it at a third of the draws, and `min: 1` keeps the count down at the
+    // furnishing this room is usually described at.
+    groupsPerHundredCells: { min: 1, max: 4 },
+    groups: [
+      {
+        id: 'summoning_circle',
+        size: { w: 3, h: 3 },
+        parts: [{ offset: { x: 0, y: 0 }, footprint: { w: 3, h: 3 } }],
+      },
+      {
+        id: 'work_bench',
+        size: { w: 2, h: 1 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+      {
+        id: 'reagent_stack',
+        size: { w: 2, h: 2 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 2, h: 1 } },
+          { offset: { x: 0, y: 1 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 1 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    scatterChance: 0.12,
+  },
+  /**
+   * The chamber at the top of the stair, under whatever the roof opens onto.
+   *
+   * One door, and it is the second room in the project to say so — the guest
+   * room is the other, and for the opposite reason. A guest room has one way in
+   * because that is what makes it a place you can be cornered in; this one has
+   * one because there is nowhere else for a door at the top of a tower to go.
+   *
+   * No pillars: 9x9 is under the line, and declaring them here would be the
+   * hall's silent defect copied into a room built after it was measured.
+   */
+  observatory: {
+    minSize: { w: 9, h: 9 },
+    maxSize: { w: 14, h: 13 },
+    doorRange: { min: 1, max: 1 },
+    shapes: ['rectangle', 'alcove'],
+    allowPillars: false,
+    anchorRange: { min: 2, max: 3 },
+    anchors: [
+      { footprint: { w: 2, h: 3 }, placement: 'corner' },
+      { footprint: { w: 4, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+    ],
+    groupsPerHundredCells: { min: 2, max: 4 },
+    groups: [
+      {
+        id: 'armillary_sphere',
+        size: { w: 2, h: 2 },
+        parts: [{ offset: { x: 0, y: 0 }, footprint: { w: 2, h: 2 } }],
+      },
+      {
+        id: 'chart_desk',
+        size: { w: 2, h: 1 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    // The lowest in the project, below the reading room's. A floor somebody
+    // works on by starlight is a floor somebody keeps clear.
+    scatterChance: 0.08,
+  },
 } satisfies Record<string, RoomGeometry>;
 
 /**
@@ -918,10 +1225,22 @@ export const BUILDING_REGISTRY = {
           // empty at every dark seed. Counted rather than assumed, because the
           // count is worse than the front that made this change believed: the
           // two store rooms already declare no light-bearing anchor at all, so
-          // this makes **three** of the seven rooms unlit by their own
+          // this made **three** of the seven rooms unlit by their own
           // furniture. The crypt is not one of them — its brazier carries a
           // light and is lost to `excluded`, not to the table — so the two
           // cases are different and only this comment says so.
+          //
+          // **Six of fifteen as of the observatory.** The nave declares an altar
+          // where the halls declare a fire and has no 2x1 slot to put a sconce
+          // in; the archive declares no fire on purpose, because a room full of
+          // parchment is the one room in this project that should not have one;
+          // the observatory is lit by what it is pointed at. The count is
+          // carried forward here rather than restated in each
+          // room, because a room with no light of its own is a property of the
+          // set and not of the room: it is what `Scene.lights` comes back empty
+          // for at every dark seed. (It read "four of nine" for one commit,
+          // which counted the rooms right and the pairs wrong: the temple made
+          // it four of eleven.)
           null,
         ],
         groups: [['prison_desk', 'guard_stool']],
@@ -1115,6 +1434,319 @@ export const BUILDING_REGISTRY = {
           // without making them compete (the `criterion` above), and that
           // measurement does not transfer to an entailment premise.
           label: 'cripta da masmorra',
+        },
+      },
+    },
+  },
+  /**
+   * The smith's. Two rooms and one of them is a room this project already had.
+   *
+   * **The palette ladder leads with the building's own word**, which the tavern
+   * and the dungeon do not — theirs lead with a material, `wood` and `dungeon`.
+   * The reason is that the catalogue is twenty pieces wider than it was: a rung
+   * naming a material now reaches pieces drawn for other buildings, and
+   * `['iron', …]` here would have furnished the shop front with `ore_cart`, the
+   * mine's. A building word is the one rung nothing else can carry.
+   *
+   * The shop front reuses the guest room's geometry, and what that buys and
+   * costs is exactly what the crypt's header predicted. It buys five slots
+   * already dimensioned and a group already drawn. It costs the 2x3 at index 1,
+   * which is a bunk in a room people sleep in and is nothing at all in a shop —
+   * left `null`, the way the cell leaves the guest room's fire.
+   */
+  forge: {
+    assetTags: ['forge', 'wood', 'stone'],
+    rooms: {
+      smithy: {
+        floorMaterials: ['forge_floor', 'dirt_floor'],
+        wallMaterials: { forge_floor: 'forge_wall', dirt_floor: 'stone_wall' },
+        defaultWallMaterial: 'forge_wall',
+        anchors: [
+          // The forge itself. A wider light than a hearth's, because the fire
+          // in a smithy is the reason the room is lit at all.
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 7, colorHex: '#ff9a4d' } },
+          { concept: 'shelving', feature: 'shelving' },
+          // **The net.** `storage` carries no word, so no description can refuse
+          // it, and this room's other two anchors both can be refused — which
+          // is the arithmetic the crypt's fourth slot was added for.
+          { concept: 'storage' },
+        ],
+        groups: [['anvil'], ['barrel', 'crate_small']],
+        // Scale off the iron, the coal dust, and the stone the fire has spalled
+        // off the wall. `['iron']` is the broken chain and only it — scrap in a
+        // smithy is scrap iron — and the rung order is what keeps it ahead of
+        // the dust.
+        scatterLadder: [
+          { tags: ['iron'], weight: 3 },
+          { tags: ['grime'], weight: 3 },
+          { tags: ['masonry'], weight: 2 },
+        ],
+        words: {
+          name: 'Forja da ferraria',
+          criterion: 'A forja da ferraria: a oficina com a fornalha, a bigorna e as ferramentas',
+          label: 'forja da ferraria',
+        },
+      },
+      room: {
+        floorMaterials: ['forge_floor'],
+        wallMaterials: { forge_floor: 'forge_wall' },
+        defaultWallMaterial: 'forge_wall',
+        anchors: [
+          // The stair to the rooms over the shop. The guest room's first slot is
+          // a bed at 2x3 and a staircase is 2x3 as well, which is what makes
+          // this reuse work at all.
+          { concept: 'stairs', feature: 'stairs' },
+          // The bunks. A shop front has nobody sleeping in it.
+          null,
+          { concept: 'storage' },
+          // **The blade display, and the slot the guest room fills with a short
+          // shelf.** Both are 3x1 against a wall; `weapons` at that footprint is
+          // one piece in the whole catalogue, so no palette rung is doing any
+          // work here.
+          { concept: 'weapons', feature: 'weapons' },
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 4, colorHex: '#ffb46b' } },
+        ],
+        groups: [['table_small', 'chair']],
+        scatterLadder: [
+          { tags: ['iron'], weight: 3 },
+          { tags: ['grime'], weight: 2 },
+          { tags: ['storage'], weight: 1 },
+        ],
+        words: {
+          name: 'Loja da ferraria',
+          criterion: 'A frente de loja da ferraria, com as lâminas à mostra e o balcão de venda',
+          label: 'loja da ferraria',
+        },
+      },
+    },
+  },
+  /**
+   * The temple. **Both of its rooms borrow a geometry**, which no building in
+   * this project had done before: the nave is the common room's shapes and the
+   * sacristy is the guest room's.
+   *
+   * It is the cheapest a building can be and the reuse is honest rather than
+   * lazy — a nave is a wide room with a long wall, a recess, and a span that
+   * wants columns, which is the common room's geometry described in other
+   * words. What it inherits with it is the common room's known defect: a hall
+   * asked for pillars under 11x11 is handed none in silence, on 205 of 600
+   * seeds. The nave is exposed to it because it shares the geometry, not
+   * because this front added a room with it, and it is left alone here for the
+   * same reason the hall's is.
+   *
+   * **The 5x2 slot is empty and it is the only one of the three a nave has no
+   * use for.** The concepts the catalogue answers at that footprint are a bar
+   * counter and a weapon rack. Leaving it `null` costs the room its only
+   * possible sconce — see the unlit count on the cell's empty slot above — and
+   * putting a serving counter in a nave to buy a light back is not a trade
+   * worth making.
+   */
+  temple: {
+    assetTags: ['temple', 'stone', 'wood'],
+    rooms: {
+      hall: {
+        floorMaterials: ['mosaic_floor', 'flagstone'],
+        wallMaterials: { mosaic_floor: 'sanctum_wall', flagstone: 'stone_wall' },
+        defaultWallMaterial: 'sanctum_wall',
+        anchors: [
+          // The bar counter's slot. A nave has neither that nor an armoury.
+          null,
+          // **The altar, and the room's net.** `altar` carries no word, so this
+          // is the piece no description can refuse — which matters more here
+          // than anywhere, because the only other anchor the room has is the
+          // stair and `stairs` is one of the words a dark, ruined description
+          // scores low enough to read as refused.
+          { concept: 'altar' },
+          { concept: 'stairs', feature: 'stairs' },
+        ],
+        groups: [
+          // The offering table and its seats, in the round table's shape.
+          ['table_round', 'chair', 'chair', 'chair', 'chair'],
+          // **Three stone benches in the long table's three rows**, which is
+          // the one place the borrowed geometry reads better than the room it
+          // was drawn for: three parallel 3x1 runs is a bank of pews.
+          ['stone_bench', 'stone_bench', 'stone_bench'],
+        ],
+        // Wax and dust, the vault coming down, and the rushes underfoot. No
+        // crockery and no glass: nothing is drunk from in a nave.
+        scatterLadder: [
+          { tags: ['grime'], weight: 3 },
+          { tags: ['masonry'], weight: 2 },
+          { tags: ['bedding'], weight: 1 },
+        ],
+        words: {
+          name: 'Nave do templo',
+          // **Pending measurement.** The building question's wording for
+          // `temple` was measured and failed — it takes three crypt sentences,
+          // one at 0.93 — and the repair the user approved touches the
+          // dungeon's criterion as well, so the final strings for both are
+          // being measured together. This is the plan's wording until they
+          // arrive.
+          criterion: 'A nave do templo: o corpo principal, com o altar e os bancos',
+          label: 'nave do templo',
+        },
+      },
+      room: {
+        floorMaterials: ['mosaic_floor'],
+        wallMaterials: { mosaic_floor: 'sanctum_wall' },
+        defaultWallMaterial: 'sanctum_wall',
+        anchors: [
+          { concept: 'stairs', feature: 'stairs' },
+          null,
+          // **The vestment cabinet, and the collision the map predicted.** It is
+          // `storage` at 2x1, which is the wardrobe's concept at the wardrobe's
+          // footprint — three pieces answer that query now. It is resolved
+          // where `storage` itself was: on the palette rung, by the building's
+          // own word, which is the only tag of the three that one piece carries
+          // and the other two do not.
+          { concept: 'storage' },
+          { concept: 'shelving', feature: 'shelving' },
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 4, colorHex: '#ffd9a0' } },
+        ],
+        groups: [['table_small', 'chair']],
+        // The vessels first: a sacristy is the room the plate is kept in.
+        scatterLadder: [
+          { tags: ['crockery'], weight: 3 },
+          { tags: ['grime'], weight: 2 },
+          { tags: ['bedding'], weight: 1 },
+        ],
+        words: {
+          name: 'Sacristia do templo',
+          criterion: 'A sacristia do templo, onde se guardam os paramentos e as alfaias',
+          label: 'sacristia do templo',
+        },
+      },
+    },
+  },
+  /**
+   * The library. Two rooms, two geometries of its own, and **no `RoomKind` it
+   * shares with anything** — the first building of which that is true.
+   *
+   * It is also the building that shows what a geometry of its own is *for*,
+   * which the crypt's header claims and one room could not demonstrate: the two
+   * rooms here are the same furniture at two densities and two scales. The
+   * reading room is wide, swept and lit; the archive is the smallest footprint
+   * in the project, the fullest floor, and the only room that declares no fire
+   * at all. Fitted into one geometry they would have been one room with a dial.
+   */
+  library: {
+    assetTags: ['library', 'wood', 'stone'],
+    rooms: {
+      reading: {
+        floorMaterials: ['oak_floor'],
+        wallMaterials: { oak_floor: 'library_wall' },
+        defaultWallMaterial: 'library_wall',
+        anchors: [
+          { concept: 'shelving', feature: 'shelving' },
+          // **The second shelf run, and the room's net.** Same concept, a
+          // different footprint, so it is a different piece; no word on it, so
+          // "sem prateleiras" takes the long run and leaves the short one.
+          { concept: 'shelving' },
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 5, colorHex: '#ffb46b' } },
+          { concept: 'stairs', feature: 'stairs' },
+        ],
+        groups: [['lectern'], ['table_small', 'chair']],
+        // Dust, the packing straw a consignment came in, and the one broken
+        // tile. No crockery and no glass: nothing is drunk over the books.
+        scatterLadder: [
+          { tags: ['grime'], weight: 3 },
+          { tags: ['bedding'], weight: 2 },
+          { tags: ['clutter', 'stone'], weight: 1 },
+        ],
+        words: {
+          name: 'Sala de leitura da biblioteca',
+          criterion: 'A sala de leitura da biblioteca, com as estantes, o atril e as mesas de estudo',
+          // Three words, because four is the ceiling the bench measured and
+          // "sala de leitura da biblioteca" is five. The building is carried by
+          // `BUILDING_TEMPLATE`, which is asked first.
+          label: 'sala de leitura',
+        },
+      },
+      archive: {
+        floorMaterials: ['archive_floor'],
+        wallMaterials: { archive_floor: 'library_wall' },
+        defaultWallMaterial: 'library_wall',
+        anchors: [
+          // **The shelf ladder, the distinctive piece and the net at once.**
+          // `ladder` carries no word, which is what this room needs more than
+          // most: its other three anchors are two shelf runs and a chest, and
+          // `shelving` and `storage` between them are the whole room.
+          { concept: 'ladder' },
+          { concept: 'shelving', feature: 'shelving' },
+          { concept: 'shelving' },
+          { concept: 'storage' },
+        ],
+        groups: [['crate', 'crate_small', 'crate_small'], ['table_small', 'chair']],
+        // Dust first, then the sacking a bundle of deeds is tied in, then the
+        // straw. The archive is the room the library does not sweep.
+        scatterLadder: [
+          { tags: ['grime'], weight: 3 },
+          { tags: ['storage'], weight: 2 },
+          { tags: ['bedding'], weight: 1 },
+        ],
+        words: {
+          name: 'Arquivo da biblioteca',
+          criterion: 'O arquivo da biblioteca: os pergaminhos e os registros guardados nas estantes altas',
+          label: 'arquivo da biblioteca',
+        },
+      },
+    },
+  },
+  /**
+   * The wizard's tower. Two rooms, two geometries, and one stair between them:
+   * the laboratory's corner stair is the one the observatory's comes up from,
+   * which is the only place in this project where two rooms of one building are
+   * stated to be above and below each other.
+   */
+  tower: {
+    assetTags: ['arcane', 'stone', 'wood'],
+    rooms: {
+      laboratory: {
+        floorMaterials: ['slate_floor', 'flagstone'],
+        wallMaterials: { slate_floor: 'slate_wall', flagstone: 'stone_wall' },
+        defaultWallMaterial: 'slate_wall',
+        anchors: [
+          { concept: 'shelving', feature: 'shelving' },
+          // The athanor: a furnace kept alight for months, which is the one
+          // thing in a laboratory that is also a hearth.
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 5, colorHex: '#9fd4ff' } },
+          // The reagent cabinet, and the net.
+          { concept: 'storage' },
+          { concept: 'stairs', feature: 'stairs' },
+        ],
+        groups: [['summoning_circle'], ['table_small', 'chair'], ['crate', 'barrel', 'barrel']],
+        // Glass first, and this is the only floor in the project that leads
+        // with it: what a laboratory drops is what it decanted into.
+        scatterLadder: [
+          { tags: ['glass'], weight: 3 },
+          { tags: ['grime'], weight: 2 },
+          { tags: ['masonry'], weight: 1 },
+        ],
+        words: {
+          name: 'Laboratório da torre',
+          criterion: 'O laboratório da torre, com o círculo de invocação e os instrumentos de estudo',
+          label: 'laboratório da torre',
+        },
+      },
+      observatory: {
+        floorMaterials: ['slate_floor'],
+        wallMaterials: { slate_floor: 'slate_wall' },
+        defaultWallMaterial: 'slate_wall',
+        anchors: [
+          { concept: 'stairs', feature: 'stairs' },
+          { concept: 'shelving', feature: 'shelving' },
+          { concept: 'storage' },
+        ],
+        groups: [['armillary_sphere'], ['table_small', 'chair']],
+        scatterLadder: [
+          { tags: ['glass'], weight: 3 },
+          { tags: ['grime'], weight: 2 },
+          { tags: ['bedding'], weight: 1 },
+        ],
+        words: {
+          name: 'Observatório da torre',
+          criterion: 'O observatório no alto da torre, com a esfera armilar e as cartas celestes',
+          label: 'observatório da torre',
         },
       },
     },

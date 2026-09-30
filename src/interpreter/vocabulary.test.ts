@@ -19,6 +19,10 @@ const PLACE_TYPES: Place[] = [
   { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' },
   { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'storeroom' },
   { building: 'dungeon', room: 'crypt' },
+  { building: 'forge', room: 'smithy' }, { building: 'forge', room: 'room' },
+  { building: 'temple', room: 'hall' }, { building: 'temple', room: 'room' },
+  { building: 'library', room: 'reading' }, { building: 'library', room: 'archive' },
+  { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' },
 ];
 
 describe('isFeature', () => {

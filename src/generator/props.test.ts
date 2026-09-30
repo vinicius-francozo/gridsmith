@@ -21,7 +21,7 @@ const library = createPlaceholderLibrary();
  *
  * The seed is here because the draw is one: a slot names a concept and the
  * library is asked which pieces carry it at that footprint. It settles to one
- * candidate for every slot the seven rooms declare today, so nothing below
+ * candidate for every slot every room declares today, so nothing below
  * depends on which seed this is — but the argument is real, and a variant added
  * to the library would make it matter.
  */
