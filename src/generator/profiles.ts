@@ -151,10 +151,24 @@ export const MATERIALS: Record<string, MaterialDef> = {
   // would have gone in unmeasured and taken the regression anchor with it, the
   // way `temple_marble` would have gone in at 24.2 a front earlier.
   //
+  // **The spread rule has a trap of its own, and it points the other way.**
+  // `profiles.test.ts` asserts `Math.round(widest * 10) / 10 === 10.2`, so a
+  // name whose spread lands anywhere in (10.22196, 10.25] passes the pin *and*
+  // quietly becomes the widest material in the project: the ruler that
+  // separates "a different material" from "the same stone cut differently"
+  // moves under everybody, and the test stays green. `cargo_floor` — measured
+  // for the ship and not used — is **10.2276**, which is exactly that name.
+  // `herb_floor`, at **10.3710**, is the one that rounds to 10.4 and fails
+  // outright. Only the second is caught.
+  //
+  // So the eight names below were each held under `stone_floor`'s **10.22196**
+  // rather than under the pin, for the same reason every floor here was held
+  // under 29.53 rather than under 28: an assertion is a floor on what may pass,
+  // not a statement of what the project's widest is.
+  //
   // Walls are held to neither floor rule — `everyFloorShade` reads
   // `floorMaterials` only — so `shoring_wall` carries the variant spread and
-  // nothing else: 9.16, under `stone_floor`'s 10.2, which is still the widest
-  // in the project.
+  // nothing else: 9.16.
   gravel_floor: { variants: 3, rotatable: true },
   shoring_wall: { variants: 3, rotatable: false },
   // Boards laid fore and aft, so no rotation, for `wood_plank`'s reason: a deck
