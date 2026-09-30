@@ -104,6 +104,9 @@ export const MATERIAL_VARIANTS: Readonly<Record<string, number>> = {
   forge_wall: 3,
   mosaic_floor: 3,
   sanctum_wall: 3,
+  oak_floor: 3,
+  archive_floor: 3,
+  library_wall: 3,
 };
 
 /**

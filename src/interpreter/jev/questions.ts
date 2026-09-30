@@ -123,6 +123,7 @@ export const QUESTIONS = {
       dungeon: 'Uma masmorra, calabouço, prisão, cripta ou fortaleza subterrânea',
       forge: 'Uma ferraria, forja ou oficina de ferreiro',
       temple: 'Um templo, igreja ou santuário de culto',
+      library: 'Uma biblioteca ou um arquivo de livros',
     },
   },
   /**

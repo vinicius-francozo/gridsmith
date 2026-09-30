@@ -68,6 +68,7 @@ const PLACE_TYPES: Place[] = [
   { building: 'dungeon', room: 'crypt' },
   { building: 'forge', room: 'smithy' }, { building: 'forge', room: 'room' },
   { building: 'temple', room: 'hall' }, { building: 'temple', room: 'room' },
+  { building: 'library', room: 'reading' }, { building: 'library', room: 'archive' },
 ];
 
 /** The rooms both buildings have, and so the ones whose geometry is shared. */
@@ -533,6 +534,8 @@ const FLOORS: Readonly<Record<string, string>> = {
   forge_room: 'broken_chain 3, dust 2, sack 1',
   temple_hall: 'dust 3, rubble 2, straw 1',
   temple_room: 'mug 3, dust 2, straw 1',
+  library_reading: 'dust 3, straw 2, shard 1',
+  library_archive: 'dust 3, sack 2, straw 1',
 };
 
 describe('every floor, one by one', () => {
@@ -890,17 +893,25 @@ describe('profile material vocabulary', () => {
 
   it('would not have passed on the wall material a pillar used to be painted', () => {
     // The regression anchor. Painting a pillar `stone_wall` is what the map
-    // that prompted this did, and against `dirt_floor` and `flagstone` it
-    // measures 23.4 and 25.0 — under the ruler. It was 42.6 against
+    // that prompted this did, and it measured 23.4 against `dirt_floor` and
+    // 25.0 against `flagstone` — under the ruler. It was 42.6 against
     // `stone_floor`, which is why "the pillars are invisible" was the wrong
     // diagnosis and "nobody looked at them" was the right one.
+    //
+    // **21.4 now, and it moved because the floor vocabulary grew rather than
+    // because anything about pillars changed.** The nearest floor to
+    // `stone_wall` is `oak_floor` variant 0, the library's; `dirt_floor`'s 23.4
+    // is what the number was when four floors existed. The claim the anchor
+    // makes is the inequality, and the pinned figure is what makes an edit to
+    // this file a decision — so it is updated with the floor that supplies it
+    // named, not loosened into `toBeLessThan` alone.
     const worst = Math.min(
       ...everyFloorShade().flatMap((shade) =>
         shadesOf('stone_wall').map((wall) => deltaE2000(wall, shade.color)),
       ),
     );
     expect(worst).toBeLessThan(STANDS_OUT);
-    expect(Math.round(worst * 10) / 10).toBe(23.4);
+    expect(Math.round(worst * 10) / 10).toBe(21.4);
   });
 
   it('is told apart from a floor by more than one material is told from itself', () => {

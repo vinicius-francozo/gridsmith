@@ -140,6 +140,20 @@ const PROFILES: Readonly<Record<RoomKind, PlaceProfile>> = {
     sizes: { small: { w: 10, h: 9 }, medium: { w: 13, h: 9 }, large: { w: 13, h: 12 } },
     doors: { min: 1, max: 2 },
   },
+  // The reading room, against its own 9x8 floor and 15x13 ceiling. Wider than
+  // the smithy on every hint, because the room it has to hold is a room people
+  // sit down in rather than stand up in.
+  reading: {
+    sizes: { small: { w: 10, h: 9 }, medium: { w: 13, h: 10 }, large: { w: 14, h: 13 } },
+    doors: { min: 1, max: 2 },
+  },
+  // The stacks, against 7x7 and 12x11 — **the smallest bands in the table**,
+  // and the only ones whose small hint is square. A 7x7 footprint is a 5x5
+  // floor, which is what the 4x1 shelf run is dimensioned against.
+  archive: {
+    sizes: { small: { w: 8, h: 8 }, medium: { w: 11, h: 8 }, large: { w: 11, h: 11 } },
+    doors: { min: 1, max: 2 },
+  },
 };
 
 /** What a place is when the description said nothing about size. */

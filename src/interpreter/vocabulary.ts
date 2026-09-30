@@ -107,7 +107,12 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // The sacristy's brazier. **Not the nave**: its 3x2 slot is the altar and
     // it has no 2x1 to put a sconce in, so a temple hall is the fourth room in
     // the project with no light of its own.
-    { building: 'temple', room: 'room' }],
+    { building: 'temple', room: 'room' },
+    // The reading room's fire, and it is the one room of this building that
+    // gets one. **The archive declares none on purpose** — a chamber full of
+    // parchment is the one place in this project an open flame is a mistake —
+    // so "uma lareira no arquivo" is answered the way a bar in a bedroom is.
+    { building: 'library', room: 'reading' }],
   /**
    * A flight up or down, to the rooms above or the cellar below.
    *
@@ -122,7 +127,10 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     { building: 'forge', room: 'room' },
     // Up to the gallery, and down to the undercroft. Both temple rooms have the
     // slot, because both borrow a geometry that declares one.
-    { building: 'temple', room: 'hall' }, { building: 'temple', room: 'room' }],
+    { building: 'temple', room: 'hall' }, { building: 'temple', room: 'room' },
+    // Up to the gallery over the reading room. The archive has no stair slot:
+    // it is a room you walk into off a corridor.
+    { building: 'library', room: 'reading' }],
   /**
    * Columns carrying a span too wide for bare joists. A hall is that wide, and
    * so is a crypt, whose vault is the reason it has them.
@@ -144,7 +152,10 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // Both, and for the same reason as the stair: the shapes come with the
     // borrowed geometry, and both of these geometries offer `alcove`. A recess
     // off a nave is a side chapel.
-    { building: 'temple', room: 'hall' }, { building: 'temple', room: 'room' }],
+    { building: 'temple', room: 'hall' }, { building: 'temple', room: 'room' },
+    // A reading nook. The archive's shapes are `rectangle` and `l_shape`, so
+    // asking it for a recess is answered with a conflict rather than silently.
+    { building: 'library', room: 'reading' }],
   /**
    * Racks along a wall, for casks or for a guest's belongings — and, in a
    * crypt, the tiers of a bone niche, which is a shelf holding the dead.
@@ -156,7 +167,11 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     { building: 'forge', room: 'smithy' },
     // The sacristy's shelf. The nave fills no shelving slot — the geometry it
     // borrows has none.
-    { building: 'temple', room: 'room' }],
+    { building: 'temple', room: 'room' },
+    // Both, and this is the building the word is most obviously about: each of
+    // the two rooms declares two shelf runs at two footprints, and one of the
+    // two carries the word so the other can be the piece nothing can refuse.
+    { building: 'library', room: 'reading' }, { building: 'library', room: 'archive' }],
   /** Stacked sleeping berths. A room to sleep in, and nowhere else. */
   bunks: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
   /**
