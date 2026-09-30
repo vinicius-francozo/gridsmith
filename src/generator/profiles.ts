@@ -300,12 +300,24 @@ export type ScatterRung = { tags: string[]; weight: number };
  * (`crate`, `barrel`, `supply_crate`, `sack`), so somebody writing "caixotes
  * empilhados" would be handed the wardrobe that happens to be the concept's one
  * anchor. What it needs is a mechanism that promotes a group, not a word.
+ *
+ * **`altar`, `ladder` and `mess` are three more wordless ones, and they are
+ * wordless for the reason `storage` is not.** Each is the one piece its room
+ * cannot be talked out of — the altar in a nave, the stepladder in an archive,
+ * the long table in a mess hall — and the crypt's fourth slot is the precedent
+ * for what a room without one costs: every anchor refusable, and bare walls on
+ * a description that merely reads as dark. Giving any of the three a word is
+ * possible and is a separate decision, because a word in `FEATURES` is a word
+ * the prompt offers and the admission bench has to measure.
  */
 export const CONCEPTS = {
+  altar: {},
   bar: { feature: 'bar' },
   bed: { feature: 'bed' },
   bunks: { feature: 'bunks' },
   hearth: { feature: 'hearth' },
+  ladder: {},
+  mess: {},
   shelving: { feature: 'shelving' },
   stairs: { feature: 'stairs' },
   storage: {},

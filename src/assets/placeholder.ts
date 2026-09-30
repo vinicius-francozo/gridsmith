@@ -117,6 +117,35 @@ export const MATERIAL_VARIANTS: Readonly<Record<string, number>> = {
  * is for. Floors are drawn as the flat colour `materialColor` derives from the
  * material and its variant, which still shows that the generator assigned
  * variants at all.
+ *
+ * ## The two words every piece carries
+ *
+ * One for **what the piece is** and one for **where it belongs**. The debris
+ * comment below is where that convention was first written down and measured,
+ * and it holds for the other two kinds by a different route: an anchor's
+ * what-it-is word *is* its `CONCEPTS` word, because that is what
+ * `resolveAssets` queries by, and the place word is the rung a building's
+ * palette ladder prefers it on.
+ *
+ * The ten buildings added here bring ten place words — `forge`, `temple`,
+ * `library`, `arcane`, `barracks`, `manor`, `mine`, `ship`, `apothecary`,
+ * `den` — beside the four the project already had (`wood`, `stone`, `dungeon`,
+ * `tomb`), and nine what-it-is words the existing vocabulary had no room for:
+ * `altar`, `ladder`, `mess`, `anvil`, `lectern`, `sigil`, `instrument`,
+ * `winch`, `still`, `hatch`, `herbs`. Each is declared here and nowhere else.
+ *
+ * ## What "no piece is unreachable" does and does not cover
+ *
+ * `profiles.test.ts` sweeps the catalogue against every room and reports a
+ * piece no room can produce. **It sweeps the debris only** — `cataloguedDebris`
+ * filters `kind === 'scatter'` — because that is the layer where the loss
+ * happened (`scatter/stool` went to zero weight in silence) and the layer whose
+ * pool is built by tag rather than named by hand. An anchor or a group is named
+ * by id on a building's filling, so a piece nothing names is visible as an
+ * absence in the registry rather than as a silent zero, and ten of the pieces
+ * above are exactly that on purpose: they belong to the five buildings that
+ * arrive after these, and they are catalogued now because a catalogue entry no
+ * room references cannot move a single cell of a single map.
  */
 export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   // Anchors: the furniture that defines a room and is placed against a wall.
@@ -152,6 +181,26 @@ export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   { id: 'anchor/sarcophagus', kind: 'anchor', footprint: { w: 3, h: 2 }, tags: ['tomb', 'stone', 'dungeon'], againstWall: true },
   { id: 'anchor/bone_niche', kind: 'anchor', footprint: { w: 4, h: 1 }, tags: ['shelving', 'tomb', 'dungeon'], againstWall: true },
   { id: 'anchor/votive_brazier', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['hearth', 'light', 'tomb'], againstWall: true },
+  // The ten buildings' own wall pieces. **An anchor is resolved by its
+  // *concept* and its footprint** (`resolveAssets`), and the palette ladder
+  // only ever orders what that pair already returned — so a piece added here
+  // can only reach an existing room if it carries that room's concept at that
+  // room's footprint. Two below do, and both are deliberately short a word for
+  // it: `vestment_cabinet` and `ore_cart` are `storage` at 2x1, which is the
+  // slot the guest room and the cell fill, and **neither carries `wood` or
+  // `dungeon`** — the two rungs those buildings prefer by — so the wardrobe and
+  // the lockers stay the only candidates either of them has. That is what keeps
+  // a tavern and a dungeon byte for byte what they were with twenty pieces
+  // added around them, and it is a property of these tag lists rather than of
+  // the resolver.
+  { id: 'anchor/blade_display', kind: 'anchor', footprint: { w: 3, h: 1 }, tags: ['weapons', 'forge', 'iron'], againstWall: true },
+  { id: 'anchor/altar', kind: 'anchor', footprint: { w: 3, h: 2 }, tags: ['altar', 'temple', 'stone'], againstWall: true },
+  { id: 'anchor/vestment_cabinet', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['storage', 'temple'], againstWall: true },
+  { id: 'anchor/shelf_ladder', kind: 'anchor', footprint: { w: 1, h: 3 }, tags: ['ladder', 'library', 'wood'], againstWall: true },
+  { id: 'anchor/mess_table', kind: 'anchor', footprint: { w: 5, h: 2 }, tags: ['mess', 'barracks', 'wood'], againstWall: true },
+  { id: 'anchor/ore_cart', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['storage', 'mine', 'iron'], againstWall: true },
+  { id: 'anchor/cannon', kind: 'anchor', footprint: { w: 2, h: 1 }, tags: ['weapons', 'ship', 'iron'], againstWall: true },
+  { id: 'anchor/herb_bed', kind: 'anchor', footprint: { w: 2, h: 3 }, tags: ['herbs', 'apothecary', 'wood'], againstWall: true },
 
   // Groups: arrangements placed in the open, with room around them.
   { id: 'group/table_round', kind: 'group', footprint: { w: 2, h: 2 }, tags: ['table', 'seating', 'wood'], againstWall: false },
@@ -174,6 +223,29 @@ export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   { id: 'group/slab_lid', kind: 'group', footprint: { w: 2, h: 1 }, tags: ['tomb', 'stone'], againstWall: false },
   { id: 'group/grave_marker', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['tomb', 'stone'], againstWall: false },
   { id: 'group/funerary_urn', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['tomb', 'storage'], againstWall: false },
+  // The ten buildings' own floor pieces — the twelve of the twenty that stand
+  // in the open rather than against a wall, because an anvil, a summoning
+  // circle and a harp are not furniture you push back to the plaster.
+  //
+  // **Their tags are inert and that is worth saying once rather than being
+  // discovered.** A group is named by id on the building's filling and is never
+  // queried, so nothing here reads these words; the anchors above and the
+  // debris below are the two kinds the library is asked about. They carry the
+  // same two-word shape anyway — what the piece *is*, then where it belongs —
+  // so that the catalogue reads as one vocabulary and so that a group promoted
+  // to a concept later arrives already spelled.
+  { id: 'group/anvil', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['anvil', 'forge', 'iron'], againstWall: false },
+  { id: 'group/lectern', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['lectern', 'library', 'wood'], againstWall: false },
+  { id: 'group/summoning_circle', kind: 'group', footprint: { w: 3, h: 3 }, tags: ['sigil', 'arcane', 'stone'], againstWall: false },
+  { id: 'group/armillary_sphere', kind: 'group', footprint: { w: 2, h: 2 }, tags: ['instrument', 'arcane', 'iron'], againstWall: false },
+  { id: 'group/map_table', kind: 'group', footprint: { w: 3, h: 2 }, tags: ['table', 'barracks', 'wood'], againstWall: false },
+  { id: 'group/harp', kind: 'group', footprint: { w: 2, h: 2 }, tags: ['instrument', 'manor', 'wood'], againstWall: false },
+  { id: 'group/globe', kind: 'group', footprint: { w: 1, h: 1 }, tags: ['instrument', 'manor', 'wood'], againstWall: false },
+  { id: 'group/pulley_winch', kind: 'group', footprint: { w: 2, h: 2 }, tags: ['winch', 'mine', 'iron'], againstWall: false },
+  { id: 'group/chart_table', kind: 'group', footprint: { w: 2, h: 2 }, tags: ['table', 'ship', 'wood'], againstWall: false },
+  { id: 'group/alembic', kind: 'group', footprint: { w: 2, h: 2 }, tags: ['still', 'apothecary', 'glass'], againstWall: false },
+  { id: 'group/appraisal_table', kind: 'group', footprint: { w: 2, h: 2 }, tags: ['table', 'den', 'wood'], againstWall: false },
+  { id: 'group/trapdoor', kind: 'group', footprint: { w: 2, h: 2 }, tags: ['hatch', 'den', 'wood'], againstWall: false },
 
   // Scatter: one-cell litter, strewn over the floor.
   //
