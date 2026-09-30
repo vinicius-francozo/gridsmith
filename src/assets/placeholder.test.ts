@@ -173,6 +173,8 @@ describe('MATERIAL_VARIANTS', () => {
       shoring_wall: 3,
       deck_floor: 3,
       hull_wall: 3,
+      physic_floor: 3,
+      apothecary_wall: 3,
     });
   });
 });

@@ -125,7 +125,10 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // The stern lantern. **Not the hold**: a hold is where an open flame sinks
     // the ship, and the room declares no slot for one, so "uma lanterna no
     // porão" is answered the way a fire in the archive is.
-    { building: 'ship', room: 'cabin' }],
+    { building: 'ship', room: 'cabin' },
+    // The furnace under the still, and the stove that keeps the frost off the
+    // glasshouse. Both rooms of this building declare one.
+    { building: 'apothecary', room: 'distillery' }, { building: 'apothecary', room: 'hall' }],
   /**
    * A flight up or down, to the rooms above or the cellar below.
    *
@@ -151,7 +154,11 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' },
     // The companion ladder up out of the hold. The cabin opens onto the
     // companionway rather than onto a stair of its own.
-    { building: 'ship', room: 'room' }],
+    { building: 'ship', room: 'room' },
+    // Down to the cellar the casks are laid in. **Not the glasshouse**: the
+    // geometry it borrows declares a 5x2 and a 3x2 and a corner, and this
+    // building fills none of them with a stair.
+    { building: 'apothecary', room: 'distillery' }],
   /**
    * Columns carrying a span too wide for bare joists. A hall is that wide, and
    * so is a crypt, whose vault is the reason it has them.
@@ -169,7 +176,10 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // reason is arithmetic rather than taste: `laboratory` is 11x11 at its
     // smallest, which is exactly where `growPillars` becomes possible. The
     // three halls are a cell short and pay 205 of 600 seeds for it in silence.
-    { building: 'tower', room: 'laboratory' }],
+    { building: 'tower', room: 'laboratory' },
+    // The fourth hall, and it inherits the same defect for the same reason the
+    // nave does: the geometry is 12x10 at its smallest, a cell under the line.
+    { building: 'apothecary', room: 'hall' }],
   /** A recess off the main floor: a snug, a bed nook, or a burial recess. */
   alcove: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'crypt' },
     // The shop front is the guest room's geometry, so it has the guest room's
@@ -193,7 +203,11 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     { building: 'mine', room: 'room' },
     // The hold has the guest room's shapes; the cabin declares `alcove` of its
     // own, and there it is a quarter gallery off the stern.
-    { building: 'ship', room: 'room' }, { building: 'ship', room: 'cabin' }],
+    { building: 'ship', room: 'room' }, { building: 'ship', room: 'cabin' },
+    // The glasshouse, because it is a hall and a hall offers all four shapes. A
+    // recess off it is a cold frame. **Not the still room**, whose shapes are
+    // `rectangle` and `l_shape` for the smithy's reason.
+    { building: 'apothecary', room: 'hall' }],
   /**
    * Racks along a wall, for casks or for a guest's belongings — and, in a
    * crypt, the tiers of a bone niche, which is a shelf holding the dead.
@@ -216,7 +230,10 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // The tool rack, in both rooms of the mine.
     { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' },
     // The cargo shelf and the cabin's book shelf.
-    { building: 'ship', room: 'room' }, { building: 'ship', room: 'cabin' }],
+    { building: 'ship', room: 'room' }, { building: 'ship', room: 'cabin' },
+    // The rack of jars. **Not the glasshouse**: the hall's geometry declares no
+    // shelving slot, which is why the nave is not listed either.
+    { building: 'apothecary', room: 'distillery' }],
   /** Stacked sleeping berths. A room to sleep in, and nowhere else. */
   bunks: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
   /**

@@ -162,6 +162,12 @@ export const MATERIALS: Record<string, MaterialDef> = {
   // the pillar, 35.6 against `stone_wall`, spread 8.95.
   deck_floor: { variants: 3, rotatable: false },
   hull_wall: { variants: 3, rotatable: false },
+  // Glazed tile, laid square and readable spun: `flagstone`'s judgement rather
+  // than `mosaic_floor`'s, because a plain tile has no figure on it to break.
+  // 33.18 against the pillar, 42.5 against `stone_wall`, spread 9.98 — the
+  // widest of this front's eight and still under `stone_floor`'s 10.2.
+  physic_floor: { variants: 3, rotatable: true },
+  apothecary_wall: { variants: 3, rotatable: false },
   // See `PILLAR_MATERIAL`. One variant and no rotation: the variant ladder
   // exists so that a floor of two hundred cells does not read as one flat
   // sheet, and a room has four pillars — a pillar drawn in three shades would
@@ -369,14 +375,14 @@ export type ScatterRung = { tags: string[]; weight: number };
  * empilhados" would be handed the wardrobe that happens to be the concept's one
  * anchor. What it needs is a mechanism that promotes a group, not a word.
  *
- * **`altar` and `ladder` are two more wordless ones, and they are wordless for
- * the reason `storage` is not.** Each is the one piece its room cannot be
- * talked out of — the altar in a nave, the stepladder in an archive — and the
- * crypt's fourth slot is the precedent for what a room without one costs: every
- * anchor refusable, and bare walls on a description that merely reads as dark.
- * Giving either of them a word is possible and is a separate decision, because
- * a word in `FEATURES` is a word the prompt offers and the admission bench has
- * to measure.
+ * **`altar`, `ladder` and `herbs` are three more wordless ones, and they are
+ * wordless for the reason `storage` is not.** Each is the one piece its room
+ * cannot be talked out of — the altar in a nave, the stepladder in an archive,
+ * the bed of simples in a physic house — and the crypt's fourth slot is the
+ * precedent for what a room without one costs: every anchor refusable, and bare
+ * walls on a description that merely reads as dark. Giving any of them a word is
+ * possible and is a separate decision, because a word in `FEATURES` is a word
+ * the prompt offers and the admission bench has to measure.
  */
 export const CONCEPTS = {
   altar: {},
@@ -384,6 +390,7 @@ export const CONCEPTS = {
   bed: { feature: 'bed' },
   bunks: { feature: 'bunks' },
   hearth: { feature: 'hearth' },
+  herbs: {},
   ladder: {},
   shelving: { feature: 'shelving' },
   stairs: { feature: 'stairs' },
@@ -1170,6 +1177,55 @@ export const ROOM_REGISTRY = {
     // in a cabin has been at sea.
     scatterChance: 0.1,
   },
+  /**
+   * The still room of an apothecary: the furnace, the alembic over it, and the
+   * shelves of what comes out.
+   *
+   * **The smithy's geometry restated in its own numbers, and the reasons carry
+   * across whole.** A still is a fire with a vessel on it, which is what a
+   * forge is; `alcove` is off the shape list because a recess is where the fire
+   * would go and the fire already has a wall; and there are no pillars because
+   * 9x8 is under the 11x11 `growPillars` needs, so declaring them would be the
+   * hall's silent defect copied into a room built after it was measured.
+   *
+   * The alembic is a group of one part at 2x2 rather than an anchor, for the
+   * anvil's reason: a still is tended from every side.
+   */
+  distillery: {
+    minSize: { w: 9, h: 8 },
+    maxSize: { w: 14, h: 12 },
+    doorRange: { min: 1, max: 2 },
+    shapes: ['rectangle', 'l_shape'],
+    allowPillars: false,
+    anchorRange: { min: 2, max: 3 },
+    anchors: [
+      { footprint: { w: 3, h: 2 }, placement: 'wall' },
+      { footprint: { w: 4, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 3 }, placement: 'corner' },
+    ],
+    // The observatory's, and below the smithy's 3: a still room with four
+    // arrangements on its floor is a workshop, and what this room is about is
+    // the one vessel over the one fire.
+    groupsPerHundredCells: { min: 2, max: 4 },
+    groups: [
+      {
+        id: 'alembic',
+        size: { w: 2, h: 2 },
+        parts: [{ offset: { x: 0, y: 0 }, footprint: { w: 2, h: 2 } }],
+      },
+      {
+        id: 'still_bench',
+        size: { w: 2, h: 1 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    // The laboratory's. A room with glass in it is a room somebody sweeps.
+    scatterChance: 0.12,
+  },
 } satisfies Record<string, RoomGeometry>;
 
 /**
@@ -1369,7 +1425,7 @@ export const BUILDING_REGISTRY = {
           // light and is lost to `excluded`, not to the table — so the two
           // cases are different and only this comment says so.
           //
-          // **Seven of nineteen as of the ship.** The nave declares an altar
+          // **Seven of twenty-one as of the apothecary.** The nave declares an altar
           // where the halls declare a fire and has no 2x1 slot to put a sconce
           // in; the archive declares no fire on purpose, because a room full of
           // parchment is the one room in this project that should not have one;
@@ -2062,6 +2118,100 @@ export const BUILDING_REGISTRY = {
           name: 'Camarote do navio',
           criterion: 'O camarote do capitão, com a mesa de cartas e o beliche à popa',
           label: 'camarote do capitão',
+        },
+      },
+    },
+  },
+  /**
+   * The apothecary. The still room, and the glasshouse the simples are grown
+   * in.
+   *
+   * **The glasshouse is the fourth hall in the project, and it is the one that
+   * puts the borrowed geometry to the least ordinary use.** The common room's
+   * three slots are a serving counter at 5x2, a fire at 3x2 and a corner at
+   * 2x3: the first is left `null` the way the nave leaves it, the second is the
+   * stove that keeps the frost off, and the third is the herb bed — which is
+   * the whole reason this room borrows rather than declares. A bed of simples
+   * is 2x3 against a corner, and that slot was already drawn.
+   *
+   * The three long-table rows are the nave's trick used a second time and for a
+   * different picture: three parallel 3x1 runs read as a bank of pews in a
+   * temple and as three raised beds here.
+   *
+   * **What it inherits with the geometry is the hall's measured defect**:
+   * `minSize` is 12x10, a cell short of the 11x11 `growPillars` needs, so a
+   * small glasshouse asked for columns comes back with none on 205 of 600
+   * seeds. That is the geometry's to fix and not this building's, and it is the
+   * same inheritance the nave took.
+   *
+   * `herbs` is a concept with no word, so the bed is the piece no description
+   * can refuse — which this room needs more than most, since the stove is its
+   * only other anchor.
+   */
+  apothecary: {
+    assetTags: ['apothecary', 'glass', 'wood', 'stone'],
+    rooms: {
+      distillery: {
+        floorMaterials: ['physic_floor'],
+        wallMaterials: { physic_floor: 'apothecary_wall' },
+        defaultWallMaterial: 'apothecary_wall',
+        anchors: [
+          // The furnace under the still. Narrower than the forge's seven and
+          // wider than a sconce: a fire kept low for weeks at a time.
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 5, colorHex: '#ff9a4d' } },
+          { concept: 'shelving', feature: 'shelving' },
+          // The poison cabinet, and the room's net.
+          { concept: 'storage' },
+          { concept: 'stairs', feature: 'stairs' },
+        ],
+        groups: [['alembic'], ['table_small', 'chair']],
+        // Glass first, and it is the second floor in the project to lead with
+        // it after the laboratory's: what a still room drops is what it
+        // decanted into.
+        scatterLadder: [
+          { tags: ['glass'], weight: 3 },
+          { tags: ['grime'], weight: 2 },
+          { tags: ['crockery'], weight: 1 },
+        ],
+        words: {
+          name: 'Destilaria da botica',
+          criterion: 'A destilaria da botica, com o alambique sobre a fornalha e os frascos nas estantes',
+          label: 'destilaria da botica',
+        },
+      },
+      hall: {
+        floorMaterials: ['physic_floor', 'dirt_floor'],
+        wallMaterials: { physic_floor: 'apothecary_wall', dirt_floor: 'apothecary_wall' },
+        defaultWallMaterial: 'apothecary_wall',
+        anchors: [
+          // The serving counter's slot. A glasshouse has neither that nor an
+          // armoury, and buying a light back by putting a bar in it is not a
+          // trade worth making — the nave's words, and the same slot.
+          null,
+          // The stove. It is what keeps a glasshouse a glasshouse in winter,
+          // and it is also this room's only light.
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 5, colorHex: '#ffd9a0' } },
+          // **The herb bed, and the room's net.** `herbs` carries no word in
+          // `CONCEPTS`, so no description takes it away.
+          { concept: 'herbs' },
+        ],
+        groups: [
+          // The potting bench, with the pots and the crates round it.
+          ['table_round', 'barrel', 'barrel', 'crate_small', 'crate_small'],
+          // Three raised beds in the long table's three rows.
+          ['stone_bench', 'stone_bench', 'stone_bench'],
+        ],
+        // The straw a seedling is bedded in, the dirt it is grown in, and the
+        // pot it is grown in. No glass: what breaks is next door.
+        scatterLadder: [
+          { tags: ['bedding'], weight: 3 },
+          { tags: ['grime'], weight: 2 },
+          { tags: ['crockery'], weight: 1 },
+        ],
+        words: {
+          name: 'Estufa da botica',
+          criterion: 'A estufa da botica, com os canteiros de ervas e os vasos sob o vidro',
+          label: 'estufa da botica',
         },
       },
     },

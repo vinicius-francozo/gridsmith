@@ -97,9 +97,9 @@ export const QUESTIONS = {
    * sentence of the 46 at all, its mean mass falling from 0.065 to 0.007.
    *
    * **Every figure in this paragraph is a property of the finished set of ten,
-   * and eight of the ten are in the table below.** The measurement was taken on
+   * and nine of the ten are in the table below.** The measurement was taken on
    * all ten criteria at once, because that is the question the project is being
-   * built towards; `apothecary` and `den` are what is still missing. So the numbers describe what this question will do when it is
+   * built towards; `den` is what is still missing. So the numbers describe what this question will do when it is
    * complete, not what it does today, and the difference is not cosmetic — a
    * choice is a competition, and a criterion that is absent cannot take a
    * sentence from the ones that are here.
@@ -145,6 +145,7 @@ export const QUESTIONS = {
       tower: 'A torre de um mago ou feiticeiro',
       mine: 'Uma mina ou escavação de extração',
       ship: 'Um navio ou embarcação',
+      apothecary: 'Uma botica ou laboratório de alquimia',
     },
   },
   /**
@@ -164,8 +165,8 @@ export const QUESTIONS = {
    * *instruction* redistributes probability mass, and the list belongs in the
    * criteria where a noul can hold it without making the words compete.
    *
-   * **The list names ten buildings and two of them do not exist yet.** Botica
-   * and antro arrive with the rest of this front, and the sentence is not
+   * **The list names ten buildings and one of them does not exist yet.** Antro
+   * arrives with the rest of this front, and the sentence is not
    * trimmed because it was measured as this sentence — dropping the two the user
    * cut was itself remeasured rather than assumed harmless, which is the reason
    * to be careful about dropping any more. What it costs until then is the

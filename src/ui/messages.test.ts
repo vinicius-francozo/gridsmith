@@ -65,6 +65,7 @@ const PLACE_TYPES: readonly Place[] = [
   { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' },
   { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' },
   { building: 'ship', room: 'room' }, { building: 'ship', room: 'cabin' },
+  { building: 'apothecary', room: 'distillery' }, { building: 'apothecary', room: 'hall' },
 ];
 
 describe('the table covers the codes, and only the codes', () => {
@@ -197,6 +198,8 @@ describe('an entry becomes a sentence', () => {
       mine_hoist: 'Casa de guincho da mina',
       ship_room: 'Porão do navio',
       ship_cabin: 'Camarote do navio',
+      apothecary_distillery: 'Destilaria da botica',
+      apothecary_hall: 'Estufa da botica',
     };
 
     for (const place of PLACE_TYPES) {

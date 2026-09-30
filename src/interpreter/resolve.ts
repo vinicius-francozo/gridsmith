@@ -187,6 +187,13 @@ const PROFILES: Readonly<Record<RoomKind, PlaceProfile>> = {
     sizes: { small: { w: 9, h: 8 }, medium: { w: 12, h: 8 }, large: { w: 12, h: 11 } },
     doors: { min: 1, max: 1 },
   },
+  // The still room, against its own 9x8 floor and 14x12 ceiling — the smithy's
+  // bounds, so the smithy's bands, for a room that is the same thing: a fire
+  // with a vessel on it and somewhere to stand beside both.
+  distillery: {
+    sizes: { small: { w: 10, h: 9 }, medium: { w: 13, h: 9 }, large: { w: 13, h: 12 } },
+    doors: { min: 1, max: 2 },
+  },
 };
 
 /** What a place is when the description said nothing about size. */

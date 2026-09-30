@@ -146,6 +146,7 @@ export type BuildingReading = Omit<Constraints, 'place'> & { building: Building;
  */
 export const BUILDING_ANSWER = z.enum([
   'tavern', 'dungeon', 'forge', 'temple', 'library', 'tower', 'mine', 'ship',
+  'apothecary',
 ]);
 
 export function readBuildingAnswers(body: unknown): BuildingReading {
