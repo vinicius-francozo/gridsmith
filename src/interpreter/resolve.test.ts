@@ -29,6 +29,7 @@ const PLACE_TYPES: Place[] = [
   { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' },
   { building: 'mine', room: 'hoist' }, { building: 'ship', room: 'cabin' },
   { building: 'apothecary', room: 'distillery' },
+  { building: 'den', room: 'fencing' }, { building: 'den', room: 'tunnel' },
 ];
 const SIZE_HINTS = [undefined, 'small', 'medium', 'large'] as const;
 
@@ -64,6 +65,8 @@ const GENERATOR_BOUNDS: Readonly<Record<Place['room'], { min: Size; max: Size }>
   hoist: { min: { w: 8, h: 8 }, max: { w: 13, h: 12 } },
   cabin: { min: { w: 8, h: 7 }, max: { w: 12, h: 11 } },
   distillery: { min: { w: 9, h: 8 }, max: { w: 14, h: 12 } },
+  fencing: { min: { w: 8, h: 7 }, max: { w: 13, h: 11 } },
+  tunnel: { min: { w: 7, h: 7 }, max: { w: 12, h: 11 } },
 };
 
 /** `size` as the generator's own `clampSize` would leave it. */

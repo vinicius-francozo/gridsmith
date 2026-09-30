@@ -194,6 +194,18 @@ const PROFILES: Readonly<Record<RoomKind, PlaceProfile>> = {
     sizes: { small: { w: 10, h: 9 }, medium: { w: 13, h: 9 }, large: { w: 13, h: 12 } },
     doors: { min: 1, max: 2 },
   },
+  // The receiving room, against its own 8x7 floor and 13x11 ceiling.
+  fencing: {
+    sizes: { small: { w: 9, h: 8 }, medium: { w: 12, h: 8 }, large: { w: 12, h: 11 } },
+    doors: { min: 1, max: 2 },
+  },
+  // The bolt-hole, against 7x7 and 12x11 — **the smallest bands in the table
+  // after the archive's**, and the archive is the only other room whose small
+  // hint is square. A tunnel is as wide as one person and a bend.
+  tunnel: {
+    sizes: { small: { w: 8, h: 8 }, medium: { w: 11, h: 8 }, large: { w: 11, h: 11 } },
+    doors: { min: 1, max: 2 },
+  },
 };
 
 /** What a place is when the description said nothing about size. */

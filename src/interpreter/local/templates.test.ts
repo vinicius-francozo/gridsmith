@@ -29,7 +29,7 @@ import type { ChoiceTemplate } from './templates';
  */
 const BUILDINGS: Building[] = [
   'tavern', 'dungeon', 'forge', 'temple', 'library', 'tower', 'mine', 'ship',
-  'apothecary',
+  'apothecary', 'den',
 ];
 // Two lists, because the matrix is sparse: a dungeon has a crypt and a tavern
 // does not. One list over every `RoomKind` would have asked the tavern for a
@@ -43,6 +43,7 @@ const TOWER_ROOMS: RoomKind[] = ['laboratory', 'observatory'];
 const MINE_ROOMS: RoomKind[] = ['room', 'hoist'];
 const SHIP_ROOMS: RoomKind[] = ['room', 'cabin'];
 const APOTHECARY_ROOMS: RoomKind[] = ['distillery', 'hall'];
+const DEN_ROOMS: RoomKind[] = ['fencing', 'tunnel'];
 const LIGHTS: Light[] = ['dark', 'dim', 'bright'];
 const CONDITIONS: Condition[] = ['tidy', 'lived_in', 'disordered', 'ruined'];
 const SIZE_HINTS = ['small', 'medium', 'large'];
@@ -102,6 +103,7 @@ describe('every template covers its closed vocabulary', () => {
     expect(Object.keys(ROOM_TEMPLATES.ship.labels).sort()).toEqual([...SHIP_ROOMS].sort());
     expect(Object.keys(ROOM_TEMPLATES.apothecary.labels).sort())
       .toEqual([...APOTHECARY_ROOMS].sort());
+    expect(Object.keys(ROOM_TEMPLATES.den.labels).sort()).toEqual([...DEN_ROOMS].sort());
   });
 
   it('asks about all three lights', () => {
@@ -242,6 +244,10 @@ describe('the wording handed to the classifier', () => {
       distillery: 'destilaria da botica',
       hall: 'estufa da botica',
     });
+    expect(ROOM_TEMPLATES.den.labels).toEqual({
+      fencing: 'receptação do antro',
+      tunnel: 'túnel de fuga',
+    });
     expect(BUILDING_TEMPLATE.labels).toEqual({
       tavern: 'taverna',
       dungeon: 'masmorra',
@@ -252,6 +258,7 @@ describe('the wording handed to the classifier', () => {
       mine: 'mina',
       ship: 'navio',
       apothecary: 'botica',
+      den: 'antro de ladrões',
     });
     expect(LIGHT_TEMPLATE.labels).toEqual({
       dark: 'escuridão total, não há luz nenhuma',

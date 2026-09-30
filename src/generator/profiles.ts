@@ -168,6 +168,14 @@ export const MATERIALS: Record<string, MaterialDef> = {
   // widest of this front's eight and still under `stone_floor`'s 10.2.
   physic_floor: { variants: 3, rotatable: true },
   apothecary_wall: { variants: 3, rotatable: false },
+  // Beaten brick under a cellar, spun freely for `flagstone`'s reason. 31.86
+  // against the pillar, 40.2 against `stone_wall`, spread 9.96. `den_floor` —
+  // again the obvious name — measures **10.94** against the pillar and 1.54
+  // against `stone_wall`: a floor a pillar would be invisible on and a wall
+  // would be indistinguishable from. It is the widest miss of the eight names
+  // measured for this front, and the cheapest one to have shipped unmeasured.
+  cellar_floor: { variants: 3, rotatable: true },
+  hideout_wall: { variants: 3, rotatable: false },
   // See `PILLAR_MATERIAL`. One variant and no rotation: the variant ladder
   // exists so that a floor of two hundred cells does not read as one flat
   // sheet, and a room has four pillars — a pillar drawn in three shades would
@@ -1226,6 +1234,106 @@ export const ROOM_REGISTRY = {
     // The laboratory's. A room with glass in it is a room somebody sweeps.
     scatterChance: 0.12,
   },
+  /**
+   * The back room a thief sells in: the table the goods are weighed on, the
+   * racks they wait on, and the blades that came in with them.
+   *
+   * `alcove` is on the shape list and pillars are not. A recess off this room
+   * is where what is not for sale today is kept, which is exactly what a fence
+   * has; 8x7 is three cells under the 11x11 `growPillars` needs, so columns
+   * would be a promise to nobody.
+   *
+   * Four slots against an `anchorRange` of two or three, the crypt's
+   * arithmetic: the strongbox is the one carrying no word, so a description
+   * that refuses the shelves, the blades and the fire still leaves the room
+   * something against a wall.
+   */
+  fencing: {
+    minSize: { w: 8, h: 7 },
+    maxSize: { w: 13, h: 11 },
+    doorRange: { min: 1, max: 2 },
+    shapes: ['rectangle', 'alcove'],
+    allowPillars: false,
+    anchorRange: { min: 2, max: 3 },
+    anchors: [
+      { footprint: { w: 4, h: 1 }, placement: 'wall' },
+      { footprint: { w: 3, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+    ],
+    // The hall's numbers. What a receiving room is, is full.
+    groupsPerHundredCells: { min: 2, max: 5 },
+    groups: [
+      {
+        id: 'appraisal_table',
+        size: { w: 2, h: 2 },
+        parts: [{ offset: { x: 0, y: 0 }, footprint: { w: 2, h: 2 } }],
+      },
+      {
+        id: 'loot_stack',
+        size: { w: 2, h: 2 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 2, h: 1 } },
+          { offset: { x: 0, y: 1 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 1 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    scatterChance: 0.16,
+  },
+  /**
+   * The way out. A bolt-hole under the floor, with the hatch at one end of it.
+   *
+   * **The emptiest room in the project, and it is the crypt's `min` used for a
+   * second reason.** `groupsPerHundredCells.min` is 1 rather than 0 — a tunnel
+   * with nothing in it at all is a corridor, and the hatch is the thing it is —
+   * but the `max` of 3 is the lowest of any room here, because a passage
+   * somebody runs down is a passage kept clear.
+   *
+   * `l_shape` earns its place rather than being inherited: a bend is what a
+   * tunnel has, and it is the one room in the project where the shape grammar
+   * draws the thing the room is named after.
+   *
+   * `anchorRange` is one or two, the guest room's, and the lowest the project
+   * uses. A tunnel has a ladder and a lamp.
+   */
+  tunnel: {
+    minSize: { w: 7, h: 7 },
+    maxSize: { w: 12, h: 11 },
+    // Both ends, and a tunnel with one end is a dead end.
+    doorRange: { min: 1, max: 2 },
+    shapes: ['rectangle', 'l_shape'],
+    allowPillars: false,
+    anchorRange: { min: 1, max: 2 },
+    anchors: [
+      // **1x3, and the second slot in the project deeper than it is wide** —
+      // the archive's stepladder is the first. `w` runs along the wall and `h`
+      // is the depth away from it, so this is one cell of wall and three of
+      // floor: a ladder leaning up to whatever the hatch opens onto.
+      { footprint: { w: 1, h: 3 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 3 }, placement: 'corner' },
+    ],
+    groupsPerHundredCells: { min: 1, max: 3 },
+    groups: [
+      {
+        id: 'trapdoor',
+        size: { w: 2, h: 2 },
+        parts: [{ offset: { x: 0, y: 0 }, footprint: { w: 2, h: 2 } }],
+      },
+      {
+        id: 'cache',
+        size: { w: 2, h: 1 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    // The winding house's, and for the same reason: what a cut passage has
+    // underfoot is what came off its own walls.
+    scatterChance: 0.18,
+  },
 } satisfies Record<string, RoomGeometry>;
 
 /**
@@ -2212,6 +2320,86 @@ export const BUILDING_REGISTRY = {
           name: 'Estufa da botica',
           criterion: 'A estufa da botica, com os canteiros de ervas e os vasos sob o vidro',
           label: 'estufa da botica',
+        },
+      },
+    },
+  },
+  /**
+   * The thieves' den. The room stolen goods are valued in, and the way out from
+   * under it.
+   *
+   * **The tenth building, and the first whose two rooms are both new geometry
+   * and share nothing with anything.** The library was the first building with
+   * no `RoomKind` in common with another; this is the first where neither room
+   * borrows a geometry either, and the two are as far apart as two rooms of one
+   * building get here — one full, lit and against every wall, the other the
+   * emptiest room in the project.
+   *
+   * `wood` ahead of `iron`, the ship's order and the ship's reason: `iron`
+   * first furnishes the strongbox with the mine's ore cart. `den` leads anyway
+   * and reaches nothing, because the three pieces this building is told apart
+   * by are all groups and a group is named by id rather than queried — which
+   * the catalogue's own comment says of every group tag in it.
+   */
+  den: {
+    assetTags: ['den', 'wood', 'iron', 'stone'],
+    rooms: {
+      fencing: {
+        floorMaterials: ['cellar_floor', 'stone_floor'],
+        wallMaterials: { cellar_floor: 'hideout_wall', stone_floor: 'hideout_wall' },
+        defaultWallMaterial: 'hideout_wall',
+        anchors: [
+          // The racks the goods wait on.
+          { concept: 'shelving', feature: 'shelving' },
+          // What came in with them. `weapons` at 3x1 is one piece in the whole
+          // catalogue, so no palette rung is doing any work here — the shop
+          // front's situation exactly.
+          { concept: 'weapons', feature: 'weapons' },
+          // The strongbox, and the room's net.
+          { concept: 'storage' },
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 4, colorHex: '#ffb46b' } },
+        ],
+        groups: [['appraisal_table'], ['crate', 'crate_small', 'barrel']],
+        // Sacking first: what comes through this room comes through it in a
+        // sack. Then what was drunk over the bargain, then the dust.
+        scatterLadder: [
+          { tags: ['storage'], weight: 3 },
+          { tags: ['crockery'], weight: 2 },
+          { tags: ['grime'], weight: 1 },
+        ],
+        words: {
+          name: 'Receptação do antro',
+          criterion: 'A sala de receptação do antro, onde a mercadoria roubada é avaliada e guardada',
+          label: 'receptação do antro',
+        },
+      },
+      tunnel: {
+        floorMaterials: ['cellar_floor', 'dirt_floor'],
+        wallMaterials: { cellar_floor: 'hideout_wall', dirt_floor: 'hideout_wall' },
+        defaultWallMaterial: 'hideout_wall',
+        anchors: [
+          // **The ladder, and the room's net at once.** `ladder` carries no word
+          // in `CONCEPTS`, which is what this room needs more than any other:
+          // it has two other anchors and both can be refused, and a tunnel with
+          // nothing in it is a corridor. It is also the archive's piece put to
+          // its second use — the catalogue has one ladder, and a bolt-hole and
+          // a stack of books both want the same thing leaning against a wall.
+          { concept: 'ladder' },
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 3, colorHex: '#ffb46b' } },
+          { concept: 'stairs', feature: 'stairs' },
+        ],
+        groups: [['trapdoor'], ['crate_small', 'barrel']],
+        // The wall come down, the dust, and the sacking somebody slept on while
+        // they waited. No crockery and no glass: nobody stays down here.
+        scatterLadder: [
+          { tags: ['masonry'], weight: 3 },
+          { tags: ['grime'], weight: 2 },
+          { tags: ['bedding'], weight: 1 },
+        ],
+        words: {
+          name: 'Túnel do antro',
+          criterion: 'O túnel de fuga do antro, com o alçapão e a passagem escavada para fora',
+          label: 'túnel de fuga',
         },
       },
     },

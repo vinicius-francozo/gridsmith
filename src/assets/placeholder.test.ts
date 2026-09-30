@@ -175,6 +175,8 @@ describe('MATERIAL_VARIANTS', () => {
       hull_wall: 3,
       physic_floor: 3,
       apothecary_wall: 3,
+      cellar_floor: 3,
+      hideout_wall: 3,
     });
   });
 });

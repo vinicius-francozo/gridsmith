@@ -62,11 +62,11 @@ import { FEATURES } from './vocabulary';
  */
 export const BUILDING_ENUM = z.enum([
   'tavern', 'dungeon', 'forge', 'temple', 'library', 'tower', 'mine', 'ship',
-  'apothecary',
+  'apothecary', 'den',
 ]);
 export const ROOM_ENUM = z.enum([
   'hall', 'room', 'storeroom', 'crypt', 'smithy', 'reading', 'archive', 'laboratory', 'observatory',
-  'hoist', 'cabin', 'distillery',
+  'hoist', 'cabin', 'distillery', 'fencing', 'tunnel',
 ]);
 
 export const constraintsSchema = z
@@ -98,7 +98,9 @@ export const constraintsSchema = z
         'mine: room, the digging gallery with its ore cart, and hoist, the winding house over the shaft. ' +
         'ship: room, the cargo hold with its guns, and cabin, the captain\'s great cabin aft. ' +
         'apothecary: distillery, the still room with its alembic, and hall, the glasshouse the ' +
-        'herbs are grown in.',
+        'herbs are grown in. ' +
+        'den: fencing, the back room stolen goods are valued in, and tunnel, the escape passage ' +
+        'under it.',
     ),
     sizeHint: z
       .enum(['small', 'medium', 'large'])

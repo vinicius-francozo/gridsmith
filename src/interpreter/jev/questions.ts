@@ -97,17 +97,17 @@ export const QUESTIONS = {
    * sentence of the 46 at all, its mean mass falling from 0.065 to 0.007.
    *
    * **Every figure in this paragraph is a property of the finished set of ten,
-   * and nine of the ten are in the table below.** The measurement was taken on
-   * all ten criteria at once, because that is the question the project is being
-   * built towards; `den` is what is still missing. So the numbers describe what this question will do when it is
-   * complete, not what it does today, and the difference is not cosmetic — a
-   * choice is a competition, and a criterion that is absent cannot take a
-   * sentence from the ones that are here.
+   * and the ten are now the ten in the table below.** The measurement was taken
+   * on all ten criteria at once, because that is the question the project was
+   * being built towards; the caveat that stood here for four commits — that the
+   * numbers described a set the code had not reached, and that a criterion
+   * which is absent cannot take a sentence from the ones present — has been
+   * spent. The measured set and the shipped set are the same set.
    *
-   * Over the 46: **36 of 46** for the ten, against 38 of 46 on today's two
-   * options and 27 of 46 on the twelve the plan proposed. Two buildings were
-   * cut by the user rather than reworded, because there was no wording that
-   * repaired them.
+   * Over the 46: **36 of 46** for the ten, against 38 of 46 on the two options
+   * this question had before the eight and 27 of 46 on the twelve the plan
+   * proposed. Two buildings were cut by the user rather than reworded, because
+   * there was no wording that repaired them.
    *
    * **The two sentences the project answers today and will answer wrongly**,
    * measured and named rather than left to be found: `p07`, *"A despensa da
@@ -120,14 +120,12 @@ export const QUESTIONS = {
    * shape. Recovering them means moving `tavern`, which is the user's to
    * decide.
    *
-   * **Only one of those two is reachable from this file as it stands**, and the
-   * asymmetry is worth naming rather than leaving to be rediscovered:
-   * `apothecary` is not a criterion here yet, so `p07` cannot go to it today —
-   * it goes wherever the criteria present send it, which this measurement does
-   * not say. `p15` goes to `tower`, which is here. No partial set has a
-   * measurement of its own and none was taken: they are states the project
-   * passes through between two fronts, and fitting wording to one would be
-   * fitting wording to a week.
+   * **Both are reachable from this file now**, which they were not while the
+   * set was partial: `apothecary` is a criterion here, so `p07` goes where the
+   * measurement says it goes rather than wherever a shorter set sent it. The
+   * partial sets the project passed through between the two fronts were never
+   * measured and never fitted wording to, on purpose — fitting wording to one
+   * would have been fitting wording to a week.
    *
    * **The ruler for reading any number in this file.** Repeatability over ten
    * sentences: the choice is identical 10 of 10 runs, mean |Δ| 0.012, worst
@@ -146,6 +144,7 @@ export const QUESTIONS = {
       mine: 'Uma mina ou escavação de extração',
       ship: 'Um navio ou embarcação',
       apothecary: 'Uma botica ou laboratório de alquimia',
+      den: 'Um antro ou esconderijo de ladrões',
     },
   },
   /**
@@ -165,15 +164,14 @@ export const QUESTIONS = {
    * *instruction* redistributes probability mass, and the list belongs in the
    * criteria where a noul can hold it without making the words compete.
    *
-   * **The list names ten buildings and one of them does not exist yet.** Antro
-   * arrives with the rest of this front, and the sentence is not
-   * trimmed because it was measured as this sentence — dropping the two the user
-   * cut was itself remeasured rather than assumed harmless, which is the reason
-   * to be careful about dropping any more. What it costs until then is the
-   * notice: a description of a ship is read as in the catalogue and is built as
-   * the nearest building there is, with nothing said. That is a worse failure
-   * than a false notice and it is temporary, so it is written here rather than
-   * traded silently for a sentence nobody has measured.
+   * **The list names ten buildings and all ten now exist.** It was written
+   * ahead of them on purpose, because the sentence was measured as this
+   * sentence and dropping the two the user cut was itself remeasured rather
+   * than assumed harmless. What it cost in the meantime was the notice — a
+   * description of a ship read as in the catalogue and built as the nearest
+   * building there was, with nothing said — and that window is closed. The
+   * criteria are untouched by the front that closed it: this sentence is the
+   * measured one, and it is now true of the code as well.
    */
   out_of_vocabulary: {
     type: 'noul',

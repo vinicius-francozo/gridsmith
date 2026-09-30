@@ -20,7 +20,7 @@ import {
 
 const BUILDING_KEYS = [
   'tavern', 'dungeon', 'forge', 'temple', 'library', 'tower', 'mine', 'ship',
-  'apothecary',
+  'apothecary', 'den',
 ];
 // Sorted, because the assertions below sort. One list per building, because the
 // matrix of buildings against rooms is sparse: the crypt is the dungeon's, the
@@ -35,6 +35,7 @@ const TOWER_ROOMS = ['laboratory', 'observatory'];
 const MINE_ROOMS = ['hoist', 'room'];
 const SHIP_ROOMS = ['cabin', 'room'];
 const APOTHECARY_ROOMS = ['distillery', 'hall'];
+const DEN_ROOMS = ['fencing', 'tunnel'];
 
 describe('a score question and its levels', () => {
   it('has one level for each criterion, on all three scales', () => {
@@ -77,6 +78,7 @@ describe('the choice question', () => {
     expect(Object.keys(roomQuestionFor('ship').room.criteria).sort()).toEqual(SHIP_ROOMS);
     expect(Object.keys(roomQuestionFor('apothecary').room.criteria).sort())
       .toEqual(APOTHECARY_ROOMS);
+    expect(Object.keys(roomQuestionFor('den').room.criteria).sort()).toEqual(DEN_ROOMS);
   });
 
   it('removes an unavailable room from the second question', () => {
