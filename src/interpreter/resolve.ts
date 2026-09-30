@@ -120,6 +120,26 @@ const PROFILES: Readonly<Record<RoomKind, PlaceProfile>> = {
     // Sealed. One way in, and at most a second one broken open later.
     doors: { min: 1, max: 2 },
   },
+  /**
+   * The smithy, against its own 9x8 floor and 14x12 ceiling.
+   *
+   * **The three bands are separated on one side by three cells, never on both,
+   * and that is deliberate rather than the best that would fit.** `jitterSize`
+   * moves each side by a cell, so two bands three apart on *any* side can never
+   * hand back the same rectangle — and holding both sides apart in a room this
+   * small would have cost one of the three hints a range to vary in, which is
+   * the other thing `resolve.test.ts` asks for. So small and medium are apart
+   * on width, medium and large on height, and small and large on both.
+   *
+   * The small band sits a cell above the generator's floor rather than on it,
+   * which every band in this table does: `resolve` is held to never *ask* for
+   * less than the generator will build, and a band on the floor jitters under
+   * it.
+   */
+  smithy: {
+    sizes: { small: { w: 10, h: 9 }, medium: { w: 13, h: 9 }, large: { w: 13, h: 12 } },
+    doors: { min: 1, max: 2 },
+  },
 };
 
 /** What a place is when the description said nothing about size. */

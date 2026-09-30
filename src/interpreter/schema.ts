@@ -48,8 +48,8 @@ import { FEATURES } from './vocabulary';
  * `schema.test.ts` is the net, and it holds all three copies — these two and
  * `read.ts`'s — against the registries at run time.
  */
-export const BUILDING_ENUM = z.enum(['tavern', 'dungeon']);
-export const ROOM_ENUM = z.enum(['hall', 'room', 'storeroom', 'crypt']);
+export const BUILDING_ENUM = z.enum(['tavern', 'dungeon', 'forge']);
+export const ROOM_ENUM = z.enum(['hall', 'room', 'storeroom', 'crypt', 'smithy']);
 
 export const constraintsSchema = z
   .object({
@@ -67,9 +67,12 @@ export const constraintsSchema = z
       // supported combination" and says which they are — this is the only place
       // the model is told, since `zodOutputFormat` sends these as a hint in the
       // JSON Schema description rather than as grammar the API enforces.
-      'The building and its room. A tavern has hall, room or storeroom. A dungeon has those three ' +
-        'and crypt, the burial chamber: a catacomb, tomb or ossuary, with sarcophagi and bone niches. ' +
-        'There is no crypt in a tavern.',
+      'The building and the room inside it. The matrix is sparse: each building has only the rooms ' +
+        'listed for it, and a pair that is not listed is refused outright. ' +
+        'tavern: hall, room, storeroom. ' +
+        'dungeon: hall, room, storeroom, crypt — the burial chamber, a catacomb or ossuary with ' +
+        'sarcophagi and bone niches. ' +
+        'forge: smithy, the fire and the anvil, and room, the shop front where the blades are shown.',
     ),
     sizeHint: z
       .enum(['small', 'medium', 'large'])

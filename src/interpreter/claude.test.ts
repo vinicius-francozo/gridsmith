@@ -13,6 +13,7 @@ import {
   UpstreamError,
 } from './errors';
 import type { Runtime } from './errors';
+import { BUILDING_ENUM } from './schema';
 import { FEATURES } from './vocabulary';
 
 /**
@@ -227,7 +228,14 @@ describe('interpreting a description', () => {
 
     await interpreterWith(client).interpret('uma cela de masmorra');
 
-    expect(calls[0].system).toContain('tavern or dungeon room');
+    // The sentence used to name two buildings and there are more than two. It
+    // is built from `BUILDING_ENUM` now, so what is pinned is that every word
+    // the schema offers reaches the prompt — a list that lags the enum is a
+    // prompt telling the model its vocabulary is smaller than it is.
+    for (const building of BUILDING_ENUM.options) {
+      expect(calls[0].system).toContain(building);
+    }
+    expect(calls[0].system).toContain('The buildings it can draw a room of are');
     expect(calls[0].system).not.toContain('description of a tavern space');
   });
 });

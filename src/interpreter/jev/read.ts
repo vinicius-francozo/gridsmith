@@ -144,7 +144,7 @@ export type BuildingReading = Omit<Constraints, 'place'> & { building: Building;
  * assignment below compiles. Hoisted out of the function so that
  * `schema.test.ts` can hold it to the registry alongside the other two.
  */
-export const BUILDING_ANSWER = z.enum(['tavern', 'dungeon']);
+export const BUILDING_ANSWER = z.enum(['tavern', 'dungeon', 'forge']);
 
 export function readBuildingAnswers(body: unknown): BuildingReading {
   const answers = answersOf(body, Object.keys(QUESTIONS));

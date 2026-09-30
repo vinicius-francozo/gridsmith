@@ -27,12 +27,13 @@ import type { ChoiceTemplate } from './templates';
  * and the template would move together without anybody noticing; these lines
  * are what makes that a failing test instead.
  */
-const BUILDINGS: Building[] = ['tavern', 'dungeon'];
+const BUILDINGS: Building[] = ['tavern', 'dungeon', 'forge'];
 // Two lists, because the matrix is sparse: a dungeon has a crypt and a tavern
 // does not. One list over every `RoomKind` would have asked the tavern for a
 // label it must not have.
 const TAVERN_ROOMS: RoomKind[] = ['hall', 'room', 'storeroom'];
 const DUNGEON_ROOMS: RoomKind[] = ['hall', 'room', 'storeroom', 'crypt'];
+const FORGE_ROOMS: RoomKind[] = ['smithy', 'room'];
 const LIGHTS: Light[] = ['dark', 'dim', 'bright'];
 const CONDITIONS: Condition[] = ['tidy', 'lived_in', 'disordered', 'ruined'];
 const SIZE_HINTS = ['small', 'medium', 'large'];
@@ -41,6 +42,7 @@ const ALL_TEMPLATES: Array<{ name: string; template: ChoiceTemplate<string> }> =
   { name: 'building', template: BUILDING_TEMPLATE },
   { name: 'tavern room', template: ROOM_TEMPLATES.tavern },
   { name: 'dungeon room', template: ROOM_TEMPLATES.dungeon },
+  { name: 'forge room', template: ROOM_TEMPLATES.forge },
   { name: 'light', template: LIGHT_TEMPLATE },
   { name: 'condition', template: CONDITION_TEMPLATE },
   { name: 'size hint', template: SIZE_HINT_TEMPLATE },
@@ -80,6 +82,7 @@ describe('every template covers its closed vocabulary', () => {
     expect(Object.keys(BUILDING_TEMPLATE.labels).sort()).toEqual([...BUILDINGS].sort());
     expect(Object.keys(ROOM_TEMPLATES.tavern.labels).sort()).toEqual([...TAVERN_ROOMS].sort());
     expect(Object.keys(ROOM_TEMPLATES.dungeon.labels).sort()).toEqual([...DUNGEON_ROOMS].sort());
+    expect(Object.keys(ROOM_TEMPLATES.forge.labels).sort()).toEqual([...FORGE_ROOMS].sort());
   });
 
   it('asks about all three lights', () => {
@@ -116,10 +119,13 @@ describe('the wording handed to the classifier', () => {
     // failure. `furnishing` would have read naturally as `'O lugar está {}.'`,
     // which is `condition`'s.
     //
-    // The two room templates are left out and are the exception that proves the
-    // rule: they share a hypothesis, and `classify` asks exactly one of them,
-    // chosen by the building it already settled on.
-    const asked = ALL_TEMPLATES.filter(({ name }) => name !== 'dungeon room');
+    // The room templates are left out and are the exception that proves the
+    // rule: they all share one hypothesis, and `classify` asks exactly one of
+    // them, chosen by the building it already settled on. One is kept in the
+    // set so the string is still held against the other six questions.
+    const asked = ALL_TEMPLATES.filter(
+      ({ name }) => name === 'tavern room' || !name.endsWith(' room'),
+    );
     const hypotheses = asked.map(({ template }) => template.hypothesis);
     expect(new Set(hypotheses).size).toBe(hypotheses.length);
   });
@@ -145,8 +151,12 @@ describe('the wording handed to the classifier', () => {
   it('keeps every kind of place to a short label', () => {
     // Measured: phrasing these as descriptive sentences — the worst of them
     // eleven words long — scored 45% against 90% for the short ones.
-    for (const [place, label] of Object.entries(ROOM_TEMPLATES.tavern.labels)) {
-      expect(`${place}: ${String(label.split(/\s+/).length <= 4)}`).toBe(`${place}: true`);
+    for (const building of BUILDINGS) {
+      for (const [place, label] of Object.entries(ROOM_TEMPLATES[building].labels)) {
+        expect(`${building}/${place}: ${String(label.split(/\s+/).length <= 4)}`).toBe(
+          `${building}/${place}: true`,
+        );
+      }
     }
   });
 
@@ -180,6 +190,19 @@ describe('the wording handed to the classifier', () => {
       room: 'cela da masmorra',
       storeroom: 'arsenal da masmorra',
       crypt: 'cripta da masmorra',
+    });
+    // Unmeasured, like the dungeon's and for the same reason: this engine is
+    // the courtesy path, the bench that measured the tavern's three labels was
+    // never re-run, and the shape is all that is claimed — a short Portuguese
+    // noun phrase with no alternative inside it.
+    expect(ROOM_TEMPLATES.forge.labels).toEqual({
+      smithy: 'forja da ferraria',
+      room: 'loja da ferraria',
+    });
+    expect(BUILDING_TEMPLATE.labels).toEqual({
+      tavern: 'taverna',
+      dungeon: 'masmorra',
+      forge: 'ferraria',
     });
     expect(LIGHT_TEMPLATE.labels).toEqual({
       dark: 'escuridão total, não há luz nenhuma',

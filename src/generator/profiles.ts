@@ -94,6 +94,30 @@ export const MATERIALS: Record<string, MaterialDef> = {
   stone_wall: { variants: 3, rotatable: false },
   plaster_wall: { variants: 2, rotatable: false },
   timber_wall: { variants: 2, rotatable: false },
+  // **A building's own stone, and the name is the whole of the colour.**
+  // `materialColor` derives a hue, a saturation and a lightness ladder from the
+  // name by FNV-1a, so nothing is authored here — but the name still has to be
+  // *chosen*, because two of the derivation's outputs are load-bearing and
+  // neither is obvious from reading one:
+  //
+  // 1. **A floor has to stay 28 ΔE2000 clear of `tufa_column`**, the colour
+  //    every pillar in the project is painted. `profiles.test.ts` measures it
+  //    over every shade of every floor any profile can pave with, and names
+  //    under the ruler are common — `temple_marble`, the name the plan for this
+  //    front suggested, lands at 24.2 and would have failed.
+  // 2. **Three variants of one material must stay under the widest spread the
+  //    vocabulary already has**, 10.2, or the ruler that separates "a different
+  //    material" from "the same stone cut differently" moves under everybody.
+  //
+  // Measured for each name below before it was used: worst case against the
+  // pillar 29.5 (`slate_floor`), widest variant spread 9.8 (`mosaic_floor`),
+  // so `stone_floor`'s 10.2 is still the widest in the project.
+  //
+  // Three variants each rather than four, and it is the cheap half of the
+  // second rule: the ladder steps the lightness four points a rung, so three
+  // rungs span eight points where four span twelve.
+  forge_floor: { variants: 3, rotatable: true },
+  forge_wall: { variants: 3, rotatable: false },
   // See `PILLAR_MATERIAL`. One variant and no rotation: the variant ladder
   // exists so that a floor of two hundred cells does not read as one flat
   // sheet, and a room has four pillars — a pillar drawn in three shades would
@@ -736,6 +760,62 @@ export const ROOM_REGISTRY = {
     // answers with, so there is somewhere for it to land.
     scatterChance: 0.2,
   },
+  /**
+   * The forge floor of a smithy. The fire, the tools, and an anvil standing in
+   * the middle of it.
+   *
+   * **The anvil is a group and not an anchor, and that decision is the one the
+   * next six rooms copy.** An anchor needs a wall behind it (`anchorCandidates`
+   * asks `backsOnto`), and an anvil is the one thing in a smithy that is
+   * emphatically not against one — it is walked around. The slots a room fills
+   * against its walls are the fire, the tool rack and the coal bin; the piece
+   * the room is *told apart by* stands on the floor, in a group of one part at
+   * the piece's own footprint.
+   *
+   * No pillars, and it is the rule rather than a judgement: `allowPillars: true`
+   * under 11x11 is a room that asks for columns and is handed none in silence
+   * (`floorplan.ts`, `MIN_INTERIOR_FOR_PILLARS`), which is the defect the hall
+   * carries on 205 of 600 seeds. A smithy is a workshop under a low roof, so
+   * the honest answer is the one that costs nothing: no columns, and
+   * `FEATURE_PLACES` says so.
+   *
+   * `alcove` is off the shape list for the same reason it is off the store
+   * room's: a recess is where a smithy would put its fire, and the fire already
+   * has a wall.
+   */
+  smithy: {
+    minSize: { w: 9, h: 8 },
+    maxSize: { w: 14, h: 12 },
+    // A wide front onto the street and a door to the yard the fuel comes in by.
+    doorRange: { min: 1, max: 2 },
+    shapes: ['rectangle', 'l_shape'],
+    allowPillars: false,
+    anchorRange: { min: 2, max: 3 },
+    anchors: [
+      { footprint: { w: 3, h: 2 }, placement: 'wall' },
+      { footprint: { w: 4, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+    ],
+    // Above the hall's 2, because a smithy with nothing on its floor has no
+    // anvil in it, and the anvil is the one group of the two that matters.
+    groupsPerHundredCells: { min: 3, max: 6 },
+    groups: [
+      {
+        id: 'anvil',
+        size: { w: 1, h: 1 },
+        parts: [{ offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } }],
+      },
+      {
+        id: 'quench_bench',
+        size: { w: 2, h: 1 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    scatterChance: 0.18,
+  },
 } satisfies Record<string, RoomGeometry>;
 
 /**
@@ -1127,6 +1207,88 @@ export const BUILDING_REGISTRY = {
           // without making them compete (the `criterion` above), and that
           // measurement does not transfer to an entailment premise.
           label: 'cripta da masmorra',
+        },
+      },
+    },
+  },
+  /**
+   * The smith's. Two rooms and one of them is a room this project already had.
+   *
+   * **The palette ladder leads with the building's own word**, which the tavern
+   * and the dungeon do not — theirs lead with a material, `wood` and `dungeon`.
+   * The reason is that the catalogue is twenty pieces wider than it was: a rung
+   * naming a material now reaches pieces drawn for other buildings, and
+   * `['iron', …]` here would have furnished the shop front with `ore_cart`, the
+   * mine's. A building word is the one rung nothing else can carry.
+   *
+   * The shop front reuses the guest room's geometry, and what that buys and
+   * costs is exactly what the crypt's header predicted. It buys five slots
+   * already dimensioned and a group already drawn. It costs the 2x3 at index 1,
+   * which is a bunk in a room people sleep in and is nothing at all in a shop —
+   * left `null`, the way the cell leaves the guest room's fire.
+   */
+  forge: {
+    assetTags: ['forge', 'wood', 'stone'],
+    rooms: {
+      smithy: {
+        floorMaterials: ['forge_floor', 'dirt_floor'],
+        wallMaterials: { forge_floor: 'forge_wall', dirt_floor: 'stone_wall' },
+        defaultWallMaterial: 'forge_wall',
+        anchors: [
+          // The forge itself. A wider light than a hearth's, because the fire
+          // in a smithy is the reason the room is lit at all.
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 7, colorHex: '#ff9a4d' } },
+          { concept: 'shelving', feature: 'shelving' },
+          // **The net.** `storage` carries no word, so no description can refuse
+          // it, and this room's other two anchors both can be refused — which
+          // is the arithmetic the crypt's fourth slot was added for.
+          { concept: 'storage' },
+        ],
+        groups: [['anvil'], ['barrel', 'crate_small']],
+        // Scale off the iron, the coal dust, and the stone the fire has spalled
+        // off the wall. `['iron']` is the broken chain and only it — scrap in a
+        // smithy is scrap iron — and the rung order is what keeps it ahead of
+        // the dust.
+        scatterLadder: [
+          { tags: ['iron'], weight: 3 },
+          { tags: ['grime'], weight: 3 },
+          { tags: ['masonry'], weight: 2 },
+        ],
+        words: {
+          name: 'Forja da ferraria',
+          criterion: 'A forja da ferraria: a oficina com a fornalha, a bigorna e as ferramentas',
+          label: 'forja da ferraria',
+        },
+      },
+      room: {
+        floorMaterials: ['forge_floor'],
+        wallMaterials: { forge_floor: 'forge_wall' },
+        defaultWallMaterial: 'forge_wall',
+        anchors: [
+          // The stair to the rooms over the shop. The guest room's first slot is
+          // a bed at 2x3 and a staircase is 2x3 as well, which is what makes
+          // this reuse work at all.
+          { concept: 'stairs', feature: 'stairs' },
+          // The bunks. A shop front has nobody sleeping in it.
+          null,
+          { concept: 'storage' },
+          // **The blade display, and the slot the guest room fills with a short
+          // shelf.** Both are 3x1 against a wall; `weapons` at that footprint is
+          // one piece in the whole catalogue, so no palette rung is doing any
+          // work here.
+          { concept: 'weapons', feature: 'weapons' },
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 4, colorHex: '#ffb46b' } },
+        ],
+        groups: [['table_small', 'chair']],
+        scatterLadder: [
+          { tags: ['iron'], weight: 3 },
+          { tags: ['grime'], weight: 2 },
+          { tags: ['storage'], weight: 1 },
+        ],
+        words: {
+          name: 'Loja da ferraria',
+          criterion: 'A frente de loja da ferraria, com as lâminas à mostra e o balcão de venda',
+          label: 'loja da ferraria',
         },
       },
     },

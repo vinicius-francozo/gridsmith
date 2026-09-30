@@ -14,14 +14,17 @@ import {
 } from './codes';
 import { featureBudget, jitterSize, resolve } from './resolve';
 
-// The three tavern places, and the crypt. The crypt is in because it is the one
-// place whose size band is new, and the three rules this file holds a band to —
-// never under the generator's floor, the three hints never landing on the same
-// built rectangle, each hint still worth more than one rectangle — are exactly
-// what a hand-written band gets wrong.
+// The three tavern places, and every room that carries a geometry of its own.
+// A shared geometry is measured once; a room with its own `minSize` has its own
+// band, and the three rules this file holds a band to — never under the
+// generator's floor, the three hints never landing on the same built rectangle,
+// each hint still worth more than one rectangle — are exactly what a
+// hand-written band gets wrong. The crypt was the first of those and is no
+// longer the only one.
 const PLACE_TYPES: Place[] = [
   { building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' },
   { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'crypt' },
+  { building: 'forge', room: 'smithy' },
 ];
 const SIZE_HINTS = [undefined, 'small', 'medium', 'large'] as const;
 
@@ -49,6 +52,7 @@ const GENERATOR_BOUNDS: Readonly<Record<Place['room'], { min: Size; max: Size }>
   room: { min: { w: 6, h: 6 }, max: { w: 11, h: 10 } },
   storeroom: { min: { w: 8, h: 6 }, max: { w: 14, h: 12 } },
   crypt: { min: { w: 11, h: 11 }, max: { w: 18, h: 16 } },
+  smithy: { min: { w: 9, h: 8 }, max: { w: 14, h: 12 } },
 };
 
 /** `size` as the generator's own `clampSize` would leave it. */

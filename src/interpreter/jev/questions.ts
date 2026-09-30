@@ -70,22 +70,59 @@ export type JevQuestion = JevNoulQuestion | JevChoiceQuestion | JevScoreQuestion
  * so that the thirteen names a response is read by are visible in one place.
  */
 export const QUESTIONS = {
+  /**
+   * **This question has never been exercised with more than two options and is
+   * being taken to twelve**, so every criterion added to it carries its own
+   * measurement or is marked as carrying none.
+   *
+   * `forge` is measured. The wording the plan for this front proposed —
+   * `'Uma ferraria ou forja, onde se trabalha metal no fogo e na bigorna'` —
+   * scores the canonical ruler's own negation control, *"Não há fogo aqui, só
+   * cinzas frias"*, at **0.81** on this criterion: naming the fire is what
+   * pulls a sentence that denies one. The clause is gone and the criterion
+   * names the trade instead.
+   */
   building: {
     type: 'choice',
     instructions: 'Que tipo de construção o texto descreve?',
     criteria: {
       tavern: 'Uma taverna ou estalagem para hóspedes, comida e bebida',
       dungeon: 'Uma masmorra, calabouço, prisão ou fortaleza subterrânea',
+      forge: 'Uma ferraria, forja ou oficina de ferreiro',
     },
   },
+  /**
+   * **Reworded, measured, and the measurement is the reason it is not simply
+   * the old sentence with ten more nouns in it.**
+   *
+   * Over 87 sentences, false notices fall from **31 of 87 to 0 of 87** and the
+   * highest answer over all 87 falls from 0.98 to 0.72, so
+   * `OUT_OF_VOCABULARY_THRESHOLD` holds at 0.75 without being re-fitted.
+   *
+   * The obvious alternative — keep today's instruction and scale the list —
+   * was measured beside it and **failed**: 7 of 18 over the threshold against 0
+   * of 18 for this. It is `feature_pillars`' lesson reproduced on the building
+   * axis, and the one written above `feature_bar` below: enriching the
+   * *instruction* redistributes probability mass, and the list belongs in the
+   * criteria where a noul can hold it without making the words compete.
+   *
+   * **The `false` criterion names twelve buildings and this project has
+   * seven.** The five it names that do not exist yet — mansão, mina, navio,
+   * botica, antro — arrive with the next front, and the sentence is not trimmed
+   * to seven because the 0 of 87 was measured on exactly these words and a
+   * shorter list is an unmeasured variant. What it costs in the meantime is the
+   * notice: a description of a ship is read as in the catalogue, and is built as
+   * the nearest of the seven with nothing said. That is a worse failure than a
+   * false notice and it is temporary, so it is written here rather than traded
+   * silently for an unmeasured sentence.
+   */
   out_of_vocabulary: {
     type: 'noul',
-    instructions:
-      'O texto descreve uma construção que NÃO é taverna nem masmorra?',
+    instructions: 'O texto descreve um tipo de construção que não está no catálogo?',
     criteria: {
-      true: 'É outro tipo de construção ou espaço — uma ferraria, um pátio, uma floresta, qualquer coisa fora desta lista',
+      true: 'É outro tipo de construção ou espaço — um pátio, um mercado, uma floresta, um estábulo, qualquer coisa fora do catálogo',
       false:
-        'É uma taverna ou uma masmorra',
+        'É uma taverna, uma masmorra, uma ferraria, um templo, uma biblioteca, uma torre de mago, um quartel, uma mansão, uma mina, um navio, uma botica ou um antro de ladrões',
     },
   },
   light: {

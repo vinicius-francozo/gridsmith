@@ -59,6 +59,7 @@ const PLACE_TYPES: readonly Place[] = [
   { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' },
   { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'storeroom' },
   { building: 'dungeon', room: 'crypt' },
+  { building: 'forge', room: 'smithy' }, { building: 'forge', room: 'room' },
 ];
 
 describe('the table covers the codes, and only the codes', () => {
@@ -164,7 +165,7 @@ describe('an entry becomes a sentence', () => {
     );
   });
 
-  it('says the right Portuguese word for every one of the three kinds of place', () => {
+  it('says the right Portuguese word for every kind of place there is', () => {
     // Pinned one at a time for the same reason the seven features above are.
     // `Record<Place, string>` refuses a missing name and "is not the
     // identifier" refuses an untranslated one, but between them
@@ -179,6 +180,8 @@ describe('an entry becomes a sentence', () => {
       dungeon_room: 'Cela da masmorra',
       dungeon_storeroom: 'Arsenal da masmorra',
       dungeon_crypt: 'Cripta da masmorra',
+      forge_smithy: 'Forja da ferraria',
+      forge_room: 'Loja da ferraria',
     };
 
     for (const place of PLACE_TYPES) {
@@ -471,7 +474,10 @@ describe('the line under a finished map', () => {
   it('has a different name for each kind of place', () => {
     const names = PLACE_TYPES.map((place) => describeResult({ ...params, place }));
 
-    expect(new Set(names).size).toBe(7);
+    // Read off the sweep rather than written as a number, so that a pair added
+    // to `PLACE_TYPES` with a name it shares with another is what fails here —
+    // which is the whole question — instead of the count needing an edit first.
+    expect(new Set(names).size).toBe(PLACE_TYPES.length);
   });
 
   it('has a name for every pair the generator declares', () => {

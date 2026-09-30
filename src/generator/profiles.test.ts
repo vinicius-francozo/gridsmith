@@ -10,7 +10,7 @@ import { createRng } from '../core/prng';
 import { buildFloorplan } from './floorplan';
 import { isPillar } from './materials';
 import { paramsFor } from './test-fixtures';
-import { featureSuits, featuresFor } from '../interpreter/vocabulary';
+import { FEATURES, featureSuits, featuresFor } from '../interpreter/vocabulary';
 import type { Feature } from '../interpreter/vocabulary';
 import { materialColor } from '../assets/palette';
 import { createPlaceholderLibrary, MATERIAL_VARIANTS, PLACEHOLDER_CATALOG } from '../assets/placeholder';
@@ -42,27 +42,43 @@ const library = createPlaceholderLibrary();
  * A profile with its variants drawn, the way `generate` hands one to the
  * stages.
  *
- * Every slot the seven rooms declare settles to exactly one candidate once the
+ * Every slot every room declares settles to exactly one candidate once the
  * concept, the footprint and the room's palette ladder have been applied —
  * measured, and the tests below name the pieces — so this needs no seed of its
- * own and nothing here depends on which one it uses.
+ * own and nothing here depends on which one it uses. It is a property each new
+ * building has to keep: a slot with two candidates left would make the piece a
+ * room comes back with depend on the seed, which no test here would notice and
+ * every reader of the map would.
  */
 function resolved(place: Place): ResolvedProfile {
   return resolveAssets(profileFor(place), library, createRng(1));
 }
 
+/**
+ * Every pair the project builds, written out rather than read off `BUILDINGS`.
+ *
+ * A sweep derived from the registry would grow with the registry and would
+ * therefore never report a building added without anybody looking at what it
+ * costs the rooms already here — which is exactly what these sweeps are for.
+ */
 const PLACE_TYPES: Place[] = [
   { building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' },
   { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' },
   { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'storeroom' },
   { building: 'dungeon', room: 'crypt' },
+  { building: 'forge', room: 'smithy' }, { building: 'forge', room: 'room' },
 ];
 
 /** The rooms both buildings have, and so the ones whose geometry is shared. */
 const SHARED_ROOMS = ['hall', 'room', 'storeroom'] as const;
 
 describe('building and room composition', () => {
-  it('declares all seven pairs and shares geometry for the rooms both buildings have', () => {
+  it('shares one geometry between the two buildings that were written against it', () => {
+    // `SHARED_ROOMS` is the tavern's three, and the claim is about the tavern
+    // and the dungeon: those two were drawn as one set of shapes and differ
+    // only in what they put in the slots. A third building reusing one of these
+    // geometries is a different claim and is checked where it is made — its own
+    // filling, against the slot count `profileFor` enforces.
     expect(roomsFor('tavern')).toEqual([...SHARED_ROOMS]);
     // The crypt is the dungeon's alone, which is what makes the matrix sparse
     // and is the reason every table keyed on a building and a room is read
@@ -491,9 +507,9 @@ describe('the debris the catalogue offers', () => {
 });
 
 /**
- * What each of the seven floors comes out as: the piece, the weight, in order.
+ * What each floor comes out as: the piece, the weight, in order.
  *
- * **These are the weights each room was written with in `main`**, read off
+ * **The first seven are the weights each room was written with in `main`**, read off
  * `TAVERN_HALL.scatter` and its neighbours at `482a206`, where a room named its
  * debris as a list of asset ids. The claim this front makes is that the
  * mechanism changed and the floors did not, and this is that claim written
@@ -512,12 +528,14 @@ const FLOORS: Readonly<Record<string, string>> = {
   dungeon_room: 'bone 3, broken_chain 2, dust 1',
   dungeon_storeroom: 'loose_arrow 3, dust 3, rubble 2',
   dungeon_crypt: 'bone 4, rubble 3, skull 2, shard 2, dust 2',
+  forge_smithy: 'broken_chain 3, dust 3, rubble 2',
+  forge_room: 'broken_chain 3, dust 2, sack 1',
 };
 
-describe('the seven floors, one by one', () => {
+describe('every floor, one by one', () => {
   it('strews each room with the pieces and the weights it was written with', () => {
-    // **All seven, because two of them had no floor of their own and nobody
-    // noticed.** The tests below each name the rooms they are about — the
+    // **Every one, because two of the original seven had no floor of their own
+    // and nobody noticed.** The tests below each name the rooms they are about — the
     // stool's taproom, the mug against the bottle, the bone against the dust,
     // the guest room against the cellar — and when those tests were swapped
     // over two rounds, the tavern cellar and the dungeon store room fell
@@ -1055,28 +1073,39 @@ describe('pickRotation', () => {
 
 describe('the feature vocabulary', () => {
   /**
-   * The words the interpreter writes `Params.features` in, and the places
-   * each one belongs to. Copied from `FEATURES` and `FEATURE_PLACES` in
-   * `src/interpreter/vocabulary.ts`: the two fronts are separate worktrees,
-   * so the agreement cannot be imported, only kept — and a word the
-   * generator answers to nothing for is a request that disappears from the
-   * map without an error anywhere.
+   * The places each feature is offered for, read out of `vocabulary.ts` through
+   * `featuresFor` rather than copied.
+   *
+   * **It was a copy, and the copy was stale in the direction that mattered.**
+   * Written before the crypt and never updated, it omitted that room from
+   * `hearth`, `pillars`, `alcove` and `shelving` — four of the crypt's five
+   * entries — so the check below had never once run for the room the copy's own
+   * neighbours in `vocabulary.ts` cite it as guarding. It passed anyway, because
+   * a list short of an entry is a list with nothing to disagree about.
+   *
+   * The justification the copy carried was that the two fronts were separate
+   * worktrees and the agreement could not be imported. It could: this file has
+   * imported `featureSuits` and `featuresFor` from that module since the front
+   * that wrote the sentence, and reads them three tests further up.
    */
-  const FEATURE_PLACES: Record<string, Place[]> = {
-    bar: [{ building: 'tavern', room: 'hall' }],
-    hearth: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }],
-    stairs: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'storeroom' }],
-    pillars: [{ building: 'tavern', room: 'hall' }, { building: 'dungeon', room: 'hall' }],
-    alcove: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'room' }],
-    shelving: [{ building: 'tavern', room: 'storeroom' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'storeroom' }, { building: 'dungeon', room: 'room' }],
-    bunks: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
-    bed: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
-    weapons: [{ building: 'dungeon', room: 'hall' }],
-    tomb: [{ building: 'dungeon', room: 'crypt' }],
-  };
+  const FEATURE_PLACES: Record<string, Place[]> = Object.fromEntries(
+    FEATURE_VOCABULARY.map((feature) => [
+      feature,
+      PLACE_TYPES.filter((place) => featuresFor(place).includes(feature as Feature)),
+    ]),
+  );
 
   it('is the same ten words the interpreter writes', () => {
-    expect([...FEATURE_VOCABULARY].sort()).toEqual(Object.keys(FEATURE_PLACES).sort());
+    expect([...FEATURE_VOCABULARY].sort()).toEqual([...FEATURES].sort());
+  });
+
+  it('offers every word somewhere, so none of the ten is a word with no place', () => {
+    // The check the stale copy could not make: read from the live table, a
+    // feature nobody can ask for anywhere shows up as an empty list rather than
+    // as a line nobody wrote.
+    for (const [feature, places] of Object.entries(FEATURE_PLACES)) {
+      expect(`${feature}: ${String(places.length)}`).not.toBe(`${feature}: 0`);
+    }
   });
 
   it('answers to every word, either with an anchor or with the plan itself', () => {

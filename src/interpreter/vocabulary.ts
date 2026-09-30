@@ -69,7 +69,29 @@ export type Feature = (typeof FEATURES)[number];
  * feature that names an anchor is only listed for a place whose profile
  * declares that anchor, and `pillars` and `alcove` are the two answered by
  * stage one instead, so they are listed for any place whose profile allows the
- * shape. `profiles.test.ts` holds the two sides together for the crypt.
+ * shape. `profiles.test.ts` holds the two sides together.
+ *
+ * **That rule is the whole of how the lists below were decided, and it is
+ * mechanical rather than a matter of taste.** A feature belongs in a place iff
+ * the place can *answer* it: for the eight that name furniture, the building's
+ * filling has a slot carrying that word at a footprint the library can fill;
+ * for `pillars`, `allowPillars` is true; for `alcove`, `'alcove'` is on the
+ * geometry's shape list. Anything else is a word the interface offers and the
+ * map then silently drops, or — the other direction, and the one that made the
+ * cell's fire a lie — a word the interface refuses while the generator draws
+ * the piece anyway.
+ *
+ * `stairs` in a crypt is the one entry that is a judgement rather than the
+ * rule, and it is a judgement on the *profile*: the crypt declares no stair
+ * because a burial chamber is reached along a passage, and this list follows
+ * the profile rather than arguing with it.
+ *
+ * **`profiles.test.ts` now reads this agreement through `featuresFor` instead
+ * of keeping a second copy of the table.** The copy it kept was written before
+ * the crypt and was never updated: four of the crypt's five entries were
+ * missing from it, so the check it claimed to make had not been made for the
+ * room it was added for. Ten buildings would have been ten more chances at the
+ * same thing.
  */
 const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
   /** The serving counter. A tavern has one, and it is in the common room. */
@@ -78,7 +100,10 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
    * An open fire. Warms a room people sit in, not a cellar full of barrels —
    * and, in a crypt, the votive brazier left burning for the dead.
    */
-  hearth: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'crypt' }],
+  hearth: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'crypt' },
+    // The forge fire, and the brazier in the shop front. Both are `hearth`
+    // slots, and the first is the widest light any room in the project has.
+    { building: 'forge', room: 'smithy' }, { building: 'forge', room: 'room' }],
   /**
    * A flight up or down, to the rooms above or the cellar below.
    *
@@ -87,19 +112,29 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
    * decision this list makes on its own account, and it is deliberate: the
    * description that put `crypt` in the vocabulary said "sem escadaria".
    */
-  stairs: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'storeroom' }],
+  stairs: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'storeroom' },
+    // Up to the rooms over the shop. Not in the forge floor itself, which has
+    // no stair slot: a smithy is a single storey with a fire in it.
+    { building: 'forge', room: 'room' }],
   /**
    * Columns carrying a span too wide for bare joists. A hall is that wide, and
    * so is a crypt, whose vault is the reason it has them.
    */
   pillars: [{ building: 'tavern', room: 'hall' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'crypt' }],
   /** A recess off the main floor: a snug, a bed nook, or a burial recess. */
-  alcove: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'crypt' }],
+  alcove: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'crypt' },
+    // The shop front is the guest room's geometry, so it has the guest room's
+    // shapes. The forge floor is `rectangle` and `l_shape` only.
+    { building: 'forge', room: 'room' }],
   /**
    * Racks along a wall, for casks or for a guest's belongings — and, in a
    * crypt, the tiers of a bone niche, which is a shelf holding the dead.
    */
-  shelving: [{ building: 'tavern', room: 'storeroom' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'storeroom' }, { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'crypt' }],
+  shelving: [{ building: 'tavern', room: 'storeroom' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'storeroom' }, { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'crypt' },
+    // The tool rack over the forge. **Not** the shop front: that building fills
+    // the guest room's 3x1 shelf slot with the blade display instead, so
+    // "prateleiras" there would be a word with nothing behind it.
+    { building: 'forge', room: 'smithy' }],
   /** Stacked sleeping berths. A room to sleep in, and nowhere else. */
   bunks: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
   /**
@@ -113,7 +148,11 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
    * Arms kept in the room: a rack, an armoury stand, weapons out of a rack.
    * The dungeon hall is the only place whose profile declares one.
    */
-  weapons: [{ building: 'dungeon', room: 'hall' }],
+  weapons: [{ building: 'dungeon', room: 'hall' },
+    // The blade display. A weapons word in a smith's shop is the most ordinary
+    // thing a person could ask for, and it resolves to the one `weapons` anchor
+    // in the catalogue at 3x1.
+    { building: 'forge', room: 'room' }],
   /** Somewhere the dead are kept: a sarcophagus, a grave slab, a bone niche. */
   tomb: [{ building: 'dungeon', room: 'crypt' }],
 };
