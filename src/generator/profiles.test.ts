@@ -175,14 +175,13 @@ describe('building and room composition', () => {
     // skull below that — the order the room was written with — and nothing
     // from outside a burial chamber on the floor at all.
     const debris = new Map(crypt.scatter.map((slot) => [slot.assetId, slot.weight]));
-    expect(`bone ${String(debris.get('bone'))}, rubble ${String(debris.get('rubble'))}, shard ${String(debris.get('shard'))}, skull ${String(debris.get('skull'))}`)
-      .toBe('bone 4, rubble 3, shard 3, skull 3');
-    // Bone on the heaviest rung and the skull below it, which is the way round
-    // this room was written and the way round it had stopped being: read as
-    // one `debris` tag with a palette bonus, the crypt drew 10% bone against
-    // 26% skull over 350 scenes, where it was written for 31% against 18%.
-    expect(Math.max(...debris.values())).toBe(debris.get('bone'));
-    expect(debris.get('bone')).toBeGreaterThan(debris.get('skull')!);
+    expect(`bone ${String(debris.get('bone'))}, rubble ${String(debris.get('rubble'))}, shard ${String(debris.get('shard'))}, skull ${String(debris.get('skull'))}, dust ${String(debris.get('dust'))}`)
+      .toBe('bone 4, rubble 3, shard 2, skull 2, dust 2');
+    // The five pieces this room was written with, at the five weights it was
+    // written with, and no sixth. The broken chain arrives on any rung broad
+    // enough to be answered by `['dungeon', 'debris']`, and nobody is chained
+    // up in a crypt.
+    expect([...debris.keys()].sort()).toEqual(['bone', 'dust', 'rubble', 'shard', 'skull']);
     // A catacomb has no stable and no archer. Both used to arrive here, and
     // both are pieces the library answers `debris` with — which is why the
     // ladder is rungs of its own and not one tag for every dungeon room.
@@ -347,7 +346,12 @@ describe('a concept resolved into a variant', () => {
     // `stone_stairs` at 2x3, where one of them is. No single set of tags
     // separates both; `['wood', 'stone']` in that order separates both.
     const hall = resolved(TAVERN_HALL);
-    expect(hall.assetTags).toEqual(['wood', 'stone', 'tableware']);
+    // The hall declares no ladder of its own, so this is the building's,
+    // reached through the fallback in `profileFor`. It used to carry a third
+    // word, `tableware`, which no anchor in the catalogue has ever had: it was
+    // there to weigh a taproom's litter, and the debris ladder took that job
+    // over two commits ago.
+    expect(hall.assetTags).toEqual(['wood', 'stone']);
     expect(hall.anchors.map((anchor) => anchor.assetId)).toEqual([
       'bar_counter', 'hearth', 'stairs_up',
     ]);
@@ -430,27 +434,91 @@ describe('the debris a room is strewn with', () => {
 
   it('keeps the stool on the taproom floor, at the share it was written with', () => {
     // Named on its own, because the sweep above is satisfied by one room
-    // anywhere holding it and this is the room it belongs to. The old table
-    // gave it 2 of 9; a rung of its own gives it 2 of 11.
+    // anywhere holding it and this is the room it belongs to. `scatter/stool`
+    // carries `['seating', 'wood']` and nothing else, so no `clutter` or
+    // `debris` rung reaches it; a taproom with one broad tag drew it zero
+    // times in 400 seeds where the room was written for 2 of its 9 weight.
     const floor = floorOf({ building: 'tavern', room: 'hall' });
     const share = floor.get('stool');
     expect(share).toBeDefined();
     expect(`stool on the taproom floor: ${(share! * 100).toFixed(1)}%`)
-      .toBe('stool on the taproom floor: 18.2%');
+      .toBe('stool on the taproom floor: 22.2%');
+  });
+
+  it('gives the mug the taproom floor, and the bone the dungeon\u2019s', () => {
+    // **The two pieces the catalogue could not name, and now can.** A mug and
+    // a bottle were both `['tableware', 'clutter']`; a bone, a broken chain
+    // and a pinch of dust were all `['dungeon', 'debris']`. Pieces carrying
+    // the same words move together at any weight, so the emblem of each of
+    // these floors was pulled down to the average of its neighbours: over 400
+    // seeds the taproom drew 27% mugs against 27% bottles where it was written
+    // for 45% against 21%, and the cell drew 31% bone behind 35% chain and 34%
+    // dust where it was written for 46%.
+    const only = (place: Place): string[] => {
+      const scatter = resolved(place).scatter;
+      const top = Math.max(...scatter.map((slot) => slot.weight));
+      return scatter.filter((slot) => slot.weight === top).map((slot) => slot.assetId).sort();
+    };
+    expect(only({ building: 'tavern', room: 'hall' })).toEqual(['mug']);
+    expect(only({ building: 'tavern', room: 'room' })).toEqual(['mug']);
+    for (const room of ['hall', 'room', 'crypt'] as const) {
+      expect(`dungeon ${room}: ${only({ building: 'dungeon', room }).join()}`)
+        .toBe(`dungeon ${room}: bone`);
+    }
+    // And the margin, which a heaviest-piece check on its own would let
+    // collapse to a single unit of weight.
+    const taproom = floorOf({ building: 'tavern', room: 'hall' });
+    expect(taproom.get('mug')).toBe(2 * taproom.get('bottle')!);
+    const cell = floorOf({ building: 'dungeon', room: 'room' });
+    expect(cell.get('bone')).toBeGreaterThan(cell.get('broken_chain')!);
+    expect(cell.get('broken_chain')).toBeGreaterThan(cell.get('dust')!);
+  });
+
+  it('never lets the dust be the heaviest thing in a room somebody died in', () => {
+    // The symptom the round before this one left behind, and the one a reader
+    // notices first: a cell whose floor is mostly dust reads as an empty room,
+    // not as a cell. It was the heaviest piece in all three of these.
+    for (const room of ['hall', 'room', 'crypt'] as const) {
+      const floor = floorOf({ building: 'dungeon', room });
+      const dust = floor.get('dust');
+      // Still on the floor — a dungeon without dust is not the fix — just not
+      // the most of it.
+      expect(dust, room).toBeDefined();
+      // Compared as numbers and not as rounded percentages, which is a trap
+      // this test fell into first: with the cell on one broad rung the dust
+      // and the bone are equal by construction, and two equal shares print
+      // the same string. A tie is the failure, so a tie has to be visible.
+      const heaviest = Math.max(...floor.values());
+      expect(`dungeon ${room}: the dust is the heaviest thing on the floor — ${String(dust === heaviest)}`)
+        .toBe(`dungeon ${room}: the dust is the heaviest thing on the floor — false`);
+    }
   });
 
   it('keeps a piece on the first rung it stands on, not the last', () => {
-    // The mug carries `tableware` and `clutter`, and the taproom's ladder asks
-    // for both — heavily, then lightly. Summing the rungs would make it
-    // heavier for being ordinary as well as particular; taking the last would
-    // let the general rung overrule the particular one and leave a taproom's
-    // tableware weighing what its sweepings do. Straw is on that last rung
-    // only, and is what the mug is measured against.
-    const hall = new Map(resolved({ building: 'tavern', room: 'hall' }).scatter.map(
+    // **Inert as the seven ladders stand, and exercised here on purpose.**
+    // Once the catalogue grew a word for what each piece is, every rung of
+    // every room came out disjoint from every other in that room, so no room's
+    // floor can tell the three readings apart any more. Written against a
+    // room's ladder this test would have gone quiet without going red.
+    //
+    // The rule still decides the next piece added to the catalogue: a jug is
+    // crockery and clutter both, and which of the two a taproom weighs it by
+    // is the line this covers.
+    const overlapping = {
+      ...profileFor({ building: 'tavern', room: 'hall' }),
+      scatterLadder: [
+        { tags: ['crockery'], weight: 4 },
+        { tags: ['clutter'], weight: 1 },
+      ],
+    };
+    const floor = new Map(resolveAssets(overlapping, library, createRng(1)).scatter.map(
       (slot) => [slot.assetId, slot.weight],
     ));
-    expect(`mug ${String(hall.get('mug'))}, stool ${String(hall.get('stool'))}, straw ${String(hall.get('straw'))}`)
-      .toBe('mug 3, stool 2, straw 1');
+    // The mug stands on both rungs; the bottle and the sack stand only on the
+    // second. Summing would put the mug at 5, taking the last would put it at
+    // 1, and both would say a taproom's crockery weighs what its sweepings do.
+    expect(`mug ${String(floor.get('mug'))}, bottle ${String(floor.get('bottle'))}, sack ${String(floor.get('sack'))}`)
+      .toBe('mug 4, bottle 1, sack 1');
   });
 
   it('tells a guest room and a cellar apart, which one tag could not', () => {
@@ -461,41 +529,19 @@ describe('the debris a room is strewn with', () => {
     // Measured as total variation distance between the two weight
     // distributions — half the sum of the absolute differences, 0 for two
     // identical floors and 1 for two that share no piece. The flat pair
-    // measured 0; these measure 0.75, and they have no heaviest piece in
-    // common.
+    // measured 0.05 over 400 seeds; these share only their straw.
     const room = floorOf({ building: 'tavern', room: 'room' });
     const cellar = floorOf({ building: 'tavern', room: 'storeroom' });
     const apart = [...new Set([...room.keys(), ...cellar.keys()])]
       .reduce((sum, name) => sum + Math.abs((room.get(name) ?? 0) - (cellar.get(name) ?? 0)), 0) / 2;
-    expect(`guest room against cellar: ${apart.toFixed(2)}`).toBe('guest room against cellar: 0.75');
+    expect(`guest room against cellar: ${apart.toFixed(2)}`).toBe('guest room against cellar: 0.83');
 
-    const heaviestOf = (floor: Map<string, number>): string[] => {
-      const top = Math.max(...floor.values());
-      return [...floor].filter(([, share]) => share === top).map(([name]) => name).sort();
-    };
-    expect(heaviestOf(room)).toEqual(['bottle', 'mug']);
-    expect(heaviestOf(cellar)).toEqual(['sack', 'shard', 'straw']);
-  });
-
-  it('gives a taproom its tableware and a dungeon its bones', () => {
-    // The difference a person sees on the floor of the map, named rather than
-    // left to the rules above — which would hold just as well over ladders
-    // that said nothing useful.
-    const heaviest = (place: Place): string[] => {
-      const scatter = resolved(place).scatter;
-      const top = Math.max(...scatter.map((slot) => slot.weight));
-      return scatter.filter((slot) => slot.weight === top).map((slot) => slot.assetId).sort();
-    };
-    expect(heaviest({ building: 'tavern', room: 'hall' })).toEqual(['bottle', 'mug']);
-    expect(heaviest({ building: 'dungeon', room: 'hall' })).toEqual([
-      'bone', 'broken_chain', 'dust',
-    ]);
-    expect(heaviest({ building: 'dungeon', room: 'crypt' })).toEqual([
-      'bone', 'broken_chain', 'dust',
-    ]);
-    // And the piece each room has that no other rung would have given it.
-    expect(resolved({ building: 'dungeon', room: 'storeroom' }).scatter[0])
-      .toEqual({ assetId: 'loose_arrow', weight: 4 });
+    // And the guest room is swept. `straw` and `shard` were the same two words
+    // as each other, so asking for the rushes asked for the broken floor tile
+    // too, and an inn's let room came back 13% rubbish over 400 seeds. It is
+    // the cellar that has broken tiles.
+    expect([...room.keys()].sort()).toEqual(['bottle', 'mug', 'straw']);
+    expect([...cellar.keys()].sort()).toEqual(['sack', 'shard', 'straw']);
   });
 });
 

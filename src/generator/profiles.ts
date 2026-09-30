@@ -717,26 +717,17 @@ export const BUILDING_REGISTRY = {
           ['table_round', 'chair', 'chair', 'chair', 'chair'],
           ['bench', 'table_long', 'bench'],
         ],
-        // A taproom floor: what was drunk from, then what was sat on, then
-        // whatever else is loose. The last rung is `clutter` alone rather than
-        // `clutter` and `debris`, and that is what makes this a ladder — the
-        // mug and the bottle carry `clutter` too, and they keep the weight of
-        // the rung they first stood on instead of dropping to this one.
-        //
-        // `seating` is here because `scatter/stool` carries `['seating',
-        // 'wood']` and nothing else: it is the one piece of debris in the
-        // catalogue that no `clutter` or `debris` rung can reach, and it was
-        // 2 of the 9 weight this floor used to carry.
+        // A taproom floor: what was drunk from, what was sat on, what it came
+        // in, and the rushes underneath. Four rungs where one `clutter` tag
+        // used to stand, because one tag could not separate the mug from the
+        // bottle — the two carried the same pair of words — and a floor
+        // written for 45% mugs against 21% bottles drew 27% of each.
         scatterLadder: [
-          { tags: ['tableware'], weight: 3 },
+          { tags: ['crockery'], weight: 4 },
           { tags: ['seating'], weight: 2 },
-          { tags: ['clutter'], weight: 1 },
+          { tags: ['glass'], weight: 2 },
+          { tags: ['bedding'], weight: 1 },
         ],
-        // `tableware` is the tavern's, and only the common room's: it is what
-        // makes a mug and a bottle the likely litter of a taproom. It never
-        // reaches an anchor — every anchor slot in a tavern is settled by
-        // `wood` or `stone` before the ladder gets this far.
-        assetTags: ['wood', 'stone', 'tableware'],
         words: {
           name: 'Salão de taverna',
           criterion: 'Salão comum da taverna, com mesas, balcão e fregueses',
@@ -755,12 +746,19 @@ export const BUILDING_REGISTRY = {
           { concept: 'hearth', feature: 'hearth', light: { radiusCells: 4, colorHex: '#ffb46b' } },
         ],
         groups: [['table_small', 'chair']],
-        // A guest's floor: what was carried up to it, and the sweepings. No
+        // A guest's floor: what was carried up to it, and the bedding. No
         // `seating` rung — a stool on the floor of a bedroom is a taproom's
         // litter, not a guest's — and no `storage`, which is the cellar's.
+        //
+        // The last rung is `bedding` and not `['clutter', 'debris']`, which is
+        // what it was and which quietly put broken floor tile in a guest room:
+        // `straw` and `shard` carried the same two words, so asking for the
+        // rushes asked for the rubbish as well. An inn sweeps the room it
+        // rents out.
         scatterLadder: [
-          { tags: ['tableware'], weight: 3 },
-          { tags: ['clutter', 'debris'], weight: 1 },
+          { tags: ['crockery'], weight: 3 },
+          { tags: ['glass'], weight: 2 },
+          { tags: ['bedding'], weight: 1 },
         ],
         words: {
           name: 'Quarto de taverna',
@@ -777,14 +775,19 @@ export const BUILDING_REGISTRY = {
           { concept: 'stairs', feature: 'stairs' },
         ],
         groups: [['crate', 'crate_small', 'barrel'], ['barrel', 'barrel']],
-        // A cellar's floor, and the room that says why one tag was never
+        // A cellar's floor, and the room that first showed one tag was never
         // enough: this and the guest room above both asked for `clutter`, and
-        // with a single rung they came back the same five pieces in the same
-        // flat distribution. Sacking and broken floor is what a cellar has;
-        // nothing is drunk from down here, so `tableware` is off the ladder.
+        // came back the same five pieces in the same flat distribution.
+        // Sacking, packing straw and broken floor is what a cellar has;
+        // nothing is drunk from down here, so no crockery and no glass.
+        //
+        // `['clutter', 'stone']` is the shard and only the shard — `rubble` is
+        // stone but is not clutter, and the conjunction is what keeps a
+        // cellar's broken tiles from arriving as a collapsed wall.
         scatterLadder: [
           { tags: ['storage'], weight: 3 },
-          { tags: ['clutter', 'debris'], weight: 3 },
+          { tags: ['bedding'], weight: 3 },
+          { tags: ['clutter', 'stone'], weight: 2 },
         ],
         words: {
           name: 'Depósito de taverna',
@@ -815,9 +818,14 @@ export const BUILDING_REGISTRY = {
           ['war_table', 'guard_stool', 'guard_stool', 'guard_stool', 'guard_stool'],
           ['stone_bench', 'war_table_long', 'stone_bench'],
         ],
+        // Bone, then the manacle, then the fallen wall, then the dust. The
+        // first rung is a conjunction: `remains` alone would take the skull
+        // too, and a guard room is not a burial chamber.
         scatterLadder: [
-          { tags: ['dungeon', 'debris'], weight: 4 },
-          { tags: ['stone', 'debris'], weight: 2 },
+          { tags: ['remains', 'dungeon'], weight: 4 },
+          { tags: ['iron'], weight: 2 },
+          { tags: ['masonry'], weight: 2 },
+          { tags: ['grime'], weight: 1 },
         ],
         words: {
           name: 'Salão da masmorra',
@@ -838,9 +846,18 @@ export const BUILDING_REGISTRY = {
         ],
         groups: [['prison_desk', 'guard_stool']],
         // A cell has only what the dungeon itself leaves: bone, chain and
-        // dust, which is the set this room already had. No stone rung, so no
-        // rubble — the walls of a cell are the one thing kept intact.
-        scatterLadder: [{ tags: ['dungeon', 'debris'], weight: 3 }],
+        // dust, which is the set this room always had. No masonry rung — the
+        // walls of a cell are the one thing kept intact.
+        //
+        // One rung for the three of them is what this was, and it made them
+        // equal by construction: `bone`, `broken_chain` and `dust` carried the
+        // same two words, so a cell written for 46% bone drew 31%, behind the
+        // chain and the dust at 35% and 34%. Three rungs is the difference.
+        scatterLadder: [
+          { tags: ['remains', 'dungeon'], weight: 3 },
+          { tags: ['iron'], weight: 2 },
+          { tags: ['grime'], weight: 1 },
+        ],
         words: {
           name: 'Cela da masmorra',
           criterion: 'Cela ou quarto da masmorra, com catre',
@@ -853,12 +870,16 @@ export const BUILDING_REGISTRY = {
         defaultWallMaterial: 'stone_wall',
         anchors: [{ concept: 'shelving', feature: 'shelving' }, { concept: 'stairs', feature: 'stairs' }],
         groups: [['supply_crate', 'small_crate', 'weapon_bundle'], ['weapon_bundle', 'weapon_bundle']],
-        // An arsenal's own floor: `weapons` heaviest, so a loose arrow is the
-        // single piece this room is likeliest to be strewn with.
+        // An arsenal's floor: spilled arrows and the dust they lie in, over
+        // stone that has come down. No bone and no chain — nobody is kept in
+        // the store room — and that is what the broad `['dungeon', 'debris']`
+        // rung this replaces could not say. It was the worst floor in the
+        // project by a distance, 0.466 from the one this room was written
+        // with, and it had gone from three pieces to six.
         scatterLadder: [
-          { tags: ['weapons', 'debris'], weight: 4 },
-          { tags: ['dungeon', 'debris'], weight: 3 },
-          { tags: ['stone', 'debris'], weight: 2 },
+          { tags: ['weapons'], weight: 3 },
+          { tags: ['grime'], weight: 3 },
+          { tags: ['masonry'], weight: 2 },
         ],
         assetTags: ['weapons', 'dungeon', 'stone'],
         words: {
@@ -893,26 +914,24 @@ export const BUILDING_REGISTRY = {
           ['grave_slab', 'slab_lid', 'grave_marker'],
           ['funerary_urn', 'funerary_urn'],
         ],
-        // **Bone first, and the order of the three rungs is the whole of it.**
-        // Read as one `debris` tag with a palette bonus, this floor came back
-        // 8% bone and 25% skull against the 31% and 15% it was written for —
-        // the room's own emblem outnumbering the thing it is full of — and it
-        // gained straw and loose arrows, which a burial chamber has no source
-        // for. Rung by rung it is bone, then the broken floor the description
-        // that made this room asked for, then the skull.
+        // **Bone first, and it took a word in the catalogue to say so.** Read
+        // as one `['dungeon', 'debris']` rung, bone could not be the heaviest
+        // piece of this floor at any weight — `broken_chain` and `dust`
+        // carried the same two words, so the three moved together and a crypt
+        // written for 32% bone drew 20% of each. `remains` is the word, and
+        // `['remains', 'dungeon']` is bone alone: the skull is remains too, and
+        // is asked for below by the word for where it belongs.
         //
-        // Bone shares its rung with `broken_chain` and `dust`: the three carry
-        // identical tags in the catalogue, so **no ladder can part them** and
-        // bone cannot be the single heaviest piece here at all. Its ceiling is
-        // a third of the floor, reached only by a crypt with no rubble, no
-        // shards and no skull on it. These three weights are the ones measured
-        // closest to the floor this room was written with — 0.227 total
-        // variation from it, against 0.246 for `[4, 3, 2]` and 0.291 for
-        // `[6, 3, 3]`, which buys bone two points by halving the skull.
+        // Rung by rung: the bones, the vault come down, the skull, the broken
+        // floor the description that made this room asked for, and the dust.
+        // No `broken_chain` — nobody is chained up in a crypt — which one
+        // `dungeon` rung could not have said either.
         scatterLadder: [
-          { tags: ['dungeon', 'debris'], weight: 4 },
-          { tags: ['stone', 'debris'], weight: 3 },
-          { tags: ['tomb', 'debris'], weight: 3 },
+          { tags: ['remains', 'dungeon'], weight: 4 },
+          { tags: ['masonry'], weight: 3 },
+          { tags: ['tomb'], weight: 2 },
+          { tags: ['clutter', 'stone'], weight: 2 },
+          { tags: ['grime'], weight: 2 },
         ],
         // `tomb` rather than `dungeon`, and this is the room that proves the
         // ladder has to be a room's and not only a building's. The three pieces
@@ -1136,8 +1155,18 @@ export function resolveAssets(profile: PlaceProfile, library: AssetLibrary, rng:
   // Rung by rung, and a piece keeps the weight of the **first** rung it stood
   // on. Summing the rungs instead would make a mug heavier for also being
   // clutter, which is the opposite of what a ladder says; taking the last
-  // would make the general rung overrule the particular one and leave the
-  // taproom's tableware weighing what its sweepings do.
+  // would make the general rung overrule the particular one.
+  //
+  // **Inert as the seven ladders stand, and known to be.** Once the catalogue
+  // grew a word for what each piece *is*, every rung in every room came out
+  // disjoint from every other in that room, so all three readings build the
+  // same seven pools today — measured, not assumed. Kept because it is the
+  // rule that makes a ladder a ladder rather than a set with numbers on it,
+  // and because the next piece added to the catalogue is the one that will
+  // stand on two rungs: a jug is crockery and clutter both, and which of those
+  // two a taproom weighs it by is this line. `profiles.test.ts` exercises it
+  // on a ladder written for the purpose rather than on a room's, so that
+  // tuning a floor cannot quietly leave the rule uncovered.
   const scatter: ScatterSpec[] = [];
   const onTheFloor = new Set<string>();
   for (const rung of profile.scatterLadder) {
