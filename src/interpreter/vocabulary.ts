@@ -117,7 +117,21 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // a laboratory that is also a hearth. **Not the observatory** — a chamber
     // whose point is seeing out of it is lit by what it is pointed at, and its
     // geometry declares no slot a fire would fit.
-    { building: 'tower', room: 'laboratory' }],
+    { building: 'tower', room: 'laboratory' },
+    // Both rooms of the mine. A gallery and a winding house are each a place
+    // somebody works a shift in, and the lamp on the wall is the only light
+    // either of them has.
+    { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' },
+    // The stern lantern. **Not the hold**: a hold is where an open flame sinks
+    // the ship, and the room declares no slot for one, so "uma lanterna no
+    // porão" is answered the way a fire in the archive is.
+    { building: 'ship', room: 'cabin' },
+    // The furnace under the still, and the stove that keeps the frost off the
+    // glasshouse. Both rooms of this building declare one.
+    { building: 'apothecary', room: 'distillery' }, { building: 'apothecary', room: 'hall' },
+    // The fire the fence sits by, and the lamp in the tunnel — the narrowest
+    // light in the project, because a bolt-hole is not lit to be seen from.
+    { building: 'den', room: 'fencing' }, { building: 'den', room: 'tunnel' }],
   /**
    * A flight up or down, to the rooms above or the cellar below.
    *
@@ -138,7 +152,19 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     { building: 'library', room: 'reading' },
     // Both, and in this building the stair is the building: the laboratory's
     // corner stair is the one the observatory's comes up from.
-    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' }],
+    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' },
+    // Up to the surface, from both. In this building the stair is the way out.
+    { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' },
+    // The companion ladder up out of the hold. The cabin opens onto the
+    // companionway rather than onto a stair of its own.
+    { building: 'ship', room: 'room' },
+    // Down to the cellar the casks are laid in. **Not the glasshouse**: the
+    // geometry it borrows declares a 5x2 and a 3x2 and a corner, and this
+    // building fills none of them with a stair.
+    { building: 'apothecary', room: 'distillery' },
+    // Up out of the tunnel. **Not the receiving room**: a fence's back room is
+    // on the level the street is, and it declares no stair slot.
+    { building: 'den', room: 'tunnel' }],
   /**
    * Columns carrying a span too wide for bare joists. A hall is that wide, and
    * so is a crypt, whose vault is the reason it has them.
@@ -156,7 +182,10 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // reason is arithmetic rather than taste: `laboratory` is 11x11 at its
     // smallest, which is exactly where `growPillars` becomes possible. The
     // three halls are a cell short and pay 205 of 600 seeds for it in silence.
-    { building: 'tower', room: 'laboratory' }],
+    { building: 'tower', room: 'laboratory' },
+    // The fourth hall, and it inherits the same defect for the same reason the
+    // nave does: the geometry is 12x10 at its smallest, a cell under the line.
+    { building: 'apothecary', room: 'hall' }],
   /** A recess off the main floor: a snug, a bed nook, or a burial recess. */
   alcove: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'crypt' },
     // The shop front is the guest room's geometry, so it has the guest room's
@@ -172,7 +201,23 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // Both: the laboratory has all four shapes and the observatory has
     // `alcove`. A recess off a laboratory is where the thing nobody wants to
     // look at is kept.
-    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' }],
+    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' },
+    // The gallery, because it is the guest room's geometry and that geometry
+    // offers `alcove` — a recess off a gallery is a worked-out pocket of ore.
+    // **Not the winding house**: its shapes are `rectangle` and `l_shape`, so
+    // asking it for a recess is answered with a conflict rather than silently.
+    { building: 'mine', room: 'room' },
+    // The hold has the guest room's shapes; the cabin declares `alcove` of its
+    // own, and there it is a quarter gallery off the stern.
+    { building: 'ship', room: 'room' }, { building: 'ship', room: 'cabin' },
+    // The glasshouse, because it is a hall and a hall offers all four shapes. A
+    // recess off it is a cold frame. **Not the still room**, whose shapes are
+    // `rectangle` and `l_shape` for the smithy's reason.
+    { building: 'apothecary', room: 'hall' },
+    // Where what is not for sale today is kept. **Not the tunnel**, whose
+    // shapes are `rectangle` and `l_shape` — and the bend is the point of the
+    // second one.
+    { building: 'den', room: 'fencing' }],
   /**
    * Racks along a wall, for casks or for a guest's belongings — and, in a
    * crypt, the tiers of a bone niche, which is a shelf holding the dead.
@@ -191,7 +236,16 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     { building: 'library', room: 'reading' }, { building: 'library', room: 'archive' },
     // Both rooms of the tower declare one: the instruments have to stand
     // somewhere, and in this building that somewhere is a shelf.
-    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' }],
+    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' },
+    // The tool rack, in both rooms of the mine.
+    { building: 'mine', room: 'room' }, { building: 'mine', room: 'hoist' },
+    // The cargo shelf and the cabin's book shelf.
+    { building: 'ship', room: 'room' }, { building: 'ship', room: 'cabin' },
+    // The rack of jars. **Not the glasshouse**: the hall's geometry declares no
+    // shelving slot, which is why the nave is not listed either.
+    { building: 'apothecary', room: 'distillery' },
+    // The racks the goods wait on.
+    { building: 'den', room: 'fencing' }],
   /** Stacked sleeping berths. A room to sleep in, and nowhere else. */
   bunks: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
   /**
@@ -200,7 +254,10 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
    * than another word for the same piece — `anchor/bunk_beds` deliberately
    * carries no `bed` tag, so the two never resolve to each other.
    */
-  bed: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
+  bed: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' },
+    // The captain's berth. **Not the hold**, whose bunk slot is `null`: the
+    // crew sleep forward, not in the cargo.
+    { building: 'ship', room: 'cabin' }],
   /**
    * Arms kept in the room: a rack, an armoury stand, weapons out of a rack.
    * The dungeon hall is the only place whose profile declares one.
@@ -209,7 +266,14 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // The blade display. A weapons word in a smith's shop is the most ordinary
     // thing a person could ask for, and it resolves to the one `weapons` anchor
     // in the catalogue at 3x1.
-    { building: 'forge', room: 'room' }],
+    { building: 'forge', room: 'room' },
+    // The guns. `weapons` at 2x1 is the cannon and nothing else in the
+    // catalogue, and the hold declares that slot twice — one with this word on
+    // it and one without, so refusing arms leaves a broadside of one.
+    { building: 'ship', room: 'room' },
+    // What came in with the rest of it. `weapons` at 3x1 is the blade display
+    // and nothing else, so a fence and a smith show the same piece.
+    { building: 'den', room: 'fencing' }],
   /** Somewhere the dead are kept: a sarcophagus, a grave slab, a bone niche. */
   tomb: [{ building: 'dungeon', room: 'crypt' }],
 };

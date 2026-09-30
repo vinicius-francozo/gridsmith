@@ -171,6 +171,41 @@ const PROFILES: Readonly<Record<RoomKind, PlaceProfile>> = {
     sizes: { small: { w: 10, h: 10 }, medium: { w: 13, h: 10 }, large: { w: 13, h: 13 } },
     doors: { min: 1, max: 1 },
   },
+  // The winding house, against its own 8x8 floor and 13x12 ceiling. The
+  // smithy's arrangement — small and medium apart on width, medium and large
+  // on height — for the smithy's reason: three cells on one side is what
+  // `jitterSize` cannot close, and holding both sides apart in a room this
+  // small costs a hint its range to vary in.
+  hoist: {
+    sizes: { small: { w: 9, h: 9 }, medium: { w: 12, h: 9 }, large: { w: 12, h: 12 } },
+    doors: { min: 1, max: 2 },
+  },
+  // The great cabin, against its own 8x7 floor and 12x11 ceiling. One door,
+  // which makes the range a point rather than a band — the third entry in this
+  // table to say so, and the three say it for three unrelated reasons.
+  cabin: {
+    sizes: { small: { w: 9, h: 8 }, medium: { w: 12, h: 8 }, large: { w: 12, h: 11 } },
+    doors: { min: 1, max: 1 },
+  },
+  // The still room, against its own 9x8 floor and 14x12 ceiling — the smithy's
+  // bounds, so the smithy's bands, for a room that is the same thing: a fire
+  // with a vessel on it and somewhere to stand beside both.
+  distillery: {
+    sizes: { small: { w: 10, h: 9 }, medium: { w: 13, h: 9 }, large: { w: 13, h: 12 } },
+    doors: { min: 1, max: 2 },
+  },
+  // The receiving room, against its own 8x7 floor and 13x11 ceiling.
+  fencing: {
+    sizes: { small: { w: 9, h: 8 }, medium: { w: 12, h: 8 }, large: { w: 12, h: 11 } },
+    doors: { min: 1, max: 2 },
+  },
+  // The bolt-hole, against 7x7 and 12x11 — **the smallest bands in the table
+  // after the archive's**, and the archive is the only other room whose small
+  // hint is square. A tunnel is as wide as one person and a bend.
+  tunnel: {
+    sizes: { small: { w: 8, h: 8 }, medium: { w: 11, h: 8 }, large: { w: 11, h: 11 } },
+    doors: { min: 1, max: 2 },
+  },
 };
 
 /** What a place is when the description said nothing about size. */
