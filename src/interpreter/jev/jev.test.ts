@@ -36,23 +36,29 @@ const ANSWER = `{
     "feature_pillars": { "type": "noul", "noul": 0.12 },
     "feature_alcove": { "type": "noul", "noul": 0.07 },
     "feature_shelving": { "type": "noul", "noul": 0.88 },
-    "feature_bunks": { "type": "noul", "noul": 0.02 }
+    "feature_bunks": { "type": "noul", "noul": 0.02 },
+    "feature_bed": { "type": "noul", "noul": 0.05 },
+    "feature_weapons": { "type": "noul", "noul": 0.03 },
+    "feature_tomb": { "type": "noul", "noul": 0.01 }
   },
   "usage": { "input_tokens": 307, "output_tokens": 72 }
 }`;
 const ROOM_ANSWER = '{"answers":{"room":{"type":"choice","choice":"storeroom","confidence":0.94}}}';
 
-/** The thirteen names the request has to carry, written out rather than derived. */
+/** The sixteen names the request has to carry, written out rather than derived. */
 const QUESTION_NAMES = [
   'condition',
   'furnishing',
   'feature_alcove',
   'feature_bar',
+  'feature_bed',
   'feature_bunks',
   'feature_hearth',
   'feature_pillars',
   'feature_shelving',
   'feature_stairs',
+  'feature_tomb',
+  'feature_weapons',
   'light',
   'out_of_vocabulary',
   'size',
@@ -229,9 +235,12 @@ describe('what comes back', () => {
       // split, this line read 0.6 as well.
       furnishing: 0.5,
       features: ['stairs', 'shelving'],
-      // Every noul at or under 0.05. `pillars` at 0.12 and `alcove` at 0.07
-      // are in neither list, which is the band this answer never mentioned.
-      excluded: ['bar', 'hearth', 'bunks'],
+      // Every noul at or under 0.05, in vocabulary order rather than in the
+      // order they arrived. `pillars` at 0.12 and `alcove` at 0.07 are in
+      // neither list, which is the band this answer never mentioned — and
+      // `bed` sits exactly on 0.05, which the reading takes, because the
+      // comparison is `<=` for the reason `EXCLUSION_THRESHOLD` gives.
+      excluded: ['bar', 'hearth', 'bunks', 'bed', 'weapons', 'tomb'],
       unresolved: [],
     });
   });

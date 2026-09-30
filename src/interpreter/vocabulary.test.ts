@@ -5,7 +5,21 @@ import type { Place } from '../core/types';
 import { FEATURES, featureSuits, featuresFor, isFeature } from './vocabulary';
 import type { Feature } from './vocabulary';
 
-const PLACE_TYPES: Place[] = [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'tavern', room: 'storeroom' }];
+/**
+ * Every pair the project builds.
+ *
+ * It was the tavern's three, which covered the vocabulary only because every
+ * word happened to suit a tavern room as well. `weapons` and `tomb` do not —
+ * one is the dungeon hall's and the other the crypt's — so the sweep below
+ * would have reported them as words no place can hold, when the truth was that
+ * this list had not kept up with `BUILDINGS`.
+ */
+const PLACE_TYPES: Place[] = [
+  { building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' },
+  { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' },
+  { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'storeroom' },
+  { building: 'dungeon', room: 'crypt' },
+];
 
 describe('isFeature', () => {
   it('recognises every word in the vocabulary', () => {
@@ -68,7 +82,7 @@ describe('featuresFor', () => {
     }
   });
 
-  it('accounts for every feature in the vocabulary across the three places', () => {
+  it('accounts for every feature in the vocabulary across every place there is', () => {
     // A feature that suits nowhere would be a word the prompt offers the model
     // and `resolve` then always throws away.
     const reachable = new Set(PLACE_TYPES.flatMap((place) => featuresFor(place)));

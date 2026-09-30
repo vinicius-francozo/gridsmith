@@ -170,8 +170,12 @@ describe('building and room composition', () => {
       ...profile.groups.flatMap((group) => group.parts.map((part) => part.assetId)),
     ];
 
+    // Four slots, three pieces: the library has one `tomb` anchor at 3x2, so
+    // the room's net draws the sarcophagus a second time. That is the price of
+    // `tomb` being a word, and it is written out here rather than left to be
+    // discovered on a map.
     expect(crypt.anchors.map((anchor) => anchor.assetId)).toEqual([
-      'sarcophagus', 'bone_niche', 'votive_brazier',
+      'sarcophagus', 'bone_niche', 'votive_brazier', 'sarcophagus',
     ]);
     expect(crypt.groups.map((group) => group.parts.map((part) => part.assetId))).toEqual([
       ['grave_slab', 'slab_lid', 'grave_marker'],
@@ -199,15 +203,22 @@ describe('building and room composition', () => {
       expect(`${elsewhere} in the crypt: ${String(debris.has(elsewhere))}`)
         .toBe(`${elsewhere} in the crypt: false`);
     }
-    // The sarcophagus carries **no feature word**, and that is the net rather
-    // than a detail of the table. `anchorOrder` drops an anchor whose feature is
-    // in `excluded`, and a featureless one can never be in `excluded`, so this
-    // is the single piece that cannot be refused. It is also what actually
-    // saved the map this front exists for: "catacumba **escura**" scores the
+    // **One slot carries no feature word, and that is the net rather than a
+    // detail of the table.** `anchorOrder` drops an anchor whose feature is in
+    // `excluded`, and a featureless one can never be in `excluded`, so this is
+    // the single piece that cannot be refused. It is what actually saved the
+    // map the crypt front exists for: "catacumba **escura**" scores the
     // `hearth` noul low enough to be read as a refusal, which takes the brazier
-    // out of the draw before it starts. Give it a feature and the crypt becomes
-    // refusable down to nothing.
-    expect(crypt.anchors.find((anchor) => anchor.assetId === 'sarcophagus')?.feature).toBeUndefined();
+    // out of the draw before it starts.
+    //
+    // Counted rather than looked up by asset id, which is how it used to be
+    // written and would now find the *first* sarcophagus — the one that does
+    // carry a word. Exactly one of the four has none, and both halves of that
+    // are load-bearing: none at all and the crypt is refusable down to bare
+    // walls; two and one of them is a word that promises something it cannot
+    // take away.
+    const wordless = crypt.anchors.filter((anchor) => anchor.feature === undefined);
+    expect(wordless.map((anchor) => anchor.assetId)).toEqual(['sarcophagus']);
     for (const guardRoomThing of ['war_table', 'guard_stool', 'weapon_rack', 'stone_stairs']) {
       expect(idsOf(crypt)).not.toContain(guardRoomThing);
     }
@@ -317,7 +328,7 @@ describe('building and room composition', () => {
       crypt.anchors.map((anchor) => anchor.feature).filter((feature) => feature !== undefined),
     );
 
-    expect(featuresFor(place)).toEqual(['hearth', 'pillars', 'alcove', 'shelving']);
+    expect(featuresFor(place)).toEqual(['hearth', 'pillars', 'alcove', 'shelving', 'tomb']);
     for (const feature of featuresFor(place)) {
       expect(`${feature}: ${String(answeredByPlan.has(feature) || anchored.has(feature))}`).toBe(`${feature}: true`);
     }
@@ -1059,9 +1070,12 @@ describe('the feature vocabulary', () => {
     alcove: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'room' }],
     shelving: [{ building: 'tavern', room: 'storeroom' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'storeroom' }, { building: 'dungeon', room: 'room' }],
     bunks: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
+    bed: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
+    weapons: [{ building: 'dungeon', room: 'hall' }],
+    tomb: [{ building: 'dungeon', room: 'crypt' }],
   };
 
-  it('is the same seven words the interpreter writes', () => {
+  it('is the same ten words the interpreter writes', () => {
     expect([...FEATURE_VOCABULARY].sort()).toEqual(Object.keys(FEATURE_PLACES).sort());
   });
 

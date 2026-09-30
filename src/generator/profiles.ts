@@ -134,7 +134,7 @@ export function materialDef(material: string): MaterialDef {
  * other half of that agreement: a word the generator answers to nothing for
  * is a request that vanishes from the map without an error anywhere.
  *
- * Five of the seven name an anchor, through `AnchorSpec.feature`. Two of them
+ * Eight of the ten name an anchor, through `AnchorSpec.feature`. The other two
  * are answered by stage one instead, because they are shape, not furniture:
  * `alcove` picks a footprint out of the grammar and `pillars` grows columns.
  */
@@ -146,6 +146,9 @@ export const FEATURE_VOCABULARY: readonly string[] = [
   'alcove',
   'shelving',
   'bunks',
+  'bed',
+  'weapons',
+  'tomb',
 ];
 
 /** The feature that asks stage one for a recess off the main floor. */
@@ -275,24 +278,39 @@ export type ScatterRung = { tags: string[]; weight: number };
  * by nothing, which the next asset breaks silently. This table is where the
  * word is, and `profileFor` holds a slot's `feature` to the concept it names.
  *
- * Five carry a feature and four do not, and the four are not an omission. A
+ * Eight carry a feature and one does not, and the one is not an omission. A
  * featureless anchor cannot appear in `Params.excluded`, so it is the piece of
- * a room no description can take away — the sarcophagus in a crypt, the weapon
- * rack in a dungeon hall. Which slots are featureless is the *building's*
- * business and is declared on the filling; this table says which words *may*
- * ask, so that a slot cannot claim to be asked for by a word that names
- * something else.
+ * a room no description can take away. Which slots are featureless is the
+ * *building's* business and is declared on the filling; this table says which
+ * words *may* ask, so that a slot cannot claim to be asked for by a word that
+ * names something else.
+ *
+ * **`bed`, `weapons` and `tomb` were three of those four and now have words**,
+ * because a person writing "uma cama" or "um sarcófago" was writing about a
+ * piece this project has and being answered with silence. The word admits them
+ * to `FEATURES` and the measurement that admitted them is
+ * `vocabulario-pedivel/arnes-admissao.md`, beside the rulers outside this
+ * repository. Being askable makes each of them refusable in the same breath, so
+ * the crypt declares a second `tomb` slot with no word on it to keep the net
+ * the first one used to be — the dungeon hall was measured and does not need
+ * one.
+ *
+ * `storage` is the one left, and it is left on purpose. This mechanism promotes
+ * an **anchor**; `storage` lives almost entirely in `group` and `scatter`
+ * (`crate`, `barrel`, `supply_crate`, `sack`), so somebody writing "caixotes
+ * empilhados" would be handed the wardrobe that happens to be the concept's one
+ * anchor. What it needs is a mechanism that promotes a group, not a word.
  */
 export const CONCEPTS = {
   bar: { feature: 'bar' },
-  bed: {},
+  bed: { feature: 'bed' },
   bunks: { feature: 'bunks' },
   hearth: { feature: 'hearth' },
   shelving: { feature: 'shelving' },
   stairs: { feature: 'stairs' },
   storage: {},
-  tomb: {},
-  weapons: {},
+  tomb: { feature: 'tomb' },
+  weapons: { feature: 'weapons' },
 } satisfies Record<string, { feature?: string }>;
 
 /** A word a room may ask the library for. */
@@ -661,6 +679,13 @@ export const ROOM_REGISTRY = {
       { footprint: { w: 3, h: 2 }, placement: 'wall' },
       { footprint: { w: 4, h: 1 }, placement: 'wall' },
       { footprint: { w: 2, h: 1 }, placement: 'wall' },
+      // A fourth slot at the first one's footprint, and the dungeon's filling
+      // below says what it is for. It never makes the room hold four pieces:
+      // `anchorRange.max` is three, and the one path that can overrun it —
+      // `anchorOrder` putting every *requested* anchor in front without
+      // trimming — can only reach three here, because three of these four carry
+      // a word and the fourth is the one that does not.
+      { footprint: { w: 3, h: 2 }, placement: 'wall' },
     ],
     // See the header: `min: 0` is the whole point of this room having its own
     // geometry. A crypt asked for with no furniture comes back with none.
@@ -754,7 +779,7 @@ export const BUILDING_REGISTRY = {
         wallMaterials: { wood_plank: 'plaster_wall' },
         defaultWallMaterial: 'plaster_wall',
         anchors: [
-          { concept: 'bed' },
+          { concept: 'bed', feature: 'bed' },
           { concept: 'bunks', feature: 'bunks' },
           { concept: 'storage' },
           { concept: 'shelving', feature: 'shelving' },
@@ -825,7 +850,17 @@ export const BUILDING_REGISTRY = {
         wallMaterials: { flagstone: 'stone_wall', stone_floor: 'stone_wall' },
         defaultWallMaterial: 'stone_wall',
         anchors: [
-          { concept: 'weapons' },
+          // **The word costs this room its net, and the room was measured to be
+          // able to afford it.** The rack carried no feature, so nothing could
+          // refuse it and the hall could never come back with bare walls; now
+          // all three of its anchors are refusable, which is the state the
+          // tavern hall is in and which empties that room's wall on 1 of the 41
+          // sentences of the exclusion corpus. Recomputed over the same 41 with
+          // this word in place, the dungeon hall keeps 2.32 anchors on average
+          // against 2.59 before, and comes back bare on **0 of 41** — before
+          // and after. The crypt, whose net is the same shape, does not survive
+          // the same change and declares a second slot below.
+          { concept: 'weapons', feature: 'weapons' },
           { concept: 'hearth', feature: 'hearth', light: { radiusCells: 6, colorHex: '#ffb46b' } },
           { concept: 'stairs', feature: 'stairs' },
         ],
@@ -853,7 +888,7 @@ export const BUILDING_REGISTRY = {
         wallMaterials: { flagstone: 'stone_wall', stone_floor: 'stone_wall' },
         defaultWallMaterial: 'stone_wall',
         anchors: [
-          { concept: 'bed' },
+          { concept: 'bed', feature: 'bed' },
           { concept: 'bunks', feature: 'bunks' },
           { concept: 'storage' },
           { concept: 'shelving', feature: 'shelving' },
@@ -931,15 +966,10 @@ export const BUILDING_REGISTRY = {
         wallMaterials: { stone_floor: 'stone_wall', flagstone: 'stone_wall' },
         defaultWallMaterial: 'stone_wall',
         anchors: [
-          // **No feature word, and that is the net.** `anchorOrder` refuses an
-          // anchor whose feature is in `excluded`, and a featureless anchor can
-          // never be in `excluded`, so this is the one piece of the room that no
-          // description can take away — the same job `weapon_rack` does in the
-          // dungeon hall. It is also what actually carried the map this front
-          // exists for: that description excluded `hearth` along with `stairs`,
-          // so the brazier never entered the draw and the crypt came back as a
-          // sarcophagus and a bone niche.
-          { concept: 'tomb' },
+          // **The sarcophagus a description can ask for**, which is what
+          // admitting `tomb` to the vocabulary bought — and what it cost is the
+          // slot below.
+          { concept: 'tomb', feature: 'tomb' },
           { concept: 'shelving', feature: 'shelving' },
           // The only light this room has, and it is worth saying that the room
           // usually has none: a crypt described the archetypal way is described
@@ -947,6 +977,45 @@ export const BUILDING_REGISTRY = {
           // so `Scene.lights` comes back empty. That is the honest reading of
           // the sentence and not a fault; the v1 renderer draws no light anyway.
           { concept: 'hearth', feature: 'hearth', light: { radiusCells: 3, colorHex: '#ffb46b' } },
+          // **No feature word, and that is the net.** `anchorOrder` refuses an
+          // anchor whose feature is in `excluded`, and a featureless anchor can
+          // never be in `excluded`, so this is the one piece of the room that no
+          // description can take away — the same job `weapon_rack` used to do in
+          // the dungeon hall. It is also what actually carried the map the crypt
+          // front exists for: that description excluded `hearth` along with
+          // `stairs`, so the brazier never entered the draw and the crypt came
+          // back as a sarcophagus and a bone niche.
+          //
+          // **It used to be the slot above, and giving that slot a word spent
+          // it.** Measured over the 41 sentences of the exclusion corpus, the
+          // crypt with all three of its anchors refusable keeps 2.27 of them
+          // and comes back with bare walls on 1 of 41 — the one being `"Uma
+          // sala nua, sem nada nas paredes e sem móveis."`, which puts `tomb`,
+          // `shelving` and `hearth` at 0.03, 0.03 and 0.04, all under the
+          // exclusion threshold. With this slot the same 41 give 3.27 and 0 of
+          // 41, which is where the room was before the word.
+          //
+          // **The dungeon hall was measured too and does not get one**: the
+          // same 41 take it from 2.59 anchors to 2.32 and leave it bare on 0 of
+          // 41 both ways, so a net there would be furniture bought against a
+          // risk that did not turn up.
+          //
+          // **What it costs is visible and is not small.** The library has one
+          // `tomb` anchor at 3x2, so this slot and the one above both draw the
+          // sarcophagus: over 400 seeds with nothing asked for, 130 crypts hold
+          // two of them, and 197 do when the description asks for a tomb by
+          // name. And the refusal only half works — "sem túmulos" still leaves a
+          // sarcophagus standing on 333 of 400 seeds, against 369 when nothing
+          // is refused, because this slot is not the one the word names.
+          //
+          // The alternative measured beside it was a second 4x1 slot, which
+          // draws the bone niche instead: it makes "sem túmulos" take the
+          // sarcophagus away completely, and pays for it by doubling the bone
+          // niche on 271 of 400 seeds and by making **`shelving`**'s refusal
+          // the half-working one, since the niche is what that word names. A
+          // word admitted this front can afford to be the one that pays;
+          // `shelving` was measured against a corpus that assumed it worked.
+          { concept: 'tomb' },
         ],
         groups: [
           ['grave_slab', 'slab_lid', 'grave_marker'],

@@ -197,9 +197,18 @@ describe('the wording handed to the classifier', () => {
       medium: 'de tamanho médio',
       large: 'grande',
     });
-    // These seven are also the words `synonyms.ts` rewrites descriptions
-    // *towards*, which it reads from here rather than restating. Changing one
-    // silently re-points that whole layer.
+    // These are also the words `synonyms.ts` rewrites descriptions *towards*,
+    // which it reads from here rather than restating. Changing one silently
+    // re-points that whole layer.
+    //
+    // **The last three are not measured and are in the list for the opposite
+    // reason from the first seven.** Those seven are pinned because a bench
+    // measured them and tidying one would invalidate the numbers in
+    // `templates.ts`. `cama`, `armas` and `túmulo` were never run on this
+    // engine at all: the front that admitted them measured against Jev and
+    // wrote down that this path is a courtesy. They are pinned so that the
+    // absence of a measurement stays visible in the one place a reader of this
+    // file will look, rather than becoming a word somebody assumes was tested.
     expect(FEATURE_TEMPLATE.labels).toEqual({
       bar: 'balcão',
       hearth: 'lareira',
@@ -208,6 +217,9 @@ describe('the wording handed to the classifier', () => {
       alcove: 'alcova',
       shelving: 'prateleiras',
       bunks: 'beliches',
+      bed: 'cama',
+      weapons: 'armas',
+      tomb: 'túmulo',
     });
   });
 

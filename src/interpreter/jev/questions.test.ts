@@ -109,6 +109,35 @@ describe('the feature questions', () => {
       expect(QUESTIONS[name].type).toBe('noul');
     }
   });
+
+  it('keeps the bunk named on the far side of the bed question', () => {
+    // **A measurement lives in this one clause and nothing else can hold it.**
+    // Asked with `'Não há cama nenhuma'` on the `false` side, `feature_bed`
+    // scored the four sentences of the corpora that describe bunks at
+    // 0.970–0.980 — over the presence gate, beside `feature_bunks` itself at
+    // 0.980–0.990. Naming the bunk here takes those four to 0.420–0.490 and
+    // leaves presence alone: the lowest of the eight sentences that do ask for
+    // a bed moved 0.930 to 0.920.
+    //
+    // It matters because of what the generator does downstream, not because of
+    // tidiness. A guest room declares `bed` and `bunks` as separate slots, and
+    // `anchorOrder` puts *every* requested anchor at the front of the draw
+    // without trimming to `anchorRange`, so "dois beliches" scoring both words
+    // draws the guest bed as well as the bunks — the word promising one thing
+    // and the catalogue handing over another.
+    //
+    // Seventeen requests bought this clause, and re-measuring is what it costs
+    // to change it. Written out rather than tested against a live model: there
+    // is no model in this suite, and a shape check ("mentions a bunk") would go
+    // green on any sentence containing the word.
+    expect(QUESTIONS.feature_bed.criteria.false).toBe(
+      'Não há cama nenhuma, ou o que há para dormir é um beliche',
+    );
+    // The other side did **not** move between the two wordings, and that is
+    // half of why the second one is usable: the instruction still names the
+    // thing on its own, which is the rule `feature_pillars` was measured into.
+    expect(QUESTIONS.feature_bed.instructions).toBe('O lugar tem uma cama?');
+  });
 });
 
 describe('every question, whatever its primitive', () => {

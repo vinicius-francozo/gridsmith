@@ -97,6 +97,9 @@ const NO_FEATURES: Record<Feature, number> = {
   alcove: 0.1,
   shelving: 0.1,
   bunks: 0.1,
+  bed: 0.1,
+  weapons: 0.1,
+  tomb: 0.1,
 };
 
 describe('reading scores back by label', () => {

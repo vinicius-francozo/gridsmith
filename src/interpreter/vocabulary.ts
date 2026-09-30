@@ -15,8 +15,29 @@
 
 import type { Place } from '../core/types';
 
-/** Every feature in the vocabulary, in a stable order so prompts do not drift. */
-export const FEATURES = ['bar', 'hearth', 'stairs', 'pillars', 'alcove', 'shelving', 'bunks'] as const;
+/**
+ * Every feature in the vocabulary, in a stable order so prompts do not drift.
+ *
+ * **The order is not cosmetic and the three newest words are at the end for
+ * that reason.** `resolveFeatures` drops whatever will not fit the floor's
+ * budget *from the end* of this list, and `jev/read.ts` reads the nouls in this
+ * order so that which word survives cannot depend on a hundredth of a point.
+ * Appending is therefore the only edit that moves no existing word: putting
+ * `bed` before `bunks` would have changed which of the seven a tight guest room
+ * keeps, which is a behaviour nobody asked for and no measurement covers.
+ *
+ * What it costs is that `bed`, `weapons` and `tomb` are the first to be dropped
+ * when the budget bites — and the budget does bite, in the one place it already
+ * did before they existed. A guest room's floor is 6x6 at its smallest, which
+ * is a budget of two, and asking for every word that place offers already lost
+ * `bunks` on 128 of 1200 resolves and `shelving` on 42 before this line grew.
+ * It is `CELLS_PER_FEATURE` in `resolve.ts` that decides that, not this order,
+ * and it is left alone here because it is the same number for every room.
+ */
+export const FEATURES = [
+  'bar', 'hearth', 'stairs', 'pillars', 'alcove', 'shelving', 'bunks',
+  'bed', 'weapons', 'tomb',
+] as const;
 
 /** A feature the generator is expected to be able to place. */
 export type Feature = (typeof FEATURES)[number];
@@ -67,6 +88,20 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
   shelving: [{ building: 'tavern', room: 'storeroom' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'storeroom' }, { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'crypt' }],
   /** Stacked sleeping berths. A room to sleep in, and nowhere else. */
   bunks: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
+  /**
+   * Somewhere one person sleeps: a bed, a cot, a pallet. The rooms that hold
+   * one are the two that hold bunks, and it is a **separate** slot there rather
+   * than another word for the same piece — `anchor/bunk_beds` deliberately
+   * carries no `bed` tag, so the two never resolve to each other.
+   */
+  bed: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
+  /**
+   * Arms kept in the room: a rack, an armoury stand, weapons out of a rack.
+   * The dungeon hall is the only place whose profile declares one.
+   */
+  weapons: [{ building: 'dungeon', room: 'hall' }],
+  /** Somewhere the dead are kept: a sarcophagus, a grave slab, a bone niche. */
+  tomb: [{ building: 'dungeon', room: 'crypt' }],
 };
 
 /** Whether `word` is a feature the generator knows at all. */
