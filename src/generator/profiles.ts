@@ -1533,7 +1533,7 @@ export const BUILDING_REGISTRY = {
           // light and is lost to `excluded`, not to the table — so the two
           // cases are different and only this comment says so.
           //
-          // **Seven of twenty-one as of the apothecary.** The nave declares an altar
+          // **Seven of twenty-three as of the thieves' den.** The nave declares an altar
           // where the halls declare a fire and has no 2x1 slot to put a sconce
           // in; the archive declares no fire on purpose, because a room full of
           // parchment is the one room in this project that should not have one;
@@ -1544,7 +1544,8 @@ export const BUILDING_REGISTRY = {
           // for at every dark seed. (It read "four of nine" for one commit,
           // which counted the rooms right and the pairs wrong: the temple made
           // it four of eleven.) Neither room of the mine is one of them — a
-          // gallery and a winding house each declare a lamp — and the ship
+          // gallery and a winding house each declare a lamp, both rooms of the
+          // apothecary declare one and so do both of the den — and the ship
           // brings exactly one, the hold, for the archive's reason: a hold is
           // where an open flame is what sinks the ship.
           null,
