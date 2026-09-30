@@ -507,30 +507,38 @@ describe('the rules themselves', () => {
     // What this adds over the test below is narrower and worth having anyway:
     // it names the canonicals that are *dead* rather than the ones that are
     // alive, so swapping which family is empty fails here; and it counts over
-    // all eight words a rule could exist for — the seven features plus the
-    // storeroom noun — rather than the seven, so emptying the `depósito` family
-    // is in scope too. Both sides come off the data; neither reads the prose.
+    // all eleven words a rule could exist for — the ten features plus the
+    // storeroom noun — rather than the features alone, so emptying the
+    // `depósito` family is in scope too. Both sides come off the data; neither
+    // reads the prose.
+    //
+    // **Six are dead now and the six are not one kind of thing.** `alcova`,
+    // `lareira` and `pilares` had families and lost them to measurement.
+    // `cama`, `armas` and `túmulo` never had one: they arrived on a front that
+    // measured against the Jev engine and left this one a courtesy, and a rule
+    // added without measuring is exactly what `synonyms.ts` has had to take
+    // back nineteen times.
     const possible = [STOREROOM_WORD, ...Object.values(FEATURE_TEMPLATE.labels)];
     const alive = new Set(SYNONYM_RULES.map((rule) => rule.canonical));
     const dead = possible.filter((label) => !alive.has(label));
 
-    expect(possible).toHaveLength(8);
-    expect(dead).toHaveLength(3);
-    expect([...dead].sort()).toEqual(['alcova', 'lareira', 'pilares']);
+    expect(possible).toHaveLength(11);
+    expect(dead).toHaveLength(6);
+    expect([...dead].sort()).toEqual(['alcova', 'armas', 'cama', 'lareira', 'pilares', 'túmulo']);
   });
 
   it('holds the count of feature labels with no rule, which `templates.ts` states', () => {
-    // `templates.ts` says three of the seven feature labels have no synonym
-    // rule and the other four do. That sentence is derived from this table and
-    // lives in another file, so the shape check above could not see it — and it
+    // `templates.ts` says six of the ten feature labels have no synonym rule
+    // and the other four do. That sentence is derived from this table and lives
+    // in another file, so the shape check above could not see it — and it
     // shipped saying "four" while listing three. Derived here, from both.
     const covered = new Set(SYNONYM_RULES.map((rule) => rule.canonical));
     const labels = Object.values(FEATURE_TEMPLATE.labels);
     const withRule = labels.filter((label) => covered.has(label));
 
-    expect(labels).toHaveLength(7);
+    expect(labels).toHaveLength(10);
     expect(withRule).toHaveLength(4);
-    expect(labels.filter((label) => !covered.has(label))).toHaveLength(3);
+    expect(labels.filter((label) => !covered.has(label))).toHaveLength(6);
     // Named, so that swapping which three are uncovered fails too.
     expect([...withRule].sort()).toEqual(['balcão', 'beliches', 'escada', 'prateleiras']);
   });

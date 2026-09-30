@@ -338,11 +338,17 @@ describe('the anchor a feature asks for by name', () => {
       })),
   );
 
-  it('is asked for by all five of the words an anchor answers to', () => {
+  it('is asked for by all six of the words an anchor in a tavern answers to', () => {
     // Without this, deleting `feature` from a spec would delete its test
     // along with it and the suite would stay green at a lower count.
+    //
+    // `PLACE_TYPES` in this file is the tavern's three, so only the words a
+    // tavern room answers to reach here — `weapons` and `tomb` are the dungeon
+    // hall's and the crypt's and are covered in `profiles.test.ts`. `bed` is
+    // the one this front adds on this side.
     expect([...new Set(REQUESTS.map((request) => request.feature))].sort()).toEqual([
       'bar',
+      'bed',
       'bunks',
       'hearth',
       'shelving',
@@ -746,14 +752,37 @@ describe('the two dials over the group layer', () => {
   it('leaves the sarcophagus standing however much of the crypt is refused', () => {
     // The net, and it is the featureless anchor rather than `anchorRange.min`.
     // `anchorOrder` drops any anchor whose feature is in `excluded`; the
-    // sarcophagus has no feature, so it cannot be named and cannot be refused.
-    // This is not hypothetical — it is the map this front exists for. The live
-    // model read "catacumba **escura**" as a refusal of `hearth` and returned
-    // `excluded: ['bar', 'hearth', 'stairs', 'bunks']`, which takes the brazier
-    // out before the draw starts; `shelving` going the same way would take the
-    // bone niche too. Give the sarcophagus a feature word and the room becomes
-    // refusable down to bare walls.
-    const everyFeature = ['bar', 'hearth', 'stairs', 'pillars', 'alcove', 'shelving', 'bunks'];
+    // crypt's fourth slot has no feature, so it cannot be named and cannot be
+    // refused. This is not hypothetical — it is the map the crypt front exists
+    // for. The live model read "catacumba **escura**" as a refusal of `hearth`
+    // and returned `excluded: ['bar', 'hearth', 'stairs', 'bunks']`, which
+    // takes the brazier out before the draw starts; `shelving` going the same
+    // way would take the bone niche too.
+    //
+    // **The list is the whole vocabulary and has to stay that way**, and the
+    // two states it was measured in are worth separating, because they say
+    // different things and reading one for the other is how a comment goes
+    // wrong (see the count `templates.ts` shipped, "two" beside a sentence
+    // naming three, for four rounds).
+    //
+    // - With the word given to `tomb` and **this slot not yet added**, the list
+    //   of seven left this test **green** while it had stopped testing
+    //   anything: `tomb` was not in it, so the only wordless slot in the room
+    //   had just become a worded one, nothing held the wall up, and the
+    //   assertion still passed. That state is what the ten are for.
+    // - At **HEAD**, with the net in place, the list of seven turns this test
+    //   **red** — `anchor/sarcophagus anchor/sarcophagus` against the one the
+    //   assertion asks for, because the slot the word names goes unrefused and
+    //   is drawn beside the net.
+    //
+    // So the update was necessary, and the green belongs to the intermediate
+    // state, not to the one in the tree. The ten are written out rather than
+    // imported for the reason the file's own fixtures are: both sides moving
+    // together assert nothing.
+    const everyFeature = [
+      'bar', 'hearth', 'stairs', 'pillars', 'alcove', 'shelving', 'bunks',
+      'bed', 'weapons', 'tomb',
+    ];
     for (let seed = 1; seed <= 20; seed += 1) {
       const { props } = furnished({ building: 'dungeon', room: 'crypt' }, seed, {
         features: [], excluded: everyFeature, furnishing: 0.5, clutter: 0.3,

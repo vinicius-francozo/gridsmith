@@ -124,7 +124,7 @@ describe('an entry becomes a sentence', () => {
     expect(describeEntry(entry(FEATURE_OVER_BUDGET, 'hearth'))).toContain('lareira');
   });
 
-  it('says the right Portuguese word for every one of the seven features', () => {
+  it('says the right Portuguese word for every one of the ten features', () => {
     // The table is the entire reason this layer reports a code rather than a
     // sentence, so it is the table that has to be pinned, word by word.
     // `Record<Feature, string>` refuses a missing word and "is not the English
@@ -139,6 +139,9 @@ describe('an entry becomes a sentence', () => {
       alcove: 'alcova',
       shelving: 'prateleiras',
       bunks: 'beliches',
+      bed: 'cama',
+      weapons: 'armas',
+      tomb: 'túmulo',
     };
 
     for (const feature of FEATURES) {

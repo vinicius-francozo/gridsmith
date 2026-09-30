@@ -20,6 +20,7 @@ import {
   PILLAR_MATERIAL,
   clampDoorCount,
   clampSize,
+  CONCEPTS,
   FEATURE_VOCABULARY,
   MATERIALS,
   materialDef,
@@ -33,7 +34,7 @@ import {
   ROTATIONS,
   wallMaterialFor,
 } from './profiles';
-import type { ResolvedProfile, ShapeName } from './profiles';
+import type { Concept, ResolvedProfile, ShapeName } from './profiles';
 
 const library = createPlaceholderLibrary();
 
@@ -74,9 +75,18 @@ describe('building and room composition', () => {
       expect(tavern.maxSize).toEqual(dungeon.maxSize);
       expect(tavern.doorRange).toEqual(dungeon.doorRange);
       expect(tavern.shapes).toEqual(dungeon.shapes);
-      expect(tavern.anchors.map(({ footprint, placement }) => ({ footprint, placement }))).toEqual(
-        dungeon.anchors.map(({ footprint, placement }) => ({ footprint, placement })),
-      );
+      // **The slots are one object, so the two buildings stand their furniture
+      // in the same places.** What a building may differ in is which of those
+      // slots it fills: the dungeon cell leaves the guest room's fire empty,
+      // and `null` is how a filling says so without shifting every slot after
+      // it onto the wrong footprint. So each side is held to the shared slots
+      // minus its own empty ones, which is what a mis-paired index would break.
+      const fitted = (building: 'tavern' | 'dungeon'): Pick<(typeof ROOMS)[typeof room]['anchors'][number], 'footprint' | 'placement'>[] =>
+        ROOMS[room].anchors.filter(
+          (_, index) => BUILDINGS[building].rooms[room]!.anchors[index] !== null,
+        );
+      expect(tavern.anchors.map(({ footprint, placement }) => ({ footprint, placement }))).toEqual(fitted('tavern'));
+      expect(dungeon.anchors.map(({ footprint, placement }) => ({ footprint, placement }))).toEqual(fitted('dungeon'));
       // **The concepts may well be the same; the pieces are not.** A guest
       // room and a cell both hold a bed, a set of bunks, somewhere to put
       // things, a shelf and a fire — the three shared rooms declare the same
@@ -112,7 +122,7 @@ describe('building and room composition', () => {
     const filling = BUILDINGS.dungeon.rooms.room!;
     const original = filling.anchors;
     filling.anchors = original.map((slot, index) =>
-      index === 0 ? { ...slot, feature: 'hearth' } : slot,
+      index === 0 && slot !== null ? { ...slot, feature: 'hearth' } : slot,
     );
     try {
       expect(() => profileFor({ building: 'dungeon', room: 'room' }))
@@ -130,7 +140,7 @@ describe('building and room composition', () => {
     const filling = BUILDINGS.dungeon.rooms.crypt!;
     const original = filling.anchors;
     filling.anchors = original.map((slot, index) =>
-      index === 0 ? { ...slot, feature: 'shelving' } : slot,
+      index === 0 && slot !== null ? { ...slot, feature: 'shelving' } : slot,
     );
     try {
       expect(() => profileFor({ building: 'dungeon', room: 'crypt' }))
@@ -160,8 +170,12 @@ describe('building and room composition', () => {
       ...profile.groups.flatMap((group) => group.parts.map((part) => part.assetId)),
     ];
 
+    // Four slots, three pieces: the library has one `tomb` anchor at 3x2, so
+    // the room's net draws the sarcophagus a second time. That is the price of
+    // `tomb` being a word, and it is written out here rather than left to be
+    // discovered on a map.
     expect(crypt.anchors.map((anchor) => anchor.assetId)).toEqual([
-      'sarcophagus', 'bone_niche', 'votive_brazier',
+      'sarcophagus', 'bone_niche', 'votive_brazier', 'sarcophagus',
     ]);
     expect(crypt.groups.map((group) => group.parts.map((part) => part.assetId))).toEqual([
       ['grave_slab', 'slab_lid', 'grave_marker'],
@@ -189,17 +203,50 @@ describe('building and room composition', () => {
       expect(`${elsewhere} in the crypt: ${String(debris.has(elsewhere))}`)
         .toBe(`${elsewhere} in the crypt: false`);
     }
-    // The sarcophagus carries **no feature word**, and that is the net rather
-    // than a detail of the table. `anchorOrder` drops an anchor whose feature is
-    // in `excluded`, and a featureless one can never be in `excluded`, so this
-    // is the single piece that cannot be refused. It is also what actually
-    // saved the map this front exists for: "catacumba **escura**" scores the
+    // **One slot carries no feature word, and that is the net rather than a
+    // detail of the table.** `anchorOrder` drops an anchor whose feature is in
+    // `excluded`, and a featureless one can never be in `excluded`, so this is
+    // the single piece that cannot be refused. It is what actually saved the
+    // map the crypt front exists for: "catacumba **escura**" scores the
     // `hearth` noul low enough to be read as a refusal, which takes the brazier
-    // out of the draw before it starts. Give it a feature and the crypt becomes
-    // refusable down to nothing.
-    expect(crypt.anchors.find((anchor) => anchor.assetId === 'sarcophagus')?.feature).toBeUndefined();
+    // out of the draw before it starts.
+    //
+    // Counted rather than looked up by asset id, which is how it used to be
+    // written and would now find the *first* sarcophagus — the one that does
+    // carry a word. Exactly one of the four has none, and both halves of that
+    // are load-bearing: none at all and the crypt is refusable down to bare
+    // walls; two and one of them is a word that promises something it cannot
+    // take away.
+    const wordless = crypt.anchors.filter((anchor) => anchor.feature === undefined);
+    expect(wordless.map((anchor) => anchor.assetId)).toEqual(['sarcophagus']);
     for (const guardRoomThing of ['war_table', 'guard_stool', 'weapon_rack', 'stone_stairs']) {
       expect(idsOf(crypt)).not.toContain(guardRoomThing);
+    }
+  });
+
+  it('furnishes no place with a piece it tells the person does not belong there', () => {
+    // **The cell's fire, and the direction nothing checked.**
+    // `FEATURE_PLACES` in `interpreter/vocabulary.ts` is the gate the interface
+    // speaks through: a word it does not list for a place comes back
+    // `FEATURE_NOT_IN_PLACE` (`resolve.ts`), which a person reads as "a fire
+    // does not belong in this kind of room". The fill never consults it —
+    // `anchorOrder` filters on a slot's `feature`, and a slot carrying none is
+    // never filtered at all — so a room could say that and draw one anyway.
+    // The dungeon cell did, at every seed, for as long as this table has had a
+    // crypt in it.
+    //
+    // Read off the slot's **concept** and not off its `feature`, because the
+    // concept is where the hole was: the cell's hearth slot declared no word,
+    // so a sweep over declared words saw nothing to check.
+    const wordFor = (concept: Concept): string | undefined =>
+      (CONCEPTS[concept] as { feature?: string }).feature;
+    for (const place of PLACE_TYPES) {
+      const offered = new Set<string>(featuresFor(place));
+      const contradicting = profileFor(place)
+        .anchors.map((anchor) => wordFor(anchor.concept))
+        .filter((word): word is string => word !== undefined && !offered.has(word));
+      expect(`${place.building}_${place.room} draws, but says it cannot hold: ${[...new Set(contradicting)].join()}`)
+        .toBe(`${place.building}_${place.room} draws, but says it cannot hold: `);
     }
   });
 
@@ -281,7 +328,7 @@ describe('building and room composition', () => {
       crypt.anchors.map((anchor) => anchor.feature).filter((feature) => feature !== undefined),
     );
 
-    expect(featuresFor(place)).toEqual(['hearth', 'pillars', 'alcove', 'shelving']);
+    expect(featuresFor(place)).toEqual(['hearth', 'pillars', 'alcove', 'shelving', 'tomb']);
     for (const feature of featuresFor(place)) {
       expect(`${feature}: ${String(answeredByPlan.has(feature) || anchored.has(feature))}`).toBe(`${feature}: true`);
     }
@@ -321,21 +368,30 @@ describe('a concept resolved into a variant', () => {
   const TAVERN_HALL: Place = { building: 'tavern', room: 'hall' };
 
   it('furnishes one guest-room geometry in wood for a tavern and in iron for a dungeon', () => {
-    // **The whole of what this front bought.** The two rooms declare the same
-    // five concepts in the same five slots — the geometry is shared, and
-    // `ROOMS` holds it once — and the building's palette is the only thing
-    // that separates a guest room from a cell. Before this, each building
-    // wrote out five asset ids of its own.
+    // **The whole of what an earlier front bought.** The two rooms declare the
+    // same concepts in the same slots — the geometry is shared, and `ROOMS`
+    // holds it once — and the building's palette is the only thing that
+    // separates a guest room from a cell. Before that, each building wrote out
+    // five asset ids of its own.
+    //
+    // **Except the last slot, and that is the cell's fire.** The guest room
+    // has a hearth and a cell has nothing there, so the dungeon's list is the
+    // tavern's four and stops. Written as "the same concepts" with no
+    // exception, this test would go green again the day somebody put a fire
+    // back in the cell.
     const tavern = profileFor({ building: 'tavern', room: 'room' });
     const dungeon = profileFor({ building: 'dungeon', room: 'room' });
-    expect(tavern.anchors.map((anchor) => anchor.concept)).toEqual(
-      dungeon.anchors.map((anchor) => anchor.concept),
+    expect(tavern.anchors.map((anchor) => anchor.concept)).toEqual([
+      'bed', 'bunks', 'storage', 'shelving', 'hearth',
+    ]);
+    expect(dungeon.anchors.map((anchor) => anchor.concept)).toEqual(
+      tavern.anchors.slice(0, -1).map((anchor) => anchor.concept),
     );
     expect(resolved({ building: 'tavern', room: 'room' }).anchors.map((anchor) => anchor.assetId)).toEqual([
       'bed', 'bunk_beds', 'wardrobe', 'shelf_row_short', 'hearth_small',
     ]);
     expect(resolved({ building: 'dungeon', room: 'room' }).anchors.map((anchor) => anchor.assetId)).toEqual([
-      'cot', 'iron_bunks', 'lockers', 'wall_rack', 'wall_torch',
+      'cot', 'iron_bunks', 'lockers', 'wall_rack',
     ]);
   });
 
@@ -1014,9 +1070,12 @@ describe('the feature vocabulary', () => {
     alcove: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'room' }],
     shelving: [{ building: 'tavern', room: 'storeroom' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'storeroom' }, { building: 'dungeon', room: 'room' }],
     bunks: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
+    bed: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
+    weapons: [{ building: 'dungeon', room: 'hall' }],
+    tomb: [{ building: 'dungeon', room: 'crypt' }],
   };
 
-  it('is the same seven words the interpreter writes', () => {
+  it('is the same ten words the interpreter writes', () => {
     expect([...FEATURE_VOCABULARY].sort()).toEqual(Object.keys(FEATURE_PLACES).sort());
   });
 

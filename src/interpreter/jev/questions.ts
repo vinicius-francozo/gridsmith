@@ -1,10 +1,20 @@
 /**
- * The thirteen first-pass questions the Jev engine asks, and the numbers that read the
+ * The sixteen first-pass questions the Jev engine asks, and the numbers that read the
  * answers back. Data and room criteria — the reading itself is `read.ts`, and the call is
  * `jev.ts`.
  *
- * The first thirteen questions go in one request. The second request asks only
- * for a room supported by the chosen building.
+ * All sixteen go in one request. The second request asks only for a room
+ * supported by the chosen building.
+ *
+ * **Adding to this list does not dilute what is already in it**, and that was
+ * measured before the last three were added rather than assumed. Each feature
+ * is its own noul, so there is no unit of probability being shared out: the
+ * same 41 sentences asked with seven feature questions and again with the
+ * thirteen of production move by 0.006 on average, and asking them with these
+ * sixteen moves the original seven by 0.0050 over 84 paired observations. What
+ * a new word costs is a *pair* — the chance it collides with one word already
+ * here — and the cost of a pair is paid at the wording, which is where
+ * `feature_bed` below pays it.
  *
  * The mapping onto Jev's three primitives is not one-to-one with
  * `local/templates.ts`, and the differences are the point:
@@ -120,7 +130,7 @@ export const QUESTIONS = {
       'Abarrotado de móveis, quase sem espaço livre',
     ],
   },
-  // The seven features, one proposition each. The bench measured that
+  // The ten features, one proposition each. The bench measured that
   // enriching the *instruction* is what ruins them: a disjunction like
   // "pilares ou colunas" fixes the synonym and breaks the literal, because it
   // redistributes probability mass instead of adding coverage. So the
@@ -169,6 +179,54 @@ export const QUESTIONS = {
     type: 'noul',
     instructions: 'O lugar tem beliches?',
     criteria: { true: 'Há beliches ou camas de dormir', false: 'Não há cama nem beliche' },
+  },
+  // **The `false` criterion names the bunk, and that is a measurement rather
+  // than a flourish.** Written `'Não há cama nenhuma'`, this noul scored the
+  // four sentences of the corpora that describe bunks at 0.970–0.980 — above
+  // the presence gate, alongside `feature_bunks` itself at 0.980–0.990. That is
+  // the `alcova`/`beliches` collision the local engine already carries, and it
+  // is worse here than there: `anchorOrder` puts *every* requested anchor at
+  // the front of the order without trimming to `wanted`, and a guest room
+  // declares `bed` and `bunks` as separate slots, so "dois beliches" would have
+  // drawn the guest bed as well. Naming the bunk on the `false` side takes
+  // those four to 0.420–0.490 and leaves presence where it was — the lowest of
+  // the eight sentences that do ask for a bed moved 0.930 to 0.920 — and moves
+  // the other nine nouls by 0.0061 on average over 153 observations. It is the
+  // same shape `feature_bunks` uses from the other side.
+  //
+  // **One ressalva on where the rest of this word's evidence comes from.** The
+  // second wording was measured on seventeen sentences. The full sweep of the
+  // corpora was run with the **first** one and carries it that way in its own
+  // record, and that sweep is what every `|allowed|` figure in this project is
+  // computed from. The two written down in `generator/profiles.ts` — the crypt
+  // and the dungeon hall — do not read this word's column at all, because
+  // neither room declares a `bed` slot. The two that do are the guest room and
+  // the cell, and their figures carry the **first** wording.
+  //
+  // Nothing in them should move: the change takes the bunk sentences from 0.97
+  // to 0.42, and an exclusion is read at 0.05 — none of the seventeen comes
+  // within 0.37 of it. But the lastro is the first wording, and that is said
+  // here rather than assumed.
+  feature_bed: {
+    type: 'noul',
+    instructions: 'O lugar tem uma cama?',
+    criteria: {
+      true: 'Há uma cama, um catre, um leito ou um colchão de dormir',
+      false: 'Não há cama nenhuma, ou o que há para dormir é um beliche',
+    },
+  },
+  feature_weapons: {
+    type: 'noul',
+    instructions: 'O lugar tem armas?',
+    criteria: { true: 'Há armas, um suporte de armas ou um arsenal', false: 'Não há arma nenhuma' },
+  },
+  feature_tomb: {
+    type: 'noul',
+    instructions: 'O lugar tem um túmulo?',
+    criteria: {
+      true: 'Há um túmulo, um sarcófago, uma lápide ou uma sepultura',
+      false: 'Não há túmulo nenhum',
+    },
   },
 } as const satisfies Readonly<Record<string, JevQuestion>>;
 
@@ -222,6 +280,9 @@ export const FEATURE_QUESTIONS: Readonly<Record<Feature, QuestionName>> = {
   alcove: 'feature_alcove',
   shelving: 'feature_shelving',
   bunks: 'feature_bunks',
+  bed: 'feature_bed',
+  weapons: 'feature_weapons',
+  tomb: 'feature_tomb',
 };
 
 /**

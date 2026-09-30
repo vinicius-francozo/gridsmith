@@ -191,12 +191,12 @@ export const SIZE_HINT_TEMPLATE: GatedTemplate<'small' | 'medium' | 'large'> = {
 };
 
 /**
- * The seven features, as seven independent presence questions.
+ * The ten features, as ten independent presence questions.
  *
- * Independent, not a choice between seven: a hall can have a bar *and* a hearth
+ * Independent, not a choice between ten: a hall can have a bar *and* a hearth
  * *and* stairs, and forcing one winner would throw two of them away. The
  * pipeline is asked for this one with `multiLabel`, which scores each label on
- * its own instead of spreading one unit of probability across all seven.
+ * its own instead of spreading one unit of probability across all of them.
  *
  * Each label is a bare noun and that is the measured shape, not laziness —
  * enriching them ("uma lareira acesa no canto") and adding alternatives
@@ -205,10 +205,12 @@ export const SIZE_HINT_TEMPLATE: GatedTemplate<'small' | 'medium' | 'large'> = {
  * earlier, in `synonyms.ts`, where they cannot blur a label — but they are not
  * free there either, and that file has had to take nineteen variants back out,
  * three whole families with them. (This said "two" while the sentence directly
- * after it named three, for four rounds of review.) **Three of these seven
- * labels have no synonym rule at all** — `hearth`, `pillars` and `alcove` lost
- * theirs to measurement — and the other four, `stairs`, `shelving`, `bunks`
- * and `bar`, still have one.
+ * after it named three, for four rounds of review.) **Six of these ten labels
+ * have no synonym rule at all.** Three of them lost theirs to measurement —
+ * `hearth`, `pillars` and `alcove` — and three never had one, because `bed`,
+ * `weapons` and `tomb` arrived on a front that measured against the Jev engine
+ * and left this one alone. The other four, `stairs`, `shelving`, `bunks` and
+ * `bar`, still have one.
  * A word only goes there if every ordinary reading of it means the label *and*
  * the swap has been measured for what else it moves; the rest are left for the
  * classifier to miss.
@@ -234,6 +236,23 @@ export const FEATURE_TEMPLATE: GatedTemplate<Feature> = {
     alcove: 'alcova',
     shelving: 'prateleiras',
     bunks: 'beliches',
+    // **These three have no measurement on this engine, and none was taken.**
+    // The Jev engine is the one the admission of `bed`, `weapons` and `tomb`
+    // was decided against; this engine is the courtesy path for whoever opens
+    // the tool without a key, and the decision that made it a courtesy also
+    // made measuring it an expense with nothing riding on it. So the labels
+    // follow the shape the bench found for the other seven — a bare noun, no
+    // alternative inside it — and nothing more is claimed for them.
+    //
+    // `bed` is the one to watch if anybody does measure. The contamination
+    // written about above runs the other way here: "alcova" pulls `beliches`
+    // up, and `cama` and `beliches` are a closer pair than that one. On the Jev
+    // engine the same collision was real and was closed by naming the bunk in
+    // the `false` criterion — an instrument a hypothesis template does not
+    // have.
+    bed: 'cama',
+    weapons: 'armas',
+    tomb: 'túmulo',
   },
   minConfidence: 0.5,
 };

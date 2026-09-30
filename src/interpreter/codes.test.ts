@@ -94,7 +94,10 @@ const OUT_OF_VOCABULARY_ANSWER = `{
     "feature_pillars": { "type": "noul", "noul": 0.04 },
     "feature_alcove": { "type": "noul", "noul": 0.02 },
     "feature_shelving": { "type": "noul", "noul": 0.08 },
-    "feature_bunks": { "type": "noul", "noul": 0.01 }
+    "feature_bunks": { "type": "noul", "noul": 0.01 },
+    "feature_bed": { "type": "noul", "noul": 0.02 },
+    "feature_weapons": { "type": "noul", "noul": 0.01 },
+    "feature_tomb": { "type": "noul", "noul": 0.01 }
   },
   "usage": { "input_tokens": 311, "output_tokens": 70 }
 }`;

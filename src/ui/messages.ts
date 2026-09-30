@@ -91,6 +91,9 @@ const FEATURE_WORDS: Readonly<Record<Feature, string>> = {
   alcove: 'alcova',
   shelving: 'prateleiras',
   bunks: 'beliches',
+  bed: 'cama',
+  weapons: 'armas',
+  tomb: 'túmulo',
 };
 
 /**

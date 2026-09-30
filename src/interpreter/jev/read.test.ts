@@ -30,7 +30,7 @@ import { clutterFromScore, furnishingFromScore, readBuildingAnswers, readRoomAns
  * The figures are `p01` of the canonical ruler — `O salão principal da taverna,
  * com mesas compridas e um balcão de carvalho.` — as the bench recorded them in
  * `raw.json`: the old place choice at confidence 1.000, `out_of_vocabulary` 0.02, a
- * `condition` score of 0.71, and the seven feature nouls. **The bench did not
+ * `condition` score of 0.71, and the seven feature nouls it had. **The bench did not
  * store the `light` and `size` scores or any of the score confidences**, so
  * those four numbers are written here to exercise the reader and are not
  * measurements. The building and room replies below are adapted to the new
@@ -63,6 +63,19 @@ type Figures = {
   alcove: number;
   shelving: number;
   bunks: number;
+  /**
+   * The three admitted later, and measured on the **same sentence** in a
+   * later session rather than by the bench that wrote the seven above. The
+   * sweep is `arnes/registro-noul.csv` in the vocabulary front's directory,
+   * outside this repository beside the rulers. Its readings of the seven agree
+   * with the bench's to within 0.02 — 0.99 against 0.98 for `bar`, 0.29 against
+   * 0.31 for `shelving` — which is the repeatability the exclusion corpus
+   * documents, so these three are of a piece with them and not with the
+   * unmeasured scores above.
+   */
+  bed: number;
+  weapons: number;
+  tomb: number;
 };
 
 const P01: Figures = {
@@ -84,6 +97,9 @@ const P01: Figures = {
   alcove: 0.13,
   shelving: 0.31,
   bunks: 0.06,
+  bed: 0.06,
+  weapons: 0.15,
+  tomb: 0.04,
 };
 
 /** A whole response body, in the shape the proxy relays it. */
@@ -134,7 +150,10 @@ function responseText(figures: Partial<Figures> = {}): string {
     "feature_pillars": { "type": "noul", "noul": ${String(f.pillars)} },
     "feature_alcove": { "type": "noul", "noul": ${String(f.alcove)} },
     "feature_shelving": { "type": "noul", "noul": ${String(f.shelving)} },
-    "feature_bunks": { "type": "noul", "noul": ${String(f.bunks)} }
+    "feature_bunks": { "type": "noul", "noul": ${String(f.bunks)} },
+    "feature_bed": { "type": "noul", "noul": ${String(f.bed)} },
+    "feature_weapons": { "type": "noul", "noul": ${String(f.weapons)} },
+    "feature_tomb": { "type": "noul", "noul": ${String(f.tomb)} }
   },
   "usage": { "input_tokens": 307, "output_tokens": 72 }
 }`;
@@ -411,9 +430,14 @@ describe('which features the description refused', () => {
   });
 
   it('lists them in vocabulary order, not in the order they scored', () => {
-    const constraints = readAnswers(response({ bunks: 0.01, bar: 0.04, shelving: 0.02, hearth: 0.03 }));
+    // `tomb` is last in `FEATURES` and second-lowest here, so a list built in
+    // score order would put it second. It is the one that makes this test
+    // discriminate past the seven it was written for.
+    const constraints = readAnswers(
+      response({ bunks: 0.01, bar: 0.04, shelving: 0.02, hearth: 0.03, tomb: 0.02 }),
+    );
 
-    expect(constraints.excluded).toEqual(['bar', 'hearth', 'shelving', 'bunks']);
+    expect(constraints.excluded).toEqual(['bar', 'hearth', 'shelving', 'bunks', 'tomb']);
   });
 
   it('never puts the same feature in both lists', () => {
