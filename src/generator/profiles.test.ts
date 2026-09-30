@@ -516,7 +516,10 @@ describe('the debris the catalogue offers', () => {
  * `TAVERN_HALL.scatter` and its neighbours at `482a206`, where a room named its
  * debris as a list of asset ids. The claim this front makes is that the
  * mechanism changed and the floors did not, and this is that claim written
- * down once, for all seven.
+ * down once, for all seven. The eight below them are the floors the four new
+ * buildings were written with, and they are here for the other half of the
+ * reason: a room added to `PLACE_TYPES` with no row here is the first thing the
+ * test reports.
  *
  * It is not a restatement of the table it checks. A room declares *tags* and a
  * weight per rung; this is what the library answers with, so a tag misspelled,
