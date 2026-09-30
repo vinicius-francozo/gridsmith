@@ -169,16 +169,26 @@ describe('building and room composition', () => {
     ]);
     const hallIds = new Set(idsOf(hall));
     expect(idsOf(crypt).filter((id) => hallIds.has(id))).toEqual([]);
-    // Scatter is a pool the library answers with now, not a list, so what is
-    // held is the *weighting*: a crypt's palette is `tomb` then `stone`, so the
-    // skull and the rubble are the pieces its floor is likeliest to carry —
-    // and nothing else has gone, which is the half that says this prefers
-    // rather than filters.
+    // Scatter is a pool the library answers with now, not a list of ids, so
+    // what is held is the *shape* of the pool: bone on the heaviest rung, the
+    // broken floor the description that made this room asked for below it, the
+    // skull below that — the order the room was written with — and nothing
+    // from outside a burial chamber on the floor at all.
     const debris = new Map(crypt.scatter.map((slot) => [slot.assetId, slot.weight]));
-    expect([...debris].filter(([, weight]) => weight > 1).map(([id]) => id).sort())
-      .toEqual(['rubble', 'skull']);
-    for (const litter of ['bone', 'dust', 'shard']) {
-      expect(`${litter}: ${String(debris.get(litter))}`).toBe(`${litter}: 1`);
+    expect(`bone ${String(debris.get('bone'))}, rubble ${String(debris.get('rubble'))}, shard ${String(debris.get('shard'))}, skull ${String(debris.get('skull'))}`)
+      .toBe('bone 4, rubble 3, shard 3, skull 3');
+    // Bone on the heaviest rung and the skull below it, which is the way round
+    // this room was written and the way round it had stopped being: read as
+    // one `debris` tag with a palette bonus, the crypt drew 10% bone against
+    // 26% skull over 350 scenes, where it was written for 31% against 18%.
+    expect(Math.max(...debris.values())).toBe(debris.get('bone'));
+    expect(debris.get('bone')).toBeGreaterThan(debris.get('skull')!);
+    // A catacomb has no stable and no archer. Both used to arrive here, and
+    // both are pieces the library answers `debris` with — which is why the
+    // ladder is rungs of its own and not one tag for every dungeon room.
+    for (const elsewhere of ['straw', 'loose_arrow']) {
+      expect(`${elsewhere} in the crypt: ${String(debris.has(elsewhere))}`)
+        .toBe(`${elsewhere} in the crypt: false`);
     }
     // The sarcophagus carries **no feature word**, and that is the net rather
     // than a detail of the table. `anchorOrder` drops an anchor whose feature is
@@ -387,33 +397,90 @@ describe('a concept resolved into a variant', () => {
   });
 });
 
+/** Every piece of debris the marking library declares, by its own name. */
+function cataloguedDebris(): string[] {
+  return PLACEHOLDER_CATALOG
+    .filter((asset) => asset.kind === 'scatter')
+    .map((asset) => asset.id.slice(asset.id.indexOf('/') + 1));
+}
+
+/** What `place` strews its floor with, as a share of the weight on it. */
+function floorOf(place: Place): Map<string, number> {
+  const scatter = resolved(place).scatter;
+  const total = scatter.reduce((sum, slot) => sum + slot.weight, 0);
+  return new Map(scatter.map((slot) => [slot.assetId, slot.weight / total]));
+}
+
 describe('the debris a room is strewn with', () => {
-  it('draws the pool from the room\u2019s tags and weights it by its palette', () => {
-    // The pool is a query now, not a list of ids, so a piece of debris added
-    // to the library reaches the floors it belongs on without this table being
-    // touched. What the palette buys is that a crypt does not read as an
-    // armoury: the pieces it weights up are the ones carrying its own tags.
-    for (const place of PLACE_TYPES) {
-      const profile = resolved(place);
-      expect(profile.scatter.length).toBeGreaterThan(0);
-      for (const slot of profile.scatter) {
-        const def = PLACEHOLDER_CATALOG.find((asset) => asset.id === `scatter/${slot.assetId}`);
-        expect(def, slot.assetId).toBeDefined();
-        // Every piece the room\u2019s tags answered with is in the pool, and the
-        // weight says only how often it is drawn.
-        expect(`${slot.assetId}: ${profile.scatterTags.filter((tag) => def!.tags.includes(tag)).length}`)
-          .toBe(`${slot.assetId}: ${String(profile.scatterTags.length)}`);
-        const onPalette = def!.tags.some((tag) => profile.assetTags.includes(tag));
-        expect(`${place} ${slot.assetId}: weight ${String(slot.weight)}`)
-          .toBe(`${place} ${slot.assetId}: weight ${onPalette ? '3' : '1'}`);
-      }
-    }
+  it('leaves no piece in the catalogue that no room can strew', () => {
+    // **Catalogue to room, and the direction is the point.** Every other test
+    // of this layer reads a profile and checks that what it names exists — so
+    // when `scatter/stool` stopped being named by anything, nothing went red.
+    // It carries `['seating', 'wood']`, no room asked for either, and a piece
+    // that had been 2 of the 9 weight on a taproom floor went to zero in
+    // silence over 400 seeds.
+    //
+    // A piece nobody strews is not a bug in itself; a piece nobody strews and
+    // nobody notices is. This is the noticing.
+    const strewn = new Set(PLACE_TYPES.flatMap((place) => [...floorOf(place).keys()]));
+    const catalogued = cataloguedDebris();
+    expect(catalogued.length).toBeGreaterThan(0);
+    expect(catalogued.filter((name) => !strewn.has(name))).toEqual([]);
+  });
+
+  it('keeps the stool on the taproom floor, at the share it was written with', () => {
+    // Named on its own, because the sweep above is satisfied by one room
+    // anywhere holding it and this is the room it belongs to. The old table
+    // gave it 2 of 9; a rung of its own gives it 2 of 11.
+    const floor = floorOf({ building: 'tavern', room: 'hall' });
+    const share = floor.get('stool');
+    expect(share).toBeDefined();
+    expect(`stool on the taproom floor: ${(share! * 100).toFixed(1)}%`)
+      .toBe('stool on the taproom floor: 18.2%');
+  });
+
+  it('keeps a piece on the first rung it stands on, not the last', () => {
+    // The mug carries `tableware` and `clutter`, and the taproom's ladder asks
+    // for both — heavily, then lightly. Summing the rungs would make it
+    // heavier for being ordinary as well as particular; taking the last would
+    // let the general rung overrule the particular one and leave a taproom's
+    // tableware weighing what its sweepings do. Straw is on that last rung
+    // only, and is what the mug is measured against.
+    const hall = new Map(resolved({ building: 'tavern', room: 'hall' }).scatter.map(
+      (slot) => [slot.assetId, slot.weight],
+    ));
+    expect(`mug ${String(hall.get('mug'))}, stool ${String(hall.get('stool'))}, straw ${String(hall.get('straw'))}`)
+      .toBe('mug 3, stool 2, straw 1');
+  });
+
+  it('tells a guest room and a cellar apart, which one tag could not', () => {
+    // Both rooms asked for `clutter` and nothing else, so both came back the
+    // same five pieces at the same flat weight: two floors a person could not
+    // tell apart in a building where one holds beds and the other barrels.
+    //
+    // Measured as total variation distance between the two weight
+    // distributions — half the sum of the absolute differences, 0 for two
+    // identical floors and 1 for two that share no piece. The flat pair
+    // measured 0; these measure 0.75, and they have no heaviest piece in
+    // common.
+    const room = floorOf({ building: 'tavern', room: 'room' });
+    const cellar = floorOf({ building: 'tavern', room: 'storeroom' });
+    const apart = [...new Set([...room.keys(), ...cellar.keys()])]
+      .reduce((sum, name) => sum + Math.abs((room.get(name) ?? 0) - (cellar.get(name) ?? 0)), 0) / 2;
+    expect(`guest room against cellar: ${apart.toFixed(2)}`).toBe('guest room against cellar: 0.75');
+
+    const heaviestOf = (floor: Map<string, number>): string[] => {
+      const top = Math.max(...floor.values());
+      return [...floor].filter(([, share]) => share === top).map(([name]) => name).sort();
+    };
+    expect(heaviestOf(room)).toEqual(['bottle', 'mug']);
+    expect(heaviestOf(cellar)).toEqual(['sack', 'shard', 'straw']);
   });
 
   it('gives a taproom its tableware and a dungeon its bones', () => {
-    // Named rather than left to the rule above, because the rule would hold
-    // just as well over a palette that said nothing useful. This is the
-    // difference a person sees on the floor of the map.
+    // The difference a person sees on the floor of the map, named rather than
+    // left to the rules above — which would hold just as well over ladders
+    // that said nothing useful.
     const heaviest = (place: Place): string[] => {
       const scatter = resolved(place).scatter;
       const top = Math.max(...scatter.map((slot) => slot.weight));
@@ -421,9 +488,14 @@ describe('the debris a room is strewn with', () => {
     };
     expect(heaviest({ building: 'tavern', room: 'hall' })).toEqual(['bottle', 'mug']);
     expect(heaviest({ building: 'dungeon', room: 'hall' })).toEqual([
-      'bone', 'broken_chain', 'dust', 'rubble',
+      'bone', 'broken_chain', 'dust',
     ]);
-    expect(heaviest({ building: 'dungeon', room: 'crypt' })).toEqual(['rubble', 'skull']);
+    expect(heaviest({ building: 'dungeon', room: 'crypt' })).toEqual([
+      'bone', 'broken_chain', 'dust',
+    ]);
+    // And the piece each room has that no other rung would have given it.
+    expect(resolved({ building: 'dungeon', room: 'storeroom' }).scatter[0])
+      .toEqual({ assetId: 'loose_arrow', weight: 4 });
   });
 });
 

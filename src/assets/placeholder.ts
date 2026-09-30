@@ -181,7 +181,13 @@ export const PLACEHOLDER_CATALOG: readonly AssetDef[] = [
   { id: 'scatter/bottle', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['tableware', 'clutter'], againstWall: false },
   { id: 'scatter/straw', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['clutter', 'debris'], againstWall: false },
   { id: 'scatter/sack', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['storage', 'clutter'], againstWall: false },
-  { id: 'scatter/shard', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['clutter', 'debris'], againstWall: false },
+  // `stone` alongside the other two, and it is what a shard of broken floor
+  // is. `shard` and `straw` carried the same two tags and nothing else, so no
+  // rung of a room's debris ladder could ask for one without the other — and
+  // the crypt, whose own description asked for "cacos de piso quebrado", could
+  // only have had its shards by being strewn with straw as well. `rubble` was
+  // already the stone piece; this makes the pair say the same thing.
+  { id: 'scatter/shard', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['clutter', 'debris', 'stone'], againstWall: false },
   { id: 'scatter/bone', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['dungeon', 'debris'], againstWall: false },
   { id: 'scatter/broken_chain', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['dungeon', 'debris'], againstWall: false },
   { id: 'scatter/rubble', kind: 'scatter', footprint: { w: 1, h: 1 }, tags: ['stone', 'debris'], againstWall: false },

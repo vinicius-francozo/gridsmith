@@ -249,11 +249,21 @@ export type GroupSpec = {
 /**
  * A layer-three prop: loose debris, drawn per cell.
  *
- * Resolved, like `PlacedAnchor`. The registry declares the *tags* a room's
- * debris carries and the pool is whatever the library answers with, so this
- * type only ever exists on the far side of `resolveAssets`.
+ * Resolved, like `PlacedAnchor`. The registry declares a room's debris as a
+ * ladder of tags and the pool is what the library answers with, so this type
+ * only ever exists on the far side of `resolveAssets`.
  */
 export type ScatterSpec = { assetId: string; weight: number };
+
+/**
+ * One rung of a room's debris ladder: the tags a piece must carry to stand on
+ * it, and what it weighs there.
+ *
+ * A piece carrying the tags of two rungs stands on the **first**, which is what
+ * makes this a ladder and not a sum: a taproom asks for `tableware` heavily and
+ * then for `clutter` lightly, and the mug is tableware, not an afterthought.
+ */
+export type ScatterRung = { tags: string[]; weight: number };
 
 /**
  * Every concept a room may ask for, and the `FEATURE_VOCABULARY` word that asks
@@ -320,8 +330,23 @@ export type PlaceProfile = {
   groups: GroupSpec[];
   /** Chance a free floor cell takes a scatter prop, at clutter 1. */
   scatterChance: number;
-  /** The tags this room's debris carries. The pool is whatever the library answers with. */
-  scatterTags: string[];
+  /**
+   * What this room's floor is strewn with, heaviest rung first.
+   *
+   * The ladder is the same instrument the anchors use and a different job.
+   * `assetTags` picks **one** variant and falls back to the whole candidate
+   * list, because a piece of furniture a description asked for must not vanish.
+   * This one builds a **pool**, so its rungs are what the room holds and there
+   * is no catch-all rung underneath them — a guest room strewn with bones is
+   * not a truer guest room for nothing having been left out.
+   *
+   * What replaces the fallback is a guarantee over the catalogue rather than
+   * over one room: **no piece of debris the library declares may be off every
+   * ladder in the project.** `profiles.test.ts` checks it in that direction,
+   * catalogue to room, because the direction this file already had — room to
+   * catalogue — is what let `scatter/stool` become unreachable in silence.
+   */
+  scatterLadder: ScatterRung[];
   /**
    * The room's palette, as tags, **most particular first**.
    *
@@ -412,8 +437,8 @@ type RoomFilling = {
   defaultWallMaterial: string;
   anchors: Pick<AnchorSpec, 'concept' | 'feature' | 'light'>[];
   groups: string[][];
-  /** The tags this room's debris carries, queried against the library. */
-  scatterTags: string[];
+  /** What this room's floor is strewn with. See `PlaceProfile.scatterLadder`. */
+  scatterLadder: ScatterRung[];
   /**
    * This room's palette ladder, where it is not the building's. See
    * `PlaceProfile.assetTags`; two rooms need one of their own, and both are
@@ -692,7 +717,21 @@ export const BUILDING_REGISTRY = {
           ['table_round', 'chair', 'chair', 'chair', 'chair'],
           ['bench', 'table_long', 'bench'],
         ],
-        scatterTags: ['clutter'],
+        // A taproom floor: what was drunk from, then what was sat on, then
+        // whatever else is loose. The last rung is `clutter` alone rather than
+        // `clutter` and `debris`, and that is what makes this a ladder — the
+        // mug and the bottle carry `clutter` too, and they keep the weight of
+        // the rung they first stood on instead of dropping to this one.
+        //
+        // `seating` is here because `scatter/stool` carries `['seating',
+        // 'wood']` and nothing else: it is the one piece of debris in the
+        // catalogue that no `clutter` or `debris` rung can reach, and it was
+        // 2 of the 9 weight this floor used to carry.
+        scatterLadder: [
+          { tags: ['tableware'], weight: 3 },
+          { tags: ['seating'], weight: 2 },
+          { tags: ['clutter'], weight: 1 },
+        ],
         // `tableware` is the tavern's, and only the common room's: it is what
         // makes a mug and a bottle the likely litter of a taproom. It never
         // reaches an anchor — every anchor slot in a tavern is settled by
@@ -716,7 +755,13 @@ export const BUILDING_REGISTRY = {
           { concept: 'hearth', feature: 'hearth', light: { radiusCells: 4, colorHex: '#ffb46b' } },
         ],
         groups: [['table_small', 'chair']],
-        scatterTags: ['clutter'],
+        // A guest's floor: what was carried up to it, and the sweepings. No
+        // `seating` rung — a stool on the floor of a bedroom is a taproom's
+        // litter, not a guest's — and no `storage`, which is the cellar's.
+        scatterLadder: [
+          { tags: ['tableware'], weight: 3 },
+          { tags: ['clutter', 'debris'], weight: 1 },
+        ],
         words: {
           name: 'Quarto de taverna',
           criterion: 'Quarto de hóspedes da taverna, com cama',
@@ -732,7 +777,15 @@ export const BUILDING_REGISTRY = {
           { concept: 'stairs', feature: 'stairs' },
         ],
         groups: [['crate', 'crate_small', 'barrel'], ['barrel', 'barrel']],
-        scatterTags: ['clutter'],
+        // A cellar's floor, and the room that says why one tag was never
+        // enough: this and the guest room above both asked for `clutter`, and
+        // with a single rung they came back the same five pieces in the same
+        // flat distribution. Sacking and broken floor is what a cellar has;
+        // nothing is drunk from down here, so `tableware` is off the ladder.
+        scatterLadder: [
+          { tags: ['storage'], weight: 3 },
+          { tags: ['clutter', 'debris'], weight: 3 },
+        ],
         words: {
           name: 'Depósito de taverna',
           criterion: 'Depósito, porão ou adega da taverna, com barris e mantimentos',
@@ -762,7 +815,10 @@ export const BUILDING_REGISTRY = {
           ['war_table', 'guard_stool', 'guard_stool', 'guard_stool', 'guard_stool'],
           ['stone_bench', 'war_table_long', 'stone_bench'],
         ],
-        scatterTags: ['debris'],
+        scatterLadder: [
+          { tags: ['dungeon', 'debris'], weight: 4 },
+          { tags: ['stone', 'debris'], weight: 2 },
+        ],
         words: {
           name: 'Salão da masmorra',
           criterion: 'Sala comum ou da guarda da masmorra',
@@ -781,7 +837,10 @@ export const BUILDING_REGISTRY = {
           { concept: 'hearth', light: { radiusCells: 4, colorHex: '#ffb46b' } },
         ],
         groups: [['prison_desk', 'guard_stool']],
-        scatterTags: ['debris'],
+        // A cell has only what the dungeon itself leaves: bone, chain and
+        // dust, which is the set this room already had. No stone rung, so no
+        // rubble — the walls of a cell are the one thing kept intact.
+        scatterLadder: [{ tags: ['dungeon', 'debris'], weight: 3 }],
         words: {
           name: 'Cela da masmorra',
           criterion: 'Cela ou quarto da masmorra, com catre',
@@ -794,9 +853,13 @@ export const BUILDING_REGISTRY = {
         defaultWallMaterial: 'stone_wall',
         anchors: [{ concept: 'shelving', feature: 'shelving' }, { concept: 'stairs', feature: 'stairs' }],
         groups: [['supply_crate', 'small_crate', 'weapon_bundle'], ['weapon_bundle', 'weapon_bundle']],
-        scatterTags: ['debris'],
-        // An arsenal's own floor: `weapons` first, so a loose arrow is the piece
-        // this room is likeliest to be strewn with.
+        // An arsenal's own floor: `weapons` heaviest, so a loose arrow is the
+        // single piece this room is likeliest to be strewn with.
+        scatterLadder: [
+          { tags: ['weapons', 'debris'], weight: 4 },
+          { tags: ['dungeon', 'debris'], weight: 3 },
+          { tags: ['stone', 'debris'], weight: 2 },
+        ],
         assetTags: ['weapons', 'dungeon', 'stone'],
         words: {
           name: 'Arsenal da masmorra',
@@ -830,7 +893,27 @@ export const BUILDING_REGISTRY = {
           ['grave_slab', 'slab_lid', 'grave_marker'],
           ['funerary_urn', 'funerary_urn'],
         ],
-        scatterTags: ['debris'],
+        // **Bone first, and the order of the three rungs is the whole of it.**
+        // Read as one `debris` tag with a palette bonus, this floor came back
+        // 8% bone and 25% skull against the 31% and 15% it was written for —
+        // the room's own emblem outnumbering the thing it is full of — and it
+        // gained straw and loose arrows, which a burial chamber has no source
+        // for. Rung by rung it is bone, then the broken floor the description
+        // that made this room asked for, then the skull.
+        //
+        // Bone shares its rung with `broken_chain` and `dust`: the three carry
+        // identical tags in the catalogue, so **no ladder can part them** and
+        // bone cannot be the single heaviest piece here at all. Its ceiling is
+        // a third of the floor, reached only by a crypt with no rubble, no
+        // shards and no skull on it. These three weights are the ones measured
+        // closest to the floor this room was written with — 0.227 total
+        // variation from it, against 0.246 for `[4, 3, 2]` and 0.291 for
+        // `[6, 3, 3]`, which buys bone two points by halving the skull.
+        scatterLadder: [
+          { tags: ['dungeon', 'debris'], weight: 4 },
+          { tags: ['stone', 'debris'], weight: 3 },
+          { tags: ['tomb', 'debris'], weight: 3 },
+        ],
         // `tomb` rather than `dungeon`, and this is the room that proves the
         // ladder has to be a room's and not only a building's. The three pieces
         // that make a crypt read as a crypt are each the *third* candidate at
@@ -971,7 +1054,7 @@ export function profileFor(place: Place): PlaceProfile {
     wallMaterials: filling.wallMaterials,
     defaultWallMaterial: filling.defaultWallMaterial,
     assetTags: filling.assetTags ?? building.assetTags,
-    scatterTags: filling.scatterTags,
+    scatterLadder: filling.scatterLadder,
     anchors: geometry.anchors.map((slot, index) => ({ ...slot, ...filling.anchors[index] })),
     groups: geometry.groups.map((group, groupIndex) => ({
       ...group,
@@ -981,19 +1064,6 @@ export function profileFor(place: Place): PlaceProfile {
     })),
   };
 }
-
-/**
- * How much likelier a scatter piece is to be drawn for carrying the room's
- * palette.
- *
- * Three rather than a filter, and that is the same decision as the anchor
- * ladder made for a pool instead of for a single choice. Narrowing the pool to
- * the palette would empty it: a crypt's `tomb` matches one piece of debris in
- * the whole library, and a floor strewn with nothing but skulls is not a
- * crypt. Weighting keeps every piece the tags answered with reachable and still
- * lets the room's own litter dominate.
- */
-const PALETTE_SCATTER_WEIGHT = 3;
 
 /**
  * The candidates the palette prefers, or all of them.
@@ -1063,10 +1133,23 @@ export function resolveAssets(profile: PlaceProfile, library: AssetLibrary, rng:
     return { ...spec, assetId: assetNameOf(rng.pick(preferred(candidates, profile.assetTags))) };
   });
 
-  const scatter = library.query(profile.scatterTags, 'scatter').map((def) => ({
-    assetId: assetNameOf(def),
-    weight: def.tags.some((tag) => profile.assetTags.includes(tag)) ? PALETTE_SCATTER_WEIGHT : 1,
-  }));
+  // Rung by rung, and a piece keeps the weight of the **first** rung it stood
+  // on. Summing the rungs instead would make a mug heavier for also being
+  // clutter, which is the opposite of what a ladder says; taking the last
+  // would make the general rung overrule the particular one and leave the
+  // taproom's tableware weighing what its sweepings do.
+  const scatter: ScatterSpec[] = [];
+  const onTheFloor = new Set<string>();
+  for (const rung of profile.scatterLadder) {
+    for (const def of library.query(rung.tags, 'scatter')) {
+      const assetId = assetNameOf(def);
+      if (onTheFloor.has(assetId)) {
+        continue;
+      }
+      onTheFloor.add(assetId);
+      scatter.push({ assetId, weight: rung.weight });
+    }
+  }
 
   return { ...profile, anchors, scatter };
 }

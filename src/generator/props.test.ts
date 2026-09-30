@@ -587,11 +587,11 @@ describe('the scatter layer', () => {
         `${spec.assetId} at weight ${spec.weight}: 0 drawn`,
       );
     }
-    // A mug carries `PALETTE_SCATTER_WEIGHT` against straw's 1, because a
-    // taproom's palette names `tableware` and straw's tags do not; twice as
-    // many is the loosest claim that still separates the weights from a flat
-    // draw. Straw is still *in* the pool, which is the half of this that says
-    // the palette prefers rather than filters.
+    // A mug stands on the taproom's `tableware` rung at 3 and straw on its
+    // `clutter` rung at 1; twice as many is the loosest claim that still
+    // separates the weights from a flat draw. Straw is still on the floor,
+    // which is the half of this that says a lighter rung is not an excluded
+    // one.
     expect(`mug ${drawn('mug')} vs straw ${drawn('straw')}`).toBe(
       `mug ${drawn('mug')} vs straw ${drawn('straw') * 2 < drawn('mug') ? drawn('straw') : 'too many'}`,
     );
