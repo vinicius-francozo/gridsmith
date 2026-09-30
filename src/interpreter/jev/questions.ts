@@ -96,9 +96,19 @@ export const QUESTIONS = {
    * 1.00, `k06` 0.99, `k04` 0.96, `k05` 0.80 — and `temple` stops winning any
    * sentence of the 46 at all, its mean mass falling from 0.065 to 0.007.
    *
-   * Over the 46: **36 of 46**, against 38 of 46 on today's two options and 27
-   * of 46 on the twelve the plan proposed. Two buildings were cut by the user
-   * rather than reworded, because there was no wording that repaired them.
+   * **Every figure in this paragraph is a property of the finished set of ten,
+   * and six of the ten are in the table below.** The measurement was taken on
+   * all ten criteria at once, because that is the question the project is being
+   * built towards; `mine`, `ship`, `apothecary` and `den` arrive with the next
+   * front. So the numbers describe what this question will do when it is
+   * complete, not what it does today, and the difference is not cosmetic — a
+   * choice is a competition, and a criterion that is absent cannot take a
+   * sentence from the ones that are here.
+   *
+   * Over the 46: **36 of 46** for the ten, against 38 of 46 on today's two
+   * options and 27 of 46 on the twelve the plan proposed. Two buildings were
+   * cut by the user rather than reworded, because there was no wording that
+   * repaired them.
    *
    * **The two sentences the project answers today and will answer wrongly**,
    * measured and named rather than left to be found: `p07`, *"A despensa da
@@ -110,6 +120,15 @@ export const QUESTIONS = {
    * nearest two — and `tower` and `apothecary` are already in the minimal
    * shape. Recovering them means moving `tavern`, which is the user's to
    * decide.
+   *
+   * **Only one of those two is reachable from this file as it stands**, and the
+   * asymmetry is worth naming rather than leaving to be rediscovered:
+   * `apothecary` is not a criterion here yet, so `p07` cannot go to it today —
+   * it goes wherever six criteria send it, which this measurement does not say.
+   * `p15` goes to `tower`, which is here. The six-criterion set has no
+   * measurement of its own and none was taken: it is a state the project passes
+   * through between two fronts, and fitting wording to it would be fitting
+   * wording to a week.
    *
    * **The ruler for reading any number in this file.** Repeatability over ten
    * sentences: the choice is identical 10 of 10 runs, mean |Δ| 0.012, worst

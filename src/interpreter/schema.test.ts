@@ -50,13 +50,22 @@ const HAND_WRITTEN = [
 
 describe('the vocabulary the enums are written out in', () => {
   it('admits every building and every room the registry declares', () => {
-    // **This is the one check between a new building and a silent failure in
-    // production.** `Building` and `RoomKind` are derived from the registries
-    // (`core/types.ts`), and every *exact* `Record` keyed on them stops
-    // compiling until it is answered — which is what `profiles.test.ts` proves
-    // and what carried the crypt front. A `z.enum` written out by hand is not
-    // one of those: a list short of a word is a narrower union, every
-    // assignment still compiles, and `npm run build` is clean.
+    // **For one of the three this is the only check between a new building and
+    // a silent failure in production, and the three are not alike.** `Building`
+    // and `RoomKind` are derived from the registries (`core/types.ts`), and
+    // every *exact* `Record` keyed on them stops compiling until it is answered
+    // — which is what `profiles.test.ts` proves and what carried the crypt
+    // front. A `z.enum` written out by hand is not one of those, but two of
+    // these three are reached by the compiler anyway, through the mutual
+    // assignability check at the top of this file: drop a word from
+    // `BUILDING_ENUM` or from `ROOM_ENUM` and `npm run typecheck` fails there.
+    // Drop one from `read.ts`'s copy and **nothing fails** — its parsed value is
+    // narrower than `Building`, so every assignment compiles. `npm run build`
+    // is clean for all three, which is the property that makes any of them
+    // shippable while wrong.
+    //
+    // So this holds all three at run time rather than trusting two of them to a
+    // type error in a test file and writing a second check for the third.
     //
     // What the omission costs is invisible from here and different in each
     // engine. On Jev, `read.ts` refuses the answer and the request is lost. On

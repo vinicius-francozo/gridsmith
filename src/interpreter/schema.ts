@@ -36,14 +36,26 @@ import { FEATURES } from './vocabulary';
  * the words are, and a list assembled at import time is a list nobody can read
  * in the file it is sent from.
  *
- * The cost of writing them out is that nothing stops them going stale. The
- * *room* half is caught by the compiler, through `schema.test.ts`'s mutual
- * assignability check — a room added to the registry widens `Constraints` and
- * `ParsedConstraints` stops accepting it. **The building half is not caught by
- * anything**, in either copy: a `Building` the enum omits is still a narrower
- * type than `Building`, so every assignment still compiles and `npm run build`
- * is clean. What happens instead is that the Jev engine refuses the answer at
- * `read.ts` and the Claude engine is never told the word exists.
+ * The cost of writing them out is that nothing stops them going stale, and the
+ * three copies are not equally exposed — measured by removing a word from each
+ * and running `tsc`:
+ *
+ * - **`ROOM_ENUM` is caught by the compiler**, through `schema.test.ts`'s
+ *   mutual assignability check: a room added to the registry widens
+ *   `Constraints` and `ParsedConstraints` stops accepting it.
+ * - **`BUILDING_ENUM` is caught the same way**, by the same two lines. A
+ *   building the enum omits makes `Constraints` unassignable to
+ *   `ParsedConstraints` on `place.building`, and `npm run typecheck` fails.
+ * - **`read.ts`'s copy is caught by nothing.** Its parsed value is *narrower*
+ *   than `Building`, so every assignment there compiles with a word missing,
+ *   `npm run typecheck` is clean and so is `npm run build`.
+ *
+ * So it is the third that the run-time check below exists for, and the first
+ * two are held by it as well rather than being trusted to a compiler error in a
+ * test file. `npm run build` is clean for all three, which is the property that
+ * makes any of them shippable while wrong. What happens instead is that the Jev
+ * engine refuses the answer at `read.ts` and the Claude engine is never told the
+ * word exists.
  *
  * `schema.test.ts` is the net, and it holds all three copies — these two and
  * `read.ts`'s — against the registries at run time.

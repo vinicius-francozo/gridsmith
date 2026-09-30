@@ -732,11 +732,24 @@ describe('profileFor', () => {
  *
  * Measured at both ends. Below it: two variants of one material — the same
  * stone, cut differently — are 10.2 apart at most, so nothing under that means
- * anything. Above it: 32.7 is what `PILLAR_MATERIAL` manages against the worst
- * floor shade in the vocabulary, and 33.1 is the best *any* name reaches
- * against a dungeon hall, so there is no more headroom to be had from this
- * side of the project. 28 sits above the 23.4 the old wall material managed —
- * the map that prompted all this — and leaves 4.7 to the one in use.
+ * anything. Above it: **29.53** is what `PILLAR_MATERIAL` manages against the
+ * worst floor shade in the vocabulary, `slate_floor` variant 0, and 33.1 is the
+ * best *any* name reaches against **a dungeon hall's two floors**, which is the
+ * pair the name was chosen against. So there is no more headroom to be had from
+ * this side of the project. 28 sits above the **21.4** the old wall material
+ * manages against the nearest floor — the map that prompted all this — and
+ * leaves **1.53** to the one in use.
+ *
+ * **Those three figures all moved, and the direction is what a reader needs.**
+ * The ruler was set when the vocabulary held four floors; it holds nine. The
+ * pillar's margin has gone from 4.7 to 1.53 and the old wall material's from
+ * 23.4 to 21.4 — neither because anything about pillars changed, and both
+ * because every floor added is another shade `tufa_column` has to stand apart
+ * from and another chance for one of them to be the new worst. Two thirds of
+ * the headroom is spent. **The next front adds materials against 1.53 of it**,
+ * so a name that measures between 28 and 29.53 does not fail this ruler and
+ * does narrow it further, and a name under 28 fails outright. Measure before
+ * naming, not after.
  */
 const STANDS_OUT = 28;
 
