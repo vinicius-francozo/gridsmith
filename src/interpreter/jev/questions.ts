@@ -71,32 +71,58 @@ export type JevQuestion = JevNoulQuestion | JevChoiceQuestion | JevScoreQuestion
  */
 export const QUESTIONS = {
   /**
-   * **This question has never been exercised with more than two options and is
-   * being taken to twelve**, so every criterion added to it carries its own
-   * measurement or is marked as carrying none.
+   * **This question had never been exercised with more than two options and is
+   * being taken to ten.** Every criterion in it is measured, including the two
+   * that were here before, and the numbers below are what chose these words
+   * rather than describing them afterwards.
    *
-   * `forge` is measured. The wording the plan for this front proposed —
-   * `'Uma ferraria ou forja, onde se trabalha metal no fogo e na bigorna'` —
-   * scores the canonical ruler's own negation control, *"Não há fogo aqui, só
-   * cinzas frias"*, at **0.81** on this criterion: naming the fire is what
-   * pulls a sentence that denies one. The clause is gone and the criterion
-   * names the trade instead.
+   * **The shape that wins is the shortest one that names the place.** Every
+   * criterion the plan for this front proposed carried a clause naming what is
+   * *inside* the building, and every one of those clauses cost sentences:
+   *
+   * - `forge` as `'…onde se trabalha metal no fogo e na bigorna'` scores the
+   *   canonical ruler's own negation control, *"Não há fogo aqui, só cinzas
+   *   frias"*, at **0.81**. Naming the fire pulls a sentence that denies one.
+   * - `ship` as `'…com porão de carga'` takes the trap sentence
+   *   `porao-verbo-2` to **0.51** — the future of *pôr* against *porão*, the
+   *   hold, which is the collision `read.ts` names in its own header.
+   * - `temple` as `'…com altar e lugar de culto'` takes three crypt sentences,
+   *   `k05` at **0.93**, because the building is chosen before the room and a
+   *   catacomb reads as a place of the dead whichever way it is worded.
+   *
+   * **`dungeon` gains the word `cripta`, and it is the only criterion here that
+   * existed before and changed.** The user approved it. With it the dungeon is
+   * back to 15 of 15 and the six funerary sentences close — `k02` and `k03` at
+   * 1.00, `k06` 0.99, `k04` 0.96, `k05` 0.80 — and `temple` stops winning any
+   * sentence of the 46 at all, its mean mass falling from 0.065 to 0.007.
+   *
+   * Over the 46: **36 of 46**, against 38 of 46 on today's two options and 27
+   * of 46 on the twelve the plan proposed. Two buildings were cut by the user
+   * rather than reworded, because there was no wording that repaired them.
+   *
+   * **The two sentences the project answers today and will answer wrongly**,
+   * measured and named rather than left to be found: `p07`, *"A despensa da
+   * cozinha, com prateleiras de sacos e potes"*, goes to `apothecary` at 0.73,
+   * and `p15`, *"Um aposento privado com cama de dossel e uma escrivaninha"*,
+   * goes to `tower`. Both are the manor's absence rather than a wording defect
+   * — a rich bedroom and a larder have nowhere else to go once the building
+   * with the writing desk and the building with the pots on shelves are the
+   * nearest two — and `tower` and `apothecary` are already in the minimal
+   * shape. Recovering them means moving `tavern`, which is the user's to
+   * decide.
+   *
+   * **The ruler for reading any number in this file.** Repeatability over ten
+   * sentences: the choice is identical 10 of 10 runs, mean |Δ| 0.012, worst
+   * 0.05. A difference of up to 0.05 on one sentence is noise.
    */
   building: {
     type: 'choice',
     instructions: 'Que tipo de construção o texto descreve?',
     criteria: {
       tavern: 'Uma taverna ou estalagem para hóspedes, comida e bebida',
-      dungeon: 'Uma masmorra, calabouço, prisão ou fortaleza subterrânea',
+      dungeon: 'Uma masmorra, calabouço, prisão, cripta ou fortaleza subterrânea',
       forge: 'Uma ferraria, forja ou oficina de ferreiro',
-      // **Pending measurement, and known to be wrong.** Measured at twelve
-      // options this wording takes three crypt sentences — `k02` 0.79, `k04`
-      // 0.58, `k05` 0.93 — because the building is chosen before the room and a
-      // catacomb reads as a place of the dead either way. The repair the user
-      // approved gives the *dungeon*'s criterion the word "cripta", so both
-      // strings move together and both are being measured now. This is the
-      // plan's wording until they arrive.
-      temple: 'Um templo, igreja ou santuário, com altar e lugar de culto',
+      temple: 'Um templo, igreja ou santuário de culto',
     },
   },
   /**
@@ -105,7 +131,9 @@ export const QUESTIONS = {
    *
    * Over 87 sentences, false notices fall from **31 of 87 to 0 of 87** and the
    * highest answer over all 87 falls from 0.98 to 0.72, so
-   * `OUT_OF_VOCABULARY_THRESHOLD` holds at 0.75 without being re-fitted.
+   * `OUT_OF_VOCABULARY_THRESHOLD` holds at 0.75 without being re-fitted. On the
+   * 46 of the building corpus the same comparison is **0 of 46 against 21 of
+   * 46**, with the same 0.72 ceiling.
    *
    * The obvious alternative — keep today's instruction and scale the list —
    * was measured beside it and **failed**: 7 of 18 over the threshold against 0
@@ -114,23 +142,15 @@ export const QUESTIONS = {
    * *instruction* redistributes probability mass, and the list belongs in the
    * criteria where a noul can hold it without making the words compete.
    *
-   * **The `false` criterion names twelve buildings and the project is going to
-   * have ten.** It is the sentence the 0 of 87 was measured on, word for word,
-   * and it is left whole rather than trimmed because a shorter list is an
-   * unmeasured variant of the thing being relied on. Two of the twelve it names
-   * are now wrong in a way the others are not:
-   *
-   * - *quartel* and *mansão* were **cut by the user** after the building
-   *   question was measured at twelve options. They will never exist, so those
-   *   two words are permanently stale and the sentence needs remeasuring
-   *   against the ten that remain.
-   * - *mina*, *navio*, *botica* and *antro* arrive with the next front, so
-   *   until then a description of a ship is read as in the catalogue and is
-   *   built as the nearest building there is, with no notice. That is a worse
-   *   failure than a false notice, and it is temporary.
-   *
-   * Both are written here rather than traded silently for a sentence nobody has
-   * measured.
+   * **The list names ten buildings and four of them do not exist yet.** Mina,
+   * navio, botica and antro arrive with the next front, and the sentence is not
+   * trimmed to six because it was measured as this sentence — dropping the two
+   * the user cut was itself remeasured rather than assumed harmless, which is
+   * the reason to be careful about dropping four more. What it costs until then
+   * is the notice: a description of a ship is read as in the catalogue and is
+   * built as the nearest building there is, with nothing said. That is a worse
+   * failure than a false notice and it is temporary, so it is written here
+   * rather than traded silently for a sentence nobody has measured.
    */
   out_of_vocabulary: {
     type: 'noul',
@@ -138,7 +158,7 @@ export const QUESTIONS = {
     criteria: {
       true: 'É outro tipo de construção ou espaço — um pátio, um mercado, uma floresta, um estábulo, qualquer coisa fora do catálogo',
       false:
-        'É uma taverna, uma masmorra, uma ferraria, um templo, uma biblioteca, uma torre de mago, um quartel, uma mansão, uma mina, um navio, uma botica ou um antro de ladrões',
+        'É uma taverna, uma masmorra, uma ferraria, um templo, uma biblioteca, uma torre de mago, uma mina, um navio, uma botica ou um antro de ladrões',
     },
   },
   light: {
