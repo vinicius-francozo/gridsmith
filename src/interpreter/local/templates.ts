@@ -74,6 +74,7 @@ export const BUILDING_TEMPLATE: ChoiceTemplate<Building> = {
     tavern: 'taverna',
     dungeon: 'masmorra',
     forge: 'ferraria',
+    temple: 'templo',
   },
 };
 
@@ -144,6 +145,7 @@ export const ROOM_TEMPLATES: Readonly<Record<Building, RoomTemplateSource>> = {
   tavern: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('tavern'); } },
   dungeon: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('dungeon'); } },
   forge: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('forge'); } },
+  temple: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('temple'); } },
 };
 
 /** How lit the place is. */

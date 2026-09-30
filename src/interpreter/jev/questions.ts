@@ -89,6 +89,14 @@ export const QUESTIONS = {
       tavern: 'Uma taverna ou estalagem para hóspedes, comida e bebida',
       dungeon: 'Uma masmorra, calabouço, prisão ou fortaleza subterrânea',
       forge: 'Uma ferraria, forja ou oficina de ferreiro',
+      // **Pending measurement, and known to be wrong.** Measured at twelve
+      // options this wording takes three crypt sentences — `k02` 0.79, `k04`
+      // 0.58, `k05` 0.93 — because the building is chosen before the room and a
+      // catacomb reads as a place of the dead either way. The repair the user
+      // approved gives the *dungeon*'s criterion the word "cripta", so both
+      // strings move together and both are being measured now. This is the
+      // plan's wording until they arrive.
+      temple: 'Um templo, igreja ou santuário, com altar e lugar de culto',
     },
   },
   /**
@@ -106,15 +114,23 @@ export const QUESTIONS = {
    * *instruction* redistributes probability mass, and the list belongs in the
    * criteria where a noul can hold it without making the words compete.
    *
-   * **The `false` criterion names twelve buildings and this project has
-   * seven.** The five it names that do not exist yet — mansão, mina, navio,
-   * botica, antro — arrive with the next front, and the sentence is not trimmed
-   * to seven because the 0 of 87 was measured on exactly these words and a
-   * shorter list is an unmeasured variant. What it costs in the meantime is the
-   * notice: a description of a ship is read as in the catalogue, and is built as
-   * the nearest of the seven with nothing said. That is a worse failure than a
-   * false notice and it is temporary, so it is written here rather than traded
-   * silently for an unmeasured sentence.
+   * **The `false` criterion names twelve buildings and the project is going to
+   * have ten.** It is the sentence the 0 of 87 was measured on, word for word,
+   * and it is left whole rather than trimmed because a shorter list is an
+   * unmeasured variant of the thing being relied on. Two of the twelve it names
+   * are now wrong in a way the others are not:
+   *
+   * - *quartel* and *mansão* were **cut by the user** after the building
+   *   question was measured at twelve options. They will never exist, so those
+   *   two words are permanently stale and the sentence needs remeasuring
+   *   against the ten that remain.
+   * - *mina*, *navio*, *botica* and *antro* arrive with the next front, so
+   *   until then a description of a ship is read as in the catalogue and is
+   *   built as the nearest building there is, with no notice. That is a worse
+   *   failure than a false notice, and it is temporary.
+   *
+   * Both are written here rather than traded silently for a sentence nobody has
+   * measured.
    */
   out_of_vocabulary: {
     type: 'noul',

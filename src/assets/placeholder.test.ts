@@ -162,6 +162,8 @@ describe('MATERIAL_VARIANTS', () => {
       tufa_column: 1,
       forge_floor: 3,
       forge_wall: 3,
+      mosaic_floor: 3,
+      sanctum_wall: 3,
     });
   });
 });

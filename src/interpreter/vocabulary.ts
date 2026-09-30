@@ -103,7 +103,11 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
   hearth: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'crypt' },
     // The forge fire, and the brazier in the shop front. Both are `hearth`
     // slots, and the first is the widest light any room in the project has.
-    { building: 'forge', room: 'smithy' }, { building: 'forge', room: 'room' }],
+    { building: 'forge', room: 'smithy' }, { building: 'forge', room: 'room' },
+    // The sacristy's brazier. **Not the nave**: its 3x2 slot is the altar and
+    // it has no 2x1 to put a sconce in, so a temple hall is the fourth room in
+    // the project with no light of its own.
+    { building: 'temple', room: 'room' }],
   /**
    * A flight up or down, to the rooms above or the cellar below.
    *
@@ -115,17 +119,32 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
   stairs: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'storeroom' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'storeroom' },
     // Up to the rooms over the shop. Not in the forge floor itself, which has
     // no stair slot: a smithy is a single storey with a fire in it.
-    { building: 'forge', room: 'room' }],
+    { building: 'forge', room: 'room' },
+    // Up to the gallery, and down to the undercroft. Both temple rooms have the
+    // slot, because both borrow a geometry that declares one.
+    { building: 'temple', room: 'hall' }, { building: 'temple', room: 'room' }],
   /**
    * Columns carrying a span too wide for bare joists. A hall is that wide, and
    * so is a crypt, whose vault is the reason it has them.
+   *
+   * The nave is the third hall, and it inherits the hall's measured defect with
+   * the geometry: `minSize` is 12x10, a cell short of the 11x11 `growPillars`
+   * needs, so a small one asked for columns comes back with none on 205 of 600
+   * seeds. That is the geometry's to fix and not this table's — listing the
+   * nave here is what makes the interface's answer match what the generator
+   * will attempt, which is the only thing this table decides.
    */
-  pillars: [{ building: 'tavern', room: 'hall' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'crypt' }],
+  pillars: [{ building: 'tavern', room: 'hall' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'crypt' },
+    { building: 'temple', room: 'hall' }],
   /** A recess off the main floor: a snug, a bed nook, or a burial recess. */
   alcove: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'crypt' },
     // The shop front is the guest room's geometry, so it has the guest room's
     // shapes. The forge floor is `rectangle` and `l_shape` only.
-    { building: 'forge', room: 'room' }],
+    { building: 'forge', room: 'room' },
+    // Both, and for the same reason as the stair: the shapes come with the
+    // borrowed geometry, and both of these geometries offer `alcove`. A recess
+    // off a nave is a side chapel.
+    { building: 'temple', room: 'hall' }, { building: 'temple', room: 'room' }],
   /**
    * Racks along a wall, for casks or for a guest's belongings — and, in a
    * crypt, the tiers of a bone niche, which is a shelf holding the dead.
@@ -134,7 +153,10 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // The tool rack over the forge. **Not** the shop front: that building fills
     // the guest room's 3x1 shelf slot with the blade display instead, so
     // "prateleiras" there would be a word with nothing behind it.
-    { building: 'forge', room: 'smithy' }],
+    { building: 'forge', room: 'smithy' },
+    // The sacristy's shelf. The nave fills no shelving slot — the geometry it
+    // borrows has none.
+    { building: 'temple', room: 'room' }],
   /** Stacked sleeping berths. A room to sleep in, and nowhere else. */
   bunks: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
   /**

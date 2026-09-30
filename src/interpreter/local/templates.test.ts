@@ -27,13 +27,14 @@ import type { ChoiceTemplate } from './templates';
  * and the template would move together without anybody noticing; these lines
  * are what makes that a failing test instead.
  */
-const BUILDINGS: Building[] = ['tavern', 'dungeon', 'forge'];
+const BUILDINGS: Building[] = ['tavern', 'dungeon', 'forge', 'temple'];
 // Two lists, because the matrix is sparse: a dungeon has a crypt and a tavern
 // does not. One list over every `RoomKind` would have asked the tavern for a
 // label it must not have.
 const TAVERN_ROOMS: RoomKind[] = ['hall', 'room', 'storeroom'];
 const DUNGEON_ROOMS: RoomKind[] = ['hall', 'room', 'storeroom', 'crypt'];
 const FORGE_ROOMS: RoomKind[] = ['smithy', 'room'];
+const TEMPLE_ROOMS: RoomKind[] = ['hall', 'room'];
 const LIGHTS: Light[] = ['dark', 'dim', 'bright'];
 const CONDITIONS: Condition[] = ['tidy', 'lived_in', 'disordered', 'ruined'];
 const SIZE_HINTS = ['small', 'medium', 'large'];
@@ -43,6 +44,7 @@ const ALL_TEMPLATES: Array<{ name: string; template: ChoiceTemplate<string> }> =
   { name: 'tavern room', template: ROOM_TEMPLATES.tavern },
   { name: 'dungeon room', template: ROOM_TEMPLATES.dungeon },
   { name: 'forge room', template: ROOM_TEMPLATES.forge },
+  { name: 'temple room', template: ROOM_TEMPLATES.temple },
   { name: 'light', template: LIGHT_TEMPLATE },
   { name: 'condition', template: CONDITION_TEMPLATE },
   { name: 'size hint', template: SIZE_HINT_TEMPLATE },
@@ -83,6 +85,7 @@ describe('every template covers its closed vocabulary', () => {
     expect(Object.keys(ROOM_TEMPLATES.tavern.labels).sort()).toEqual([...TAVERN_ROOMS].sort());
     expect(Object.keys(ROOM_TEMPLATES.dungeon.labels).sort()).toEqual([...DUNGEON_ROOMS].sort());
     expect(Object.keys(ROOM_TEMPLATES.forge.labels).sort()).toEqual([...FORGE_ROOMS].sort());
+    expect(Object.keys(ROOM_TEMPLATES.temple.labels).sort()).toEqual([...TEMPLE_ROOMS].sort());
   });
 
   it('asks about all three lights', () => {
@@ -199,10 +202,15 @@ describe('the wording handed to the classifier', () => {
       smithy: 'forja da ferraria',
       room: 'loja da ferraria',
     });
+    expect(ROOM_TEMPLATES.temple.labels).toEqual({
+      hall: 'nave do templo',
+      room: 'sacristia do templo',
+    });
     expect(BUILDING_TEMPLATE.labels).toEqual({
       tavern: 'taverna',
       dungeon: 'masmorra',
       forge: 'ferraria',
+      temple: 'templo',
     });
     expect(LIGHT_TEMPLATE.labels).toEqual({
       dark: 'escuridão total, não há luz nenhuma',
