@@ -112,7 +112,12 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // gets one. **The archive declares none on purpose** — a chamber full of
     // parchment is the one place in this project an open flame is a mistake —
     // so "uma lareira no arquivo" is answered the way a bar in a bedroom is.
-    { building: 'library', room: 'reading' }],
+    { building: 'library', room: 'reading' },
+    // The athanor: a furnace kept alight for months, which is the one thing in
+    // a laboratory that is also a hearth. **Not the observatory** — a chamber
+    // whose point is seeing out of it is lit by what it is pointed at, and its
+    // geometry declares no slot a fire would fit.
+    { building: 'tower', room: 'laboratory' }],
   /**
    * A flight up or down, to the rooms above or the cellar below.
    *
@@ -130,7 +135,10 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     { building: 'temple', room: 'hall' }, { building: 'temple', room: 'room' },
     // Up to the gallery over the reading room. The archive has no stair slot:
     // it is a room you walk into off a corridor.
-    { building: 'library', room: 'reading' }],
+    { building: 'library', room: 'reading' },
+    // Both, and in this building the stair is the building: the laboratory's
+    // corner stair is the one the observatory's comes up from.
+    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' }],
   /**
    * Columns carrying a span too wide for bare joists. A hall is that wide, and
    * so is a crypt, whose vault is the reason it has them.
@@ -143,7 +151,12 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
    * will attempt, which is the only thing this table decides.
    */
   pillars: [{ building: 'tavern', room: 'hall' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'crypt' },
-    { building: 'temple', room: 'hall' }],
+    { building: 'temple', room: 'hall' },
+    // **The only room in the project that can honestly have them**, and the
+    // reason is arithmetic rather than taste: `laboratory` is 11x11 at its
+    // smallest, which is exactly where `growPillars` becomes possible. The
+    // three halls are a cell short and pay 205 of 600 seeds for it in silence.
+    { building: 'tower', room: 'laboratory' }],
   /** A recess off the main floor: a snug, a bed nook, or a burial recess. */
   alcove: [{ building: 'tavern', room: 'hall' }, { building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'hall' }, { building: 'dungeon', room: 'room' }, { building: 'dungeon', room: 'crypt' },
     // The shop front is the guest room's geometry, so it has the guest room's
@@ -155,7 +168,11 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     { building: 'temple', room: 'hall' }, { building: 'temple', room: 'room' },
     // A reading nook. The archive's shapes are `rectangle` and `l_shape`, so
     // asking it for a recess is answered with a conflict rather than silently.
-    { building: 'library', room: 'reading' }],
+    { building: 'library', room: 'reading' },
+    // Both: the laboratory has all four shapes and the observatory has
+    // `alcove`. A recess off a laboratory is where the thing nobody wants to
+    // look at is kept.
+    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' }],
   /**
    * Racks along a wall, for casks or for a guest's belongings — and, in a
    * crypt, the tiers of a bone niche, which is a shelf holding the dead.
@@ -171,7 +188,10 @@ const FEATURE_PLACES: Record<Feature, readonly Place[]> = {
     // Both, and this is the building the word is most obviously about: each of
     // the two rooms declares two shelf runs at two footprints, and one of the
     // two carries the word so the other can be the piece nothing can refuse.
-    { building: 'library', room: 'reading' }, { building: 'library', room: 'archive' }],
+    { building: 'library', room: 'reading' }, { building: 'library', room: 'archive' },
+    // Both rooms of the tower declare one: the instruments have to stand
+    // somewhere, and in this building that somewhere is a shelf.
+    { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' }],
   /** Stacked sleeping berths. A room to sleep in, and nowhere else. */
   bunks: [{ building: 'tavern', room: 'room' }, { building: 'dungeon', room: 'room' }],
   /**

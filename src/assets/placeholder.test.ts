@@ -167,6 +167,8 @@ describe('MATERIAL_VARIANTS', () => {
       oak_floor: 3,
       archive_floor: 3,
       library_wall: 3,
+      slate_floor: 3,
+      slate_wall: 3,
     });
   });
 });

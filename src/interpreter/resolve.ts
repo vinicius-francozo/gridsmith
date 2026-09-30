@@ -154,6 +154,23 @@ const PROFILES: Readonly<Record<RoomKind, PlaceProfile>> = {
     sizes: { small: { w: 8, h: 8 }, medium: { w: 11, h: 8 }, large: { w: 11, h: 11 } },
     doors: { min: 1, max: 2 },
   },
+  // The laboratory, against 11x11 and 16x15. **The small band starts at 12x12
+  // for the crypt's reason and no other**: 11x11 is exactly where `growPillars`
+  // becomes possible, and a band sitting on that line jitters under it — so a
+  // laboratory asked for small and asked for columns would sometimes get none
+  // and say nothing.
+  laboratory: {
+    sizes: { small: { w: 12, h: 12 }, medium: { w: 15, h: 12 }, large: { w: 15, h: 15 } },
+    doors: { min: 1, max: 2 },
+  },
+  // The observatory, against 9x9 and 14x13. One door, which makes the range a
+  // point rather than a band — the second place in this table to say so, after
+  // the guest room, and for an unrelated reason: there is nowhere for a second
+  // door at the top of a tower to lead.
+  observatory: {
+    sizes: { small: { w: 10, h: 10 }, medium: { w: 13, h: 10 }, large: { w: 13, h: 13 } },
+    doors: { min: 1, max: 1 },
+  },
 };
 
 /** What a place is when the description said nothing about size. */

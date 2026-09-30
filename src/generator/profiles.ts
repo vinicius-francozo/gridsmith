@@ -129,6 +129,8 @@ export const MATERIALS: Record<string, MaterialDef> = {
   oak_floor: { variants: 3, rotatable: false },
   archive_floor: { variants: 3, rotatable: true },
   library_wall: { variants: 3, rotatable: false },
+  slate_floor: { variants: 3, rotatable: true },
+  slate_wall: { variants: 3, rotatable: false },
   // See `PILLAR_MATERIAL`. One variant and no rotation: the variant ladder
   // exists so that a floor of two hundred cells does not read as one flat
   // sheet, and a room has four pillars — a pillar drawn in three shades would
@@ -925,6 +927,110 @@ export const ROOM_REGISTRY = {
     ],
     scatterChance: 0.14,
   },
+  /**
+   * A wizard's working floor. **The only room this front gives pillars to**,
+   * and the only one that can honestly have them: `minSize` is 11x11, which is
+   * where `growPillars` becomes possible at all (`floorplan.ts`,
+   * `MIN_INTERIOR_FOR_PILLARS` is 9x9 and the wall ring eats one a side).
+   *
+   * That is the crypt's rule applied rather than restated, and it is the whole
+   * reason this room is 11x11 and not 10x10. The three halls are a cell short
+   * of it and pay 205 of 600 seeds for the shortfall, silently. A room that
+   * declares `allowPillars` has to be able to grow them at its own floor or the
+   * declaration is a promise to nobody.
+   *
+   * All four shapes, because this is the one room of the four whose walls are
+   * allowed to be strange.
+   */
+  laboratory: {
+    minSize: { w: 11, h: 11 },
+    maxSize: { w: 16, h: 15 },
+    doorRange: { min: 1, max: 2 },
+    shapes: ['rectangle', 'l_shape', 't_shape', 'alcove'],
+    allowPillars: true,
+    anchorRange: { min: 2, max: 3 },
+    anchors: [
+      { footprint: { w: 4, h: 1 }, placement: 'wall' },
+      { footprint: { w: 3, h: 2 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 3 }, placement: 'corner' },
+    ],
+    // **The lowest `min` of any room but the crypt, and three groups rather
+    // than two.** Both are about the same piece: the summoning circle is 3x3
+    // and is drawn from the same list as the other two, so a `min` of 2 and a
+    // list of 2 would carpet a laboratory in chalk figures. Three templates put
+    // it at a third of the draws, and `min: 1` keeps the count down at the
+    // furnishing this room is usually described at.
+    groupsPerHundredCells: { min: 1, max: 4 },
+    groups: [
+      {
+        id: 'summoning_circle',
+        size: { w: 3, h: 3 },
+        parts: [{ offset: { x: 0, y: 0 }, footprint: { w: 3, h: 3 } }],
+      },
+      {
+        id: 'work_bench',
+        size: { w: 2, h: 1 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+      {
+        id: 'reagent_stack',
+        size: { w: 2, h: 2 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 2, h: 1 } },
+          { offset: { x: 0, y: 1 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 1 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    scatterChance: 0.12,
+  },
+  /**
+   * The chamber at the top of the stair, under whatever the roof opens onto.
+   *
+   * One door, and it is the second room in the project to say so — the guest
+   * room is the other, and for the opposite reason. A guest room has one way in
+   * because that is what makes it a place you can be cornered in; this one has
+   * one because there is nowhere else for a door at the top of a tower to go.
+   *
+   * No pillars: 9x9 is under the line, and declaring them here would be the
+   * hall's silent defect copied into a room built after it was measured.
+   */
+  observatory: {
+    minSize: { w: 9, h: 9 },
+    maxSize: { w: 14, h: 13 },
+    doorRange: { min: 1, max: 1 },
+    shapes: ['rectangle', 'alcove'],
+    allowPillars: false,
+    anchorRange: { min: 2, max: 3 },
+    anchors: [
+      { footprint: { w: 2, h: 3 }, placement: 'corner' },
+      { footprint: { w: 4, h: 1 }, placement: 'wall' },
+      { footprint: { w: 2, h: 1 }, placement: 'wall' },
+    ],
+    groupsPerHundredCells: { min: 2, max: 4 },
+    groups: [
+      {
+        id: 'armillary_sphere',
+        size: { w: 2, h: 2 },
+        parts: [{ offset: { x: 0, y: 0 }, footprint: { w: 2, h: 2 } }],
+      },
+      {
+        id: 'chart_desk',
+        size: { w: 2, h: 1 },
+        parts: [
+          { offset: { x: 0, y: 0 }, footprint: { w: 1, h: 1 } },
+          { offset: { x: 1, y: 0 }, footprint: { w: 1, h: 1 } },
+        ],
+      },
+    ],
+    // The lowest in the project, below the reading room's. A floor somebody
+    // works on by starlight is a floor somebody keeps clear.
+    scatterChance: 0.08,
+  },
 } satisfies Record<string, RoomGeometry>;
 
 /**
@@ -1124,11 +1230,12 @@ export const BUILDING_REGISTRY = {
           // light and is lost to `excluded`, not to the table — so the two
           // cases are different and only this comment says so.
           //
-          // **Five of thirteen as of the archive.** The nave declares an altar
+          // **Six of fifteen as of the observatory.** The nave declares an altar
           // where the halls declare a fire and has no 2x1 slot to put a sconce
           // in; the archive declares no fire on purpose, because a room full of
-          // parchment is the one room in this project that should not have one.
-          // The count is carried forward here rather than restated in each
+          // parchment is the one room in this project that should not have one;
+          // the observatory is lit by what it is pointed at. The count is
+          // carried forward here rather than restated in each
           // room, because a room with no light of its own is a property of the
           // set and not of the room: it is what `Scene.lights` comes back empty
           // for at every dark seed. (It read "four of nine" for one commit,
@@ -1581,6 +1688,65 @@ export const BUILDING_REGISTRY = {
           name: 'Arquivo da biblioteca',
           criterion: 'O arquivo da biblioteca: os pergaminhos e os registros guardados nas estantes altas',
           label: 'arquivo da biblioteca',
+        },
+      },
+    },
+  },
+  /**
+   * The wizard's tower. Two rooms, two geometries, and one stair between them:
+   * the laboratory's corner stair is the one the observatory's comes up from,
+   * which is the only place in this project where two rooms of one building are
+   * stated to be above and below each other.
+   */
+  tower: {
+    assetTags: ['arcane', 'stone', 'wood'],
+    rooms: {
+      laboratory: {
+        floorMaterials: ['slate_floor', 'flagstone'],
+        wallMaterials: { slate_floor: 'slate_wall', flagstone: 'stone_wall' },
+        defaultWallMaterial: 'slate_wall',
+        anchors: [
+          { concept: 'shelving', feature: 'shelving' },
+          // The athanor: a furnace kept alight for months, which is the one
+          // thing in a laboratory that is also a hearth.
+          { concept: 'hearth', feature: 'hearth', light: { radiusCells: 5, colorHex: '#9fd4ff' } },
+          // The reagent cabinet, and the net.
+          { concept: 'storage' },
+          { concept: 'stairs', feature: 'stairs' },
+        ],
+        groups: [['summoning_circle'], ['table_small', 'chair'], ['crate', 'barrel', 'barrel']],
+        // Glass first, and this is the only floor in the project that leads
+        // with it: what a laboratory drops is what it decanted into.
+        scatterLadder: [
+          { tags: ['glass'], weight: 3 },
+          { tags: ['grime'], weight: 2 },
+          { tags: ['masonry'], weight: 1 },
+        ],
+        words: {
+          name: 'Laboratório da torre',
+          criterion: 'O laboratório da torre, com o círculo de invocação e os instrumentos de estudo',
+          label: 'laboratório da torre',
+        },
+      },
+      observatory: {
+        floorMaterials: ['slate_floor'],
+        wallMaterials: { slate_floor: 'slate_wall' },
+        defaultWallMaterial: 'slate_wall',
+        anchors: [
+          { concept: 'stairs', feature: 'stairs' },
+          { concept: 'shelving', feature: 'shelving' },
+          { concept: 'storage' },
+        ],
+        groups: [['armillary_sphere'], ['table_small', 'chair']],
+        scatterLadder: [
+          { tags: ['glass'], weight: 3 },
+          { tags: ['grime'], weight: 2 },
+          { tags: ['bedding'], weight: 1 },
+        ],
+        words: {
+          name: 'Observatório da torre',
+          criterion: 'O observatório no alto da torre, com a esfera armilar e as cartas celestes',
+          label: 'observatório da torre',
         },
       },
     },

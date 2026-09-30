@@ -76,6 +76,7 @@ export const BUILDING_TEMPLATE: ChoiceTemplate<Building> = {
     forge: 'ferraria',
     temple: 'templo',
     library: 'biblioteca',
+    tower: 'torre de mago',
   },
 };
 
@@ -148,6 +149,7 @@ export const ROOM_TEMPLATES: Readonly<Record<Building, RoomTemplateSource>> = {
   forge: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('forge'); } },
   temple: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('temple'); } },
   library: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('library'); } },
+  tower: { hypothesis: ROOM_HYPOTHESIS, get labels() { return labelsOf('tower'); } },
 };
 
 /** How lit the place is. */

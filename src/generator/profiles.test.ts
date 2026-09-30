@@ -69,6 +69,7 @@ const PLACE_TYPES: Place[] = [
   { building: 'forge', room: 'smithy' }, { building: 'forge', room: 'room' },
   { building: 'temple', room: 'hall' }, { building: 'temple', room: 'room' },
   { building: 'library', room: 'reading' }, { building: 'library', room: 'archive' },
+  { building: 'tower', room: 'laboratory' }, { building: 'tower', room: 'observatory' },
 ];
 
 /** The rooms both buildings have, and so the ones whose geometry is shared. */
@@ -536,6 +537,8 @@ const FLOORS: Readonly<Record<string, string>> = {
   temple_room: 'mug 3, dust 2, straw 1',
   library_reading: 'dust 3, straw 2, shard 1',
   library_archive: 'dust 3, sack 2, straw 1',
+  tower_laboratory: 'bottle 3, dust 2, rubble 1',
+  tower_observatory: 'bottle 3, dust 2, straw 1',
 };
 
 describe('every floor, one by one', () => {

@@ -124,6 +124,7 @@ export const QUESTIONS = {
       forge: 'Uma ferraria, forja ou oficina de ferreiro',
       temple: 'Um templo, igreja ou santuário de culto',
       library: 'Uma biblioteca ou um arquivo de livros',
+      tower: 'A torre de um mago ou feiticeiro',
     },
   },
   /**
