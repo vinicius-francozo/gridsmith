@@ -415,7 +415,7 @@ function floorOf(place: Place): Map<string, number> {
   return new Map(scatter.map((slot) => [slot.assetId, slot.weight / total]));
 }
 
-describe('the debris a room is strewn with', () => {
+describe('the debris the catalogue offers', () => {
   it('leaves no piece in the catalogue that no room can strew', () => {
     // **Catalogue to room, and the direction is the point.** Every other test
     // of this layer reads a profile and checks that what it names exists — so
@@ -432,6 +432,66 @@ describe('the debris a room is strewn with', () => {
     expect(catalogued.filter((name) => !strewn.has(name))).toEqual([]);
   });
 
+});
+
+/**
+ * What each of the seven floors comes out as: the piece, the weight, in order.
+ *
+ * **These are the weights each room was written with in `main`**, read off
+ * `TAVERN_HALL.scatter` and its neighbours at `482a206`, where a room named its
+ * debris as a list of asset ids. The claim this front makes is that the
+ * mechanism changed and the floors did not, and this is that claim written
+ * down once, for all seven.
+ *
+ * It is not a restatement of the table it checks. A room declares *tags* and a
+ * weight per rung; this is what the library answers with, so a tag misspelled,
+ * a tag moved in `placeholder.ts`, a rung reweighted, reordered or dropped,
+ * and a piece landing on the wrong rung all change it.
+ */
+const FLOORS: Readonly<Record<string, string>> = {
+  tavern_hall: 'mug 4, stool 2, bottle 2, straw 1',
+  tavern_room: 'mug 3, bottle 2, straw 1',
+  tavern_storeroom: 'sack 3, straw 3, shard 2',
+  dungeon_hall: 'bone 4, broken_chain 2, rubble 2, dust 1',
+  dungeon_room: 'bone 3, broken_chain 2, dust 1',
+  dungeon_storeroom: 'loose_arrow 3, dust 3, rubble 2',
+  dungeon_crypt: 'bone 4, rubble 3, skull 2, shard 2, dust 2',
+};
+
+describe('the seven floors, one by one', () => {
+  it('strews each room with the pieces and the weights it was written with', () => {
+    // **All seven, because two of them had no floor of their own and nobody
+    // noticed.** The tests below each name the rooms they are about — the
+    // stool's taproom, the mug against the bottle, the bone against the dust,
+    // the guest room against the cellar — and when those tests were swapped
+    // over two rounds, the tavern cellar and the dungeon store room fell
+    // between them. Measured rather than read: dropping the arsenal's
+    // `weapons` rung from 3 to 1, which makes the loose arrow the lightest
+    // thing on the floor of the room it is named for instead of the heaviest,
+    // left the whole suite green at 1166 passed; so did dropping the cellar's
+    // `storage` rung from 3 to 1.
+    //
+    // A test per room would have the same hole the next time the tests move.
+    // One table cannot: a room added to `PLACE_TYPES` with no row here is the
+    // first thing this reports.
+    const unwritten = PLACE_TYPES.filter(
+      (place) => !Object.hasOwn(FLOORS, `${place.building}_${place.room}`),
+    );
+    expect(`rooms with no floor written down: ${unwritten.join(', ')}`)
+      .toBe('rooms with no floor written down: ');
+    expect(Object.keys(FLOORS)).toHaveLength(PLACE_TYPES.length);
+
+    for (const place of PLACE_TYPES) {
+      const key = `${place.building}_${place.room}`;
+      const floor = resolved(place).scatter
+        .map((slot) => `${slot.assetId} ${String(slot.weight)}`)
+        .join(', ');
+      expect(`${key}: ${floor}`).toBe(`${key}: ${FLOORS[key]}`);
+    }
+  });
+});
+
+describe('the debris a room is strewn with, piece by piece', () => {
   it('keeps the stool on the taproom floor, at the share it was written with', () => {
     // Named on its own, because the sweep above is satisfied by one room
     // anywhere holding it and this is the room it belongs to. `scatter/stool`
