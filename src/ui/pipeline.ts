@@ -53,6 +53,12 @@ export type GenerationDeps = {
    * there is one, is on their own screen.
    */
   onStage?: (stage: GenerationStage) => void;
+  /**
+   * Whether the grid rule is drawn over the map. On unless the page says
+   * otherwise — the page's grid button decides it, and the exported PNG is the
+   * canvas, so what is on screen is what is saved.
+   */
+  grid?: boolean;
 };
 
 /** Which part of the loop is running. */
@@ -100,6 +106,6 @@ export async function generateMap(
   reached('drawing');
   const params = resolve(constraints, input.seed);
   const scene = generate(params, createRng(input.seed), deps.library);
-  await renderScene(scene, deps.library, deps.target);
+  await renderScene(scene, deps.library, deps.target, { grid: deps.grid !== false });
   return { constraints, params, scene };
 }
