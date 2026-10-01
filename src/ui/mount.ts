@@ -17,13 +17,14 @@
  * carrying an SDK error with the request headers hanging off its `cause`.
  */
 
-import type { AssetLibrary, Interpreter, Params } from '../core/types';
+import type { AssetLibrary, Interpreter, Params, Scene } from '../core/types';
 import { createPlaceholderLibrary } from '../assets/placeholder';
 import { ClaudeInterpreter } from '../interpreter/claude';
 import { JevInterpreter } from '../interpreter/jev/jev';
 import { LocalInterpreter } from '../interpreter/local/local';
 import type { ModelProgress, ProgressReport } from '../interpreter/local/pipeline';
 import { toPng } from '../renderer/png';
+import { renderScene } from '../renderer/render';
 import type { RenderTarget } from '../renderer/render';
 
 import { createBlobSaver, mapFilename } from './download';
@@ -38,10 +39,12 @@ import {
 } from './messages';
 import type { Failure } from './messages';
 import { generateMap } from './pipeline';
+import { dressScene } from './scene';
 import { cryptoEntropy, randomSeed, readSeed } from './seed';
 import type { Entropy } from './seed';
 import { browserKeyStore, nullKeyStore, readApiKey, writeApiKey } from './storage';
 import type { KeyStore } from './storage';
+import { STYLE } from './style';
 
 /**
  * Everything the page reaches for outside itself.
@@ -107,10 +110,21 @@ function defaultServices(doc: Document): AppServices {
  * The signature is frozen: `src/main.ts` finds `#app`, refuses to continue
  * without it, and hands the element over. Nothing is read from the document
  * here beyond what `root` leads to.
+ *
+ * The room the page stands in — torches, banners, the floor, the rat — is
+ * added after, by `dressScene`, and only here. `mountApp` builds nothing but
+ * what a person reads and operates, so the tests that drive it see the page
+ * and none of the scenery.
  */
 export function mount(root: HTMLElement): void {
   mountApp(root, {});
+  dressScene(root);
 }
+
+/** The zoom steps the map can be shown at, as a share of the board it fits. */
+const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
+/** Where the zoom starts: the whole map, fitted to the board. */
+const ZOOM_FIT = ZOOM_STEPS.indexOf(1);
 
 /**
  * Which interpreter a run uses. The value of the picker, and nothing else.
@@ -127,41 +141,6 @@ const LOCAL_ENGINE = 'local';
 /** The three, as a type, so the switches below can be checked for exhaustiveness. */
 type Engine = typeof CLAUDE_ENGINE | typeof JEV_ENGINE | typeof LOCAL_ENGINE;
 
-const STYLE = `
-:root { color-scheme: dark; }
-* { box-sizing: border-box; }
-body { margin: 0; background: #14161a; color: #e8e6e1;
-  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-.gs-app { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
-.gs-app h1 { margin: 0; font-size: 26px; letter-spacing: 0.01em; }
-.gs-tagline { margin: 4px 0 24px; color: #9aa0a6; }
-.gs-layout { display: grid; gap: 24px; grid-template-columns: minmax(280px, 340px) 1fr; }
-@media (max-width: 760px) { .gs-layout { grid-template-columns: 1fr; } }
-.gs-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
-.gs-field label { font-size: 13px; color: #b8bcc2; }
-.gs-field select, .gs-field input, .gs-field textarea {
-  width: 100%; padding: 9px 11px; border-radius: 7px; border: 1px solid #333840;
-  background: #1c1f25; color: inherit; font: inherit; }
-.gs-field textarea { resize: vertical; }
-.gs-note { font-size: 12px; color: #7f858c; }
-.gs-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.gs-actions button {
-  padding: 10px 16px; border-radius: 7px; border: 1px solid #3a4150;
-  background: #2b3240; color: inherit; font: inherit; cursor: pointer; }
-.gs-actions button:disabled { opacity: 0.45; cursor: default; }
-.gs-status { margin: 16px 0 0; color: #9aa0a6; min-height: 1.5em; }
-.gs-failure { margin: 16px 0 0; padding: 12px 14px; border-radius: 7px;
-  border: 1px solid #6b2b2b; background: #2a1a1a; }
-.gs-failure p { margin: 0; }
-.gs-failure .gs-detail { margin-top: 6px; font-size: 12px; color: #c39a9a;
-  font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
-.gs-notices { margin-top: 16px; }
-.gs-notices h2 { margin: 0 0 6px; font-size: 13px; color: #b8bcc2; }
-.gs-notices ul { margin: 0 0 16px; padding-left: 20px; color: #cfc6a8; }
-.gs-canvas-wrap { border: 1px solid #333840; border-radius: 8px; padding: 10px;
-  background: #1c1f25; overflow: auto; }
-.gs-canvas-wrap canvas { display: block; max-width: 100%; height: auto; }
-`;
 
 /**
  * Mounts with `overrides` standing in for parts of the environment.
@@ -196,6 +175,15 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   const tagline = make('p', 'gs-tagline');
   tagline.textContent = UI_TEXT.tagline;
 
+  /**
+   * A heading that wears an icon. The icon is a CSS background on `::before`,
+   * named by class, so that nothing but the words is ever a child of the
+   * element — two of the captions below are rewritten through `textContent`,
+   * which would erase an icon kept as a child on the first rewrite.
+   */
+  const iconClass = (base: string | undefined, icon: string): string =>
+    `${base === undefined ? '' : `${base} `}gs-icon gs-icon-${icon}`;
+
   // --- The fields -----------------------------------------------------------
 
   /**
@@ -208,16 +196,17 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   const field = (
     id: string,
     label: string,
+    icon: string,
   ): { wrap: HTMLDivElement; caption: HTMLLabelElement } => {
     const wrap = make('div', 'gs-field');
-    const caption = make('label');
+    const caption = make('label', iconClass(undefined, icon));
     caption.htmlFor = id;
     caption.textContent = label;
     wrap.append(caption);
     return { wrap, caption };
   };
 
-  const descriptionField = field('gs-description', UI_TEXT.descriptionLabel).wrap;
+  const descriptionField = field('gs-description', UI_TEXT.descriptionLabel, 'scroll').wrap;
   const description = make('textarea');
   description.id = 'gs-description';
   description.rows = 4;
@@ -234,7 +223,7 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   // "list the form controls", and an `aria-label` that has to agree with a
   // separate `<p>` by hand is two strings that can drift. The test now expects
   // four values, which is what it should have expected then.
-  const engineField = field('gs-engine', UI_TEXT.engineLabel).wrap;
+  const engineField = field('gs-engine', UI_TEXT.engineLabel, 'hat').wrap;
   const engine = make('select');
   engine.id = 'gs-engine';
   const claudeOption = make('option');
@@ -256,7 +245,7 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   engineNote.textContent = UI_TEXT.engineLocalNote;
   engineField.append(engine, engineNote);
 
-  const { wrap: apiKeyField, caption: apiKeyCaption } = field('gs-api-key', UI_TEXT.apiKeyLabel);
+  const { wrap: apiKeyField, caption: apiKeyCaption } = field('gs-api-key', UI_TEXT.apiKeyLabel, 'key');
   const apiKey = make('input');
   apiKey.id = 'gs-api-key';
   // `password` so the key is not readable over a shoulder or in a screen share,
@@ -272,7 +261,7 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   apiKeyNote.textContent = UI_TEXT.apiKeyNote;
   apiKeyField.append(apiKey, apiKeyNote);
 
-  const seedField = field('gs-seed', UI_TEXT.seedLabel).wrap;
+  const seedField = field('gs-seed', UI_TEXT.seedLabel, 'sprout').wrap;
   const seed = make('input');
   seed.id = 'gs-seed';
   seed.type = 'text';
@@ -283,15 +272,13 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   seedNote.textContent = UI_TEXT.seedNote;
   seedField.append(seed, seedNote);
 
-  const actions = make('div', 'gs-actions');
-  const generateButton = make('button');
+  // The seed and the button that uses it share a row: the number is what makes
+  // the map repeatable, and it sits where the hand already is when it clicks.
+  const generateButton = make('button', iconClass('gs-forge', 'hammer'));
   generateButton.type = 'button';
   generateButton.textContent = UI_TEXT.generate;
-  const downloadButton = make('button');
-  downloadButton.type = 'button';
-  downloadButton.textContent = UI_TEXT.download;
-  downloadButton.disabled = true;
-  actions.append(generateButton, downloadButton);
+  const goRow = make('div', 'gs-go-row');
+  goRow.append(seedField, generateButton);
 
   const status = make('p', 'gs-status');
   // Both of these change while the focus is still on the button that started
@@ -309,26 +296,87 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   const notices = make('div', 'gs-notices');
 
   const controls = make('div', 'gs-controls');
-  controls.append(
-    descriptionField,
-    engineField,
-    apiKeyField,
-    seedField,
-    actions,
-    status,
-    failure,
-    notices,
-  );
+  controls.append(descriptionField, engineField, apiKeyField, goRow, failure);
+
+  /**
+   * One of the two framed boards, titled by a heading it is labelled by.
+   *
+   * The body scrolls on its own when the window is too short for the form, so
+   * the title stays put and the page itself never has to.
+   */
+  const board = (className: string, title: HTMLHeadingElement): HTMLElement => {
+    const section = make('section', `gs-board ${className}`);
+    section.setAttribute('aria-labelledby', title.id);
+    return section;
+  };
+
+  const formTitle = make('h2', iconClass('gs-tag', 'hammer'));
+  formTitle.id = 'gs-form-title';
+  formTitle.textContent = UI_TEXT.createTitle;
+  const formBody = make('div', 'gs-board-body');
+  formBody.append(formTitle, controls);
+  const formBoard = board('gs-form-board', formTitle);
+  formBoard.append(formBody);
 
   // --- The map --------------------------------------------------------------
 
-  const surface = make('div', 'gs-canvas-wrap');
-  const target = make('canvas');
-  surface.append(target);
+  const mapTitle = make('h2', iconClass('gs-map-title', 'book'));
+  mapTitle.id = 'gs-map-title';
+  mapTitle.textContent = UI_TEXT.previewTitle;
 
-  const layout = make('div', 'gs-layout');
-  layout.append(controls, surface);
-  app.append(heading, tagline, layout);
+  // A button that stays pressed, rather than a checkbox: it does something —
+  // the map is redrawn — and `aria-pressed` is how a button says which way it
+  // is switched.
+  const gridButton = make('button', iconClass('gs-tool', 'grid'));
+  gridButton.type = 'button';
+  gridButton.textContent = UI_TEXT.gridToggle;
+  const zoomOutButton = make('button', 'gs-tool gs-tool-square');
+  zoomOutButton.type = 'button';
+  zoomOutButton.textContent = '−';
+  zoomOutButton.setAttribute('aria-label', UI_TEXT.zoomOut);
+  const zoomReadout = make('span', 'gs-zoom');
+  zoomReadout.setAttribute('aria-live', 'polite');
+  const zoomInButton = make('button', 'gs-tool gs-tool-square');
+  zoomInButton.type = 'button';
+  zoomInButton.textContent = '+';
+  zoomInButton.setAttribute('aria-label', UI_TEXT.zoomIn);
+  const downloadButton = make('button', iconClass('gs-tool gs-tool-gold', 'download'));
+  downloadButton.type = 'button';
+  downloadButton.textContent = UI_TEXT.download;
+  downloadButton.disabled = true;
+  const tools = make('div', 'gs-tools');
+  tools.append(gridButton, zoomOutButton, zoomReadout, zoomInButton, downloadButton);
+  const mapHead = make('div', 'gs-map-head');
+  mapHead.append(mapTitle, tools);
+
+  const target = make('canvas');
+  // Off the screen until something is drawn on it: an empty canvas is a box
+  // of nothing with a size of its own, and the sentence below says what goes
+  // there instead.
+  target.hidden = true;
+  const empty = make('p', 'gs-empty');
+  empty.textContent = UI_TEXT.previewEmpty;
+  const frame = make('div', 'gs-map');
+  frame.append(target, empty);
+  const viewport = make('div', 'gs-viewport');
+  viewport.append(frame);
+
+  const mapFoot = make('div', 'gs-map-foot');
+  mapFoot.append(status);
+
+  const mapBoard = board('gs-map-board', mapTitle);
+  mapBoard.append(mapHead, viewport, notices, mapFoot);
+
+  const hall = make('header', 'gs-hall');
+  const plaque = make('div', 'gs-plaque');
+  const brand = make('div', 'gs-brand');
+  brand.append(heading);
+  plaque.append(brand, tagline);
+  hall.append(plaque);
+
+  const layout = make('main', 'gs-layout');
+  layout.append(formBoard, mapBoard);
+  app.append(hall, layout);
   root.replaceChildren(style, app);
 
   // --- Showing things -------------------------------------------------------
@@ -550,18 +598,60 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
   let busy = false;
   /** Whether what is in the air is a generation, which is what the label says. */
   let generating = false;
+  /**
+   * The scene behind the map on the canvas, kept so the grid can be switched
+   * without generating again. Set and cleared together with `drawn`.
+   */
+  let shown: Scene | undefined;
+  /** Whether the grid rule is drawn. The PNG is the canvas, so it follows. */
+  let gridOn = true;
+  /** Which of `ZOOM_STEPS` the map is shown at. */
+  let zoom = ZOOM_FIT;
 
-  /** Puts both buttons into the state the two flags and `drawn` describe. */
+  /** Puts every button into the state the two flags and `drawn` describe. */
   const refreshButtons = (): void => {
     generateButton.disabled = busy;
     generateButton.textContent = generating ? UI_TEXT.generating : UI_TEXT.generate;
     downloadButton.disabled = busy || drawn === undefined;
+    gridButton.disabled = busy;
+    gridButton.setAttribute('aria-pressed', String(gridOn));
+    zoomOutButton.disabled = zoom === 0;
+    zoomInButton.disabled = zoom === ZOOM_STEPS.length - 1;
   };
 
   const setBusy = (value: boolean): void => {
     busy = value;
     generating = value;
+    // On the board, so the map can dim while the one under it is being drawn.
+    mapBoard.setAttribute('aria-busy', String(value));
     refreshButtons();
+  };
+
+  /**
+   * Sizes the map to the board: the canvas's own proportions, at the zoom.
+   *
+   * Written as two custom properties on the frame and nothing else — the
+   * stylesheet does the arithmetic, against the size of the board, which only
+   * the browser knows. Before the first map the canvas has no proportions of
+   * its own and the stylesheet's default stands.
+   */
+  const showFrame = (): void => {
+    const step = ZOOM_STEPS[zoom] ?? 1;
+    zoomReadout.textContent = `${Math.round(step * 100)}%`;
+    // Read only once something is drawn: an untouched canvas is 300 × 150 by
+    // default, which is the proportion of no map at all.
+    const ratio =
+      !target.hidden && target.height > 0
+        ? `--ar: ${(target.width / target.height).toFixed(4)}; `
+        : '';
+    frame.setAttribute('style', `${ratio}--z: ${step}`);
+  };
+
+  /** Puts the canvas on the screen in place of the sentence that stood there. */
+  const showCanvas = (): void => {
+    target.hidden = false;
+    empty.hidden = true;
+    showFrame();
   };
 
   /**
@@ -655,6 +745,7 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
     // live region twice with the same words — one announcement per generation
     // is the point of the region.
     drawn = undefined;
+    shown = undefined;
     setBusy(true);
     // Only here, and not with the failure above. The refusals in between leave
     // the previous map on the canvas and the download button live on purpose,
@@ -669,6 +760,7 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
           interpreter: interpreterForRun(),
           library: services.library,
           target,
+          grid: gridOn,
           onStage: (stage) => {
             switch (stage) {
               case 'interpreting':
@@ -691,6 +783,8 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
         ...noticeList(UI_TEXT.conflictsHeading, describeEntries(result.params.conflicts)),
       );
       drawn = result.params;
+      shown = result.scene;
+      showCanvas();
       status.textContent = `${UI_TEXT.done} ${describeResult(result.params)}`;
     } catch (error) {
       status.textContent = '';
@@ -735,6 +829,53 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
     }
   };
 
+  /**
+   * Switches the grid rule, and redraws the map on the canvas to match.
+   *
+   * Redrawn rather than covered by an overlay, because the canvas is the file:
+   * what `download` encodes is exactly what is on the screen, and a grid that
+   * lived in a layer over it would be on the screen and not in the PNG. Before
+   * the first map this only records the choice, which the next run then uses.
+   *
+   * Held under `busy` like the other two, for the same reason: it writes the
+   * canvas, and an encode or a run underneath it would read a canvas halfway
+   * between two maps.
+   */
+  const toggleGrid = async (): Promise<void> => {
+    if (busy) {
+      return;
+    }
+    gridOn = !gridOn;
+    const scene = shown;
+    if (scene === undefined) {
+      refreshButtons();
+      return;
+    }
+    showFailure(undefined);
+    busy = true;
+    refreshButtons();
+    try {
+      await renderScene(scene, services.library, target, { grid: gridOn });
+    } catch (error) {
+      // A canvas the renderer gave up on halfway is not a map to offer.
+      drawn = undefined;
+      shown = undefined;
+      showFailure(describeFailure(error));
+    } finally {
+      busy = false;
+      refreshButtons();
+    }
+  };
+
+  const zoomBy = (change: number): void => {
+    zoom = Math.min(ZOOM_STEPS.length - 1, Math.max(0, zoom + change));
+    showFrame();
+    refreshButtons();
+  };
+
+  showFrame();
+  refreshButtons();
+
   // Nothing may escape a handler. A rejection left floating is logged by the
   // browser itself, with the whole error attached — and an SDK error carries
   // the request it came from. `run` catches around the loop, but the reading of
@@ -751,4 +892,11 @@ export function mountApp(root: HTMLElement, overrides: Partial<AppServices>): vo
 
   generateButton.addEventListener('click', guarded(run));
   downloadButton.addEventListener('click', guarded(download));
+  gridButton.addEventListener('click', guarded(toggleGrid));
+  zoomOutButton.addEventListener('click', () => {
+    zoomBy(-1);
+  });
+  zoomInButton.addEventListener('click', () => {
+    zoomBy(1);
+  });
 }
