@@ -10,6 +10,7 @@ import {
   UpstreamError,
 } from '../interpreter/errors';
 import type { ProgressReport } from '../interpreter/local/pipeline';
+import { GRID_LINE_COLOR } from '../renderer/drawlist';
 
 import { UI_TEXT } from './messages';
 import { mount, mountApp } from './mount';
@@ -1619,5 +1620,178 @@ describe('the refusal of a wrong-provider key, on the page', () => {
     // And it is true: following the advice does empty it.
     app.pick('claude');
     expect(app.apiKey.value).toBe('');
+  });
+});
+
+describe('the map on its board', () => {
+  /** The canvas the map is drawn on. The page has exactly one. */
+  const canvasOf = (app: Harness): FakeElement => {
+    const canvases = descendants(app.root).filter((node) => node.tagName === 'canvas');
+    expect(canvases).toHaveLength(1);
+    const [canvas] = canvases;
+    if (canvas === undefined) {
+      throw new Error('no canvas');
+    }
+    return canvas;
+  };
+
+  /**
+   * How many times the grid rule has been painted onto `canvas`.
+   *
+   * The renderer strokes the rule in its own colour and nothing else in that
+   * colour, so every assignment of it to `strokeStyle` is one grid drawn.
+   */
+  const watchGrid = (canvas: FakeElement): { ruled: number } => {
+    const seen = { ruled: 0 };
+    canvas.getContext = (): unknown =>
+      new Proxy(
+        {},
+        {
+          get: () => (): undefined => undefined,
+          set: (_target, property, value) => {
+            if (property === 'strokeStyle' && value === GRID_LINE_COLOR) {
+              seen.ruled += 1;
+            }
+            return true;
+          },
+        },
+      );
+    return seen;
+  };
+
+  const gridButton = (app: Harness): FakeElement => buttonLabelled(app.root, UI_TEXT.gridToggle);
+  const zoomButton = (app: Harness, label: string): FakeElement => {
+    const found = descendants(app.root).find(
+      (node) => node.tagName === 'button' && node.attributes.get('aria-label') === label,
+    );
+    if (found === undefined) {
+      throw new Error(`no button for ${label}`);
+    }
+    return found;
+  };
+  const frameStyle = (app: Harness): string => byClass(app.root, 'gs-map').attributes.get('style') ?? '';
+
+  const generate = async (app: Harness): Promise<void> => {
+    app.description.value = 'um salão de taverna';
+    app.apiKey.value = 'sk-ant-api03-mapa';
+    app.generate.click();
+    await settle();
+  };
+
+  it('shows a sentence in place of the canvas until there is a map', async () => {
+    const app = mountHarness();
+    const empty = byClass(app.root, 'gs-empty');
+
+    expect(canvasOf(app).hidden).toBe(true);
+    expect(empty.hidden).toBe(false);
+    expect(empty.textContent).toBe(UI_TEXT.previewEmpty);
+
+    await generate(app);
+
+    expect(canvasOf(app).hidden).toBe(false);
+    expect(empty.hidden).toBe(true);
+  });
+
+  it('sizes the frame to the map only once one is drawn', async () => {
+    // An untouched canvas is 300 × 150, which is the proportion of no map.
+    const app = mountHarness();
+    const canvas = canvasOf(app);
+    canvas.width = 300;
+    canvas.height = 150;
+    // The zoom rewrites the frame's style, so it is what would carry a
+    // proportion read too early.
+    zoomButton(app, UI_TEXT.zoomIn).click();
+
+    expect(frameStyle(app)).not.toContain('--ar');
+
+    await generate(app);
+
+    expect(canvas.height).toBeGreaterThan(0);
+    expect(frameStyle(app)).toContain(`--ar: ${(canvas.width / canvas.height).toFixed(4)}`);
+  });
+
+  it('rules the grid by default, and says so', async () => {
+    const app = mountHarness();
+    const grid = watchGrid(canvasOf(app));
+
+    expect(gridButton(app).attributes.get('aria-pressed')).toBe('true');
+    await generate(app);
+
+    expect(grid.ruled).toBe(1);
+  });
+
+  it('takes the grid off the map on the canvas without asking for another', async () => {
+    // The canvas is the file, so the PNG follows what the button says.
+    const app = mountHarness();
+    const grid = watchGrid(canvasOf(app));
+    await generate(app);
+    expect(grid.ruled).toBe(1);
+
+    gridButton(app).click();
+    await settle();
+
+    expect(gridButton(app).attributes.get('aria-pressed')).toBe('false');
+    expect(grid.ruled).toBe(1);
+    expect(app.asked).toHaveLength(1);
+    expect(app.download.disabled).toBe(false);
+
+    gridButton(app).click();
+    await settle();
+
+    expect(gridButton(app).attributes.get('aria-pressed')).toBe('true');
+    expect(grid.ruled).toBe(2);
+    expect(app.asked).toHaveLength(1);
+  });
+
+  it('remembers the choice for the next map, made before or after the first', async () => {
+    const app = mountHarness();
+    const grid = watchGrid(canvasOf(app));
+
+    gridButton(app).click();
+    await settle();
+    await generate(app);
+    expect(grid.ruled).toBe(0);
+
+    await generate(app);
+    expect(grid.ruled).toBe(0);
+    expect(app.asked).toHaveLength(2);
+  });
+
+  it('will not redraw the canvas while a map is being made', async () => {
+    const app = mountHarness({ hang: true });
+    app.description.value = 'um salão de taverna';
+    app.apiKey.value = 'sk-ant-api03-mapa';
+    app.generate.click();
+    await settle();
+
+    expect(gridButton(app).disabled).toBe(true);
+    gridButton(app).click();
+    await settle();
+
+    expect(gridButton(app).attributes.get('aria-pressed')).toBe('true');
+  });
+
+  it('zooms in steps, and stops at either end', () => {
+    const app = mountHarness();
+    const zoomIn = zoomButton(app, UI_TEXT.zoomIn);
+    const zoomOut = zoomButton(app, UI_TEXT.zoomOut);
+    const readout = byClass(app.root, 'gs-zoom');
+
+    expect(readout.textContent).toBe('100%');
+    expect(frameStyle(app)).toContain('--z: 1');
+
+    zoomIn.click();
+    expect(readout.textContent).toBe('125%');
+    expect(frameStyle(app)).toContain('--z: 1.25');
+
+    for (let press = 0; press < 10; press += 1) zoomIn.click();
+    expect(readout.textContent).toBe('200%');
+    expect(zoomIn.disabled).toBe(true);
+    expect(zoomOut.disabled).toBe(false);
+
+    for (let press = 0; press < 10; press += 1) zoomOut.click();
+    expect(readout.textContent).toBe('50%');
+    expect(zoomOut.disabled).toBe(true);
+    expect(zoomIn.disabled).toBe(false);
   });
 });

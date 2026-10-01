@@ -21,7 +21,7 @@
 import type { AssetDef, AssetLibrary, Rotation, Scene } from '../core/types';
 import { validateBitmapSize, validateCatalog, validatePlacement } from '../assets/contract';
 import { buildDrawList } from './drawlist';
-import type { DrawList, PixelLine } from './drawlist';
+import type { DrawList, DrawOptions, PixelLine } from './drawlist';
 
 /** Either canvas the renderer can paint into. */
 export type RenderTarget = HTMLCanvasElement | OffscreenCanvas;
@@ -315,7 +315,8 @@ export async function renderScene(
   scene: Scene,
   library: AssetLibrary,
   canvas: RenderTarget,
+  options: DrawOptions = {},
 ): Promise<void> {
   assertPlacements(scene, library);
-  await executeDrawList(buildDrawList(scene), library, canvas);
+  await executeDrawList(buildDrawList(scene, options), library, canvas);
 }

@@ -654,6 +654,15 @@ export const UI_TEXT = {
   drawing: 'Desenhando o mapa…',
   done: 'Mapa pronto.',
 
+  // --- The two boards, and the tools over the map ----------------------------
+  createTitle: 'Criar mapa',
+  previewTitle: 'Prévia do mapa',
+  previewEmpty: 'O mapa aparece aqui depois de gerado.',
+  /** The button that rules the grid over the map, or takes it off. The PNG follows it. */
+  gridToggle: 'Grid',
+  zoomIn: 'Aumentar zoom',
+  zoomOut: 'Diminuir zoom',
+
   // --- The interpreter picker, and the local model's own progress -----------
   //
   // These lived in a `LOCAL_TEXT` of their own in `mount.ts`, with a note

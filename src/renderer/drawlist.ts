@@ -286,6 +286,21 @@ export function doorCommand(door: Door): DoorCommand {
 }
 
 /**
+ * How a scene is drawn, as opposed to what is in it.
+ *
+ * `grid` is the only one, and it is a choice rather than a property of the
+ * scene: the rule is an alignment aid laid over the finished image. A virtual
+ * tabletop such as Roll20 draws its own grid on top of whatever it is given, so
+ * a map exported with the rule baked in shows every line twice. Off, the image
+ * is still exactly `size` times `PIXELS_PER_CELL`, so it still lands on the
+ * tabletop's grid; it only stops drawing one of its own.
+ */
+export type DrawOptions = {
+  /** Rule the grid over the image. On unless asked otherwise. */
+  grid?: boolean;
+};
+
+/**
  * Turns a scene into the list of commands that draws it.
  *
  * @throws {RangeError} if the plan size is not positive whole cells, if
@@ -294,7 +309,7 @@ export function doorCommand(door: Door): DoorCommand {
  *                      generator bugs that would otherwise render as a
  *                      plausible-looking but wrong image.
  */
-export function buildDrawList(scene: Scene): DrawList {
+export function buildDrawList(scene: Scene, options: DrawOptions = {}): DrawList {
   const planSize = scene.floorplan.size;
   const size = sizeToPixels(planSize);
   assertTotalGrid(scene.tiles, planSize);
@@ -353,12 +368,14 @@ export function buildDrawList(scene: Scene): DrawList {
 
   // 5. The grid, over everything: it is an alignment aid for the tabletop,
   //    not part of the scene.
-  commands.push({
-    kind: 'grid',
-    lines: gridLines(size, PIXELS_PER_CELL),
-    color: GRID_LINE_COLOR,
-    lineWidth: GRID_LINE_WIDTH,
-  });
+  if (options.grid !== false) {
+    commands.push({
+      kind: 'grid',
+      lines: gridLines(size, PIXELS_PER_CELL),
+      color: GRID_LINE_COLOR,
+      lineWidth: GRID_LINE_WIDTH,
+    });
+  }
 
   return { size, commands };
 }

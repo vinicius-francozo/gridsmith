@@ -402,6 +402,24 @@ describe('the grid lines', () => {
     const list = buildDrawList(sceneFrom(['...', '...']));
     expect(list.commands.filter((c) => c.kind === 'grid')).toHaveLength(1);
   });
+
+  it('can be left off, for a tabletop that rules its own', () => {
+    // Roll20 draws its grid over whatever image it is given, so a map with the
+    // rule baked in shows every line twice there.
+    const scene = sceneFrom(['...', '...'], [prop({ cell: { x: 0, y: 0 } })]);
+    const ruled = buildDrawList(scene);
+    const bare = buildDrawList(scene, { grid: false });
+
+    expect(bare.commands.filter((c) => c.kind === 'grid')).toEqual([]);
+    expect(bare.commands).toEqual(ruled.commands.filter((c) => c.kind !== 'grid'));
+  });
+
+  it('keeps the canvas the same size with or without the rule', () => {
+    // The size is what lands the image on the tabletop's grid; the rule is only
+    // a drawing of it.
+    const scene = sceneFrom(['...', '...']);
+    expect(buildDrawList(scene, { grid: false }).size).toEqual(buildDrawList(scene).size);
+  });
 });
 
 describe('gridLines', () => {
