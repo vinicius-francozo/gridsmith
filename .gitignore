@@ -6,3 +6,7 @@ dist/
 # Third-party asset libraries are never versioned: the generator reads a
 # library you supply locally. See README.md.
 assets/library/
+
+# Credentials. The Jev harness reads its key from here; it must never be committed.
+.env
+.env.*
