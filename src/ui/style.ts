@@ -3,8 +3,7 @@
  *
  * One string, put into a `<style>` by `mountApp`, so the page is still the one
  * module that touches the document. The tokens at the top are the design
- * system's, and `~/projetos/DESIGN-SYSTEM.md` is where they are explained;
- * the values here are the source of truth and that document follows them.
+ * system's; where a written guide and these values disagree, these win.
  *
  * Every picture this refers to — the stone, the floor, the icons — arrives as
  * a `--gs-art-*` custom property that `scene.ts` sets once the pixels are
