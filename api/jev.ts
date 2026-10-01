@@ -264,10 +264,25 @@ export function fetchJev(request: Request): Promise<Response> {
 }
 
 /**
- * The Cloudflare Worker entry, for a Worker module to re-export as its own
- * default. `env` and `ctx` arrive nowhere near the options parameter.
+ * The entry both hosts call: an object whose `fetch` takes a `Request`.
+ *
+ * It is the shape Vercel requires of a file in `/api` — the `fetch` Web
+ * Standard export (vercel.com/docs/functions/runtimes/node-js) — and the shape
+ * a Cloudflare Worker module exports as its default, so one object serves both.
+ *
+ * **It is not a bare function, and that is the point.** On Vercel's Node.js
+ * runtime a default export that is itself a function is the legacy
+ * `(request, response)` handler: it is called with Node's `IncomingMessage`
+ * and `ServerResponse`, so `fetchJev` would be handed an object with no
+ * `headers.get` and the relay would fail on its very first call. That is what
+ * this file exported until the first deploy was prepared, and nothing local
+ * could have shown it — `vite.config.ts` calls the handler itself, and the
+ * tests called the export with a `Request`. `test/api/jev.test.ts` now holds
+ * the shape rather than only the behaviour.
+ *
+ * `env` and `ctx` on Cloudflare, and whatever Vercel passes after the request,
+ * arrive nowhere near the options parameter — see `fetchJev`.
  */
 export const worker = { fetch: fetchJev };
 
-/** The Vercel entry: the default export, invoked with a `Request`. */
-export default fetchJev;
+export default worker;

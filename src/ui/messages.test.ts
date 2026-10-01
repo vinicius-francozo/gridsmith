@@ -801,7 +801,7 @@ describe('what the page promises about where the key goes', () => {
 
   it('says the Jev request does pass through one, and that it keeps nothing', () => {
     // The one sentence in this file that promises another file's behaviour.
-    // What makes it true is `api/jev.test.ts` — "writes nothing to the console
+    // What makes it true is `test/api/jev.test.ts` — "writes nothing to the console
     // at all, on any path", which spies every console method over every path,
     // and a second test asking separately whether the key rode along with any
     // log added on purpose. This pins the words; that pair pins the fact. If

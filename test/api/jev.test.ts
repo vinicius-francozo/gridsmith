@@ -7,7 +7,7 @@ import jevEntry, {
   TYPESAFE_ENDPOINT,
   UPSTREAM_TIMEOUT_MS,
   worker,
-} from './jev';
+} from '../../api/jev';
 
 /**
  * No test here reaches the network. Every call goes through a `fetchImpl` the
@@ -560,7 +560,7 @@ describe('the entry a host calls', () => {
       timeoutMs: 1,
     };
 
-    for (const entry of [jevEntry, worker.fetch]) {
+    for (const entry of [jevEntry.fetch, worker.fetch]) {
       const asked: string[] = [];
       vi.spyOn(globalThis, 'fetch').mockImplementation(((url: string) => {
         asked.push(String(url));
@@ -585,6 +585,21 @@ describe('the entry a host calls', () => {
     await handleJevRequest(pageRequest(), { fetchImpl, upstream: 'https://elsewhere.example/v1' });
 
     expect(calls[0].url).toBe('https://elsewhere.example/v1');
+  });
+});
+
+describe('the shape a host calls', () => {
+  it('hands Vercel an object with fetch, never a bare function', () => {
+    // On Vercel's Node.js runtime a default export that is itself a function
+    // is the legacy `(request, response)` handler, called with Node's own
+    // objects instead of a `Request`. Every behaviour test above calls the
+    // handler with a `Request` directly, so all of them stay green under that
+    // export while the deployed relay fails on its first call — which is what
+    // shipped here until the first deploy was prepared. This is the one
+    // assertion that can fail for the real reason.
+    expect(typeof jevEntry).toBe('object');
+    expect(typeof jevEntry.fetch).toBe('function');
+    expect(jevEntry).toBe(worker);
   });
 });
 

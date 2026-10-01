@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
-import handleJevRequest, { relayUnavailable } from './api/jev.ts';
+import { fetchJev, relayUnavailable } from './api/jev.ts';
 
 /**
  * `/api/jev` during `npm run dev`.
@@ -57,7 +57,7 @@ async function relay(req: IncomingMessage, res: ServerResponse): Promise<void> {
     for await (const chunk of req) chunks.push(chunk as Buffer);
     const carriesBody = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
 
-    const response = await handleJevRequest(
+    const response = await fetchJev(
       new Request('http://localhost/api/jev', {
         method,
         headers,
@@ -108,7 +108,7 @@ export default defineConfig({
     target: 'es2022',
   },
   test: {
-    include: ['src/**/*.test.ts', 'api/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
     environment: 'node',
   },
 });

@@ -616,7 +616,7 @@ export const UI_TEXT = {
   //
   // **"não guarda nem registra nada" is this file promising another file's
   // behaviour**, and the only sentence here that does. What holds it up is
-  // `api/jev.test.ts`, "writes nothing to the console at all, on any path",
+  // `test/api/jev.test.ts`, "writes nothing to the console at all, on any path",
   // which spies every console method across every path rather than grepping the
   // source — plus a second test that asks separately whether the key went with
   // any log somebody adds deliberately. If that pair ever goes, this sentence
