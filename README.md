@@ -2,7 +2,7 @@
 
 Describe a place in plain language and get a top-down battlemap back, aligned to the grid, ready to drop into a virtual tabletop.
 
-**Live demo:** `https://<your-deployment>.vercel.app` <!-- TODO: replace with the Vercel URL -->
+**Live demo:** [gridsmith-mu.vercel.app](https://gridsmith-mu.vercel.app/)
 
 ![Gridsmith generating a tavern common room](docs/screenshots/desktop-tavern.png)
 
@@ -174,7 +174,7 @@ The project is set up for Vercel (`vercel.json`). Import the repository and depl
 - `api/jev.ts` becomes a serverless function;
 - no environment variables are needed, because every key comes from the person using the page.
 
-After the first deploy, check that a map can be generated with Jev on the real domain.
+After a deploy, `OPTIONS /api/jev` should answer 204 with `access-control-allow-origin: *`, and a `POST` without a key should answer 401 with a JSON error. Then generate a map with Jev on the real domain.
 
 ## Keys and privacy
 
