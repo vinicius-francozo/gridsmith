@@ -603,11 +603,7 @@ export const UI_TEXT = {
   title: 'Gridsmith',
   tagline: 'Describe the place and get a battlemap aligned to the grid.',
   descriptionLabel: 'Describe the place',
-  /**
-   * An example in Portuguese, on purpose: it is the language the interpreters
-   * were tuned on, and the example is the first hint of what to write.
-   */
-  descriptionPlaceholder: 'e.g. um salão de taverna, luz baixa, móveis derrubados',
+  descriptionPlaceholder: 'e.g. a tavern common room, dim light, overturned furniture',
   apiKeyLabel: 'Anthropic API key',
   apiKeyPlaceholder: 'sk-ant-...',
   apiKeyNote:
