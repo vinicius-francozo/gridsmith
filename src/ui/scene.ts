@@ -130,12 +130,16 @@ function build(
     sprite('lantern', 'gs-lamp gs-wall-shadow'),
   );
 
+  // The beam is a child of the window, so that it starts at the glass at any
+  // size: placed beside it, the two were sized in different units and drifted.
+  const moonlitWindow = element('span', 'gs-prop gs-window');
+  moonlitWindow.append(sprite('window', 'gs-wall-shadow'), element('i', 'gs-moonbeam'));
+
   const hallVine = (length: number, seed: number, where: Readonly<Record<string, string>>): HTMLCanvasElement =>
     put([vine(length, seed)], 'gs-vine gs-soft-shadow', { style: { '--len': String(length), ...where } });
 
   at.hall.prepend(
-    sprite('window', 'gs-prop gs-window gs-wall-shadow'),
-    element('i', 'gs-moonbeam'),
+    moonlitWindow,
     sprite('bat', 'gs-prop gs-bat gs-soft-shadow'),
     sprite('shackle', 'gs-prop gs-ring l gs-wall-shadow'),
     sprite('shackle', 'gs-prop gs-ring r gs-wall-shadow'),
