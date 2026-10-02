@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Top-down RPG battlemap generator: plain-language description in, grid-aligned map image out.",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

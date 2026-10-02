@@ -11,9 +11,8 @@
  * They extend `InterpreterError` rather than `Error` so that everything already
  * written against that base keeps working — `describeFailure` in
  * `src/ui/messages.ts` ends with an `instanceof InterpreterError` arm, so a
- * failure from this front reaches the screen as a sentence in Portuguese with
- * the technical line under it, instead of as "algo deu errado ao montar o
- * mapa". It reaches it through the *catch-all* arm, though, which is a real
+ * failure from this front reaches the screen as a sentence with the technical
+ * line under it, instead of as "something went wrong while building the map". It reaches it through the *catch-all* arm, though, which is a real
  * shortfall and is reported rather than papered over: `messages.ts` belongs to
  * another front and cannot be given a phrase for these two from here.
  */

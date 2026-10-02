@@ -117,39 +117,38 @@ describe('an entry becomes a sentence', () => {
 
   it('ends on the quoted request, so a fragment in another language still reads', () => {
     // `unsupported_request` carries the game master's own words, in whatever
-    // language they spoke. No Portuguese sentence can be built *around* a
+    // language they spoke. No sentence can be built *around* a
     // fragment nobody has seen, so the fragment goes last and agrees with
     // nothing after it.
     for (const fragment of ['um segundo andar', 'a trapdoor behind the bar', 'ein Brunnen']) {
       expect(describeEntry(entry(UNSUPPORTED_REQUEST, fragment))).toBe(
-        `Pedido que este mapa não tem como representar: “${fragment}”.`,
+        `Asked for, but this map has no way to show it: “${fragment}”.`,
       );
     }
   });
 
-  it('shows a feature the place cannot hold in Portuguese', () => {
-    expect(describeEntry(entry(FEATURE_NOT_IN_PLACE, 'bar'))).toContain('balcão');
-    expect(describeEntry(entry(FEATURE_OVER_BUDGET, 'hearth'))).toContain('lareira');
+  it('shows a feature the place cannot hold as a person would say it', () => {
+    expect(describeEntry(entry(FEATURE_NOT_IN_PLACE, 'bar'))).toContain('bar counter');
+    expect(describeEntry(entry(FEATURE_OVER_BUDGET, 'hearth'))).toContain('fireplace');
   });
 
-  it('says the right Portuguese word for every one of the ten features', () => {
+  it('says the right word for every one of the ten features', () => {
     // The table is the entire reason this layer reports a code rather than a
     // sentence, so it is the table that has to be pinned, word by word.
-    // `Record<Feature, string>` refuses a missing word and "is not the English
-    // one" refuses an untranslated one, but between them `stairs: 'lareira'`
-    // passes both: every feature named, nothing in English, and the person
-    // told the hearth was left out when it was the stairs.
+    // `Record<Feature, string>` refuses a missing word, but `stairs: 'fireplace'`
+    // passes it: every feature named, and the person told the hearth was left
+    // out when it was the stairs.
     const words: Readonly<Record<Feature, string>> = {
-      bar: 'balcão',
-      hearth: 'lareira',
-      stairs: 'escada',
-      pillars: 'pilares',
-      alcove: 'alcova',
-      shelving: 'prateleiras',
-      bunks: 'beliches',
-      bed: 'cama',
-      weapons: 'armas',
-      tomb: 'túmulo',
+      bar: 'bar counter',
+      hearth: 'fireplace',
+      stairs: 'stairs',
+      pillars: 'pillars',
+      alcove: 'alcove',
+      shelving: 'shelves',
+      bunks: 'bunk beds',
+      bed: 'bed',
+      weapons: 'weapons',
+      tomb: 'tomb',
     };
 
     for (const feature of FEATURES) {
@@ -159,7 +158,6 @@ describe('an entry becomes a sentence', () => {
       expect(describeEntry(entry(FEATURE_OVER_BUDGET, feature))).toContain(
         `“${words[feature]}”`,
       );
-      expect(describeEntry(entry(FEATURE_NOT_IN_PLACE, feature))).not.toContain(feature);
     }
   });
 
@@ -172,37 +170,37 @@ describe('an entry becomes a sentence', () => {
     );
   });
 
-  it('says the right Portuguese word for every kind of place there is', () => {
-    // Pinned one at a time for the same reason the seven features above are.
+  it('says the right name for every kind of place there is', () => {
+    // Pinned one at a time for the same reason the features above are.
     // `Record<Place, string>` refuses a missing name and "is not the
-    // identifier" refuses an untranslated one, but between them
-    // `tavern_room: 'Depósito de taverna'` passes both: every kind named,
-    // nothing in English, and the person told the generator built a storeroom
+    // identifier" refuses a raw one, but between them
+    // `tavern_room: 'Tavern storeroom'` passes both: every kind named, none of
+    // them an identifier, and the person told the generator built a storeroom
     // when it built a bedroom.
     const names: Readonly<Record<string, string>> = {
-      tavern_hall: 'Salão de taverna',
-      tavern_room: 'Quarto de taverna',
-      tavern_storeroom: 'Depósito de taverna',
-      dungeon_hall: 'Salão da masmorra',
-      dungeon_room: 'Cela da masmorra',
-      dungeon_storeroom: 'Arsenal da masmorra',
-      dungeon_crypt: 'Cripta da masmorra',
-      forge_smithy: 'Forja da ferraria',
-      forge_room: 'Loja da ferraria',
-      temple_hall: 'Nave do templo',
-      temple_room: 'Sacristia do templo',
-      library_reading: 'Sala de leitura da biblioteca',
-      library_archive: 'Arquivo da biblioteca',
-      tower_laboratory: 'Laboratório da torre',
-      tower_observatory: 'Observatório da torre',
-      mine_room: 'Galeria da mina',
-      mine_hoist: 'Casa de guincho da mina',
-      ship_room: 'Porão do navio',
-      ship_cabin: 'Camarote do navio',
-      apothecary_distillery: 'Destilaria da botica',
-      apothecary_hall: 'Estufa da botica',
-      den_fencing: 'Receptação do antro',
-      den_tunnel: 'Túnel do antro',
+      tavern_hall: 'Tavern common room',
+      tavern_room: 'Tavern guest room',
+      tavern_storeroom: 'Tavern storeroom',
+      dungeon_hall: 'Dungeon guard hall',
+      dungeon_room: 'Dungeon cell',
+      dungeon_storeroom: 'Dungeon armoury',
+      dungeon_crypt: 'Dungeon crypt',
+      forge_smithy: 'Smithy forge',
+      forge_room: 'Smithy shopfront',
+      temple_hall: 'Temple nave',
+      temple_room: 'Temple sacristy',
+      library_reading: 'Library reading room',
+      library_archive: 'Library archive',
+      tower_laboratory: 'Wizard’s tower laboratory',
+      tower_observatory: 'Wizard’s tower observatory',
+      mine_room: 'Mine gallery',
+      mine_hoist: 'Mine winch house',
+      ship_room: 'Ship’s cargo hold',
+      ship_cabin: 'Ship’s captain’s cabin',
+      apothecary_distillery: 'Apothecary distillery',
+      apothecary_hall: 'Apothecary herb room',
+      den_fencing: 'Thieves’ den fence room',
+      den_tunnel: 'Thieves’ den escape tunnel',
     };
 
     for (const place of PLACE_TYPES) {
@@ -230,7 +228,7 @@ describe('an entry becomes a sentence', () => {
     // and `unresolved` is written by a language model, so
     // `place_not_in_vocabulary:constructor` is an entry that can actually
     // arrive. A plain lookup would answer the prototype member, and the line
-    // above the map would read `Desenhei o mais próximo: “function Object() {
+    // above the map would read `This is the nearest one: “function Object() {
     // [native code] }”`.
     //
     // The two-part keys are not decoration. `PLACE_NAMES` is nested now, so a
@@ -248,8 +246,8 @@ describe('an entry becomes a sentence', () => {
     ];
     for (const key of keys) {
       expect(describeEntry(entry(PLACE_NOT_IN_VOCABULARY, key))).toBe(
-        'A descrição não parece ser nenhum dos lugares que o gerador conhece. ' +
-          `Desenhei o mais próximo: “${key}”.`,
+        'The description does not look like any of the places the generator knows. ' +
+          `This is the nearest one: “${key}”.`,
       );
     }
   });
@@ -260,11 +258,11 @@ describe('an entry becomes a sentence', () => {
     // a model's text and `place_not_in_vocabulary:` with nothing after the
     // colon normalises to the code alone.
     expect(describeEntry(entry(PLACE_NOT_IN_VOCABULARY, 'tavern_hall'))).toBe(
-      'A descrição não parece ser nenhum dos lugares que o gerador conhece. ' +
-        'Desenhei o mais próximo: “Salão de taverna”.',
+      'The description does not look like any of the places the generator knows. ' +
+        'This is the nearest one: “Tavern common room”.',
     );
     expect(describeEntry(PLACE_NOT_IN_VOCABULARY)).toBe(
-      'A descrição não parece ser nenhum dos lugares que o gerador conhece; o mapa é o mais próximo deles.',
+      'The description does not look like any of the places the generator knows; the map is the nearest of them.',
     );
   });
 
@@ -284,7 +282,7 @@ describe('an entry becomes a sentence', () => {
     // `JSON.parse`, so it is reachable from the outside.
     for (const key of ['toString', 'constructor', 'valueOf', '__proto__', 'hasOwnProperty']) {
       expect(describeEntry(`${key}:alguma coisa`)).toBe(
-        `Aviso que esta tela não sabe explicar: “${key}:alguma coisa”.`,
+        `A notice this page does not know how to explain: “${key}:alguma coisa”.`,
       );
     }
   });
@@ -308,28 +306,28 @@ describe('an entry becomes a sentence', () => {
     expect(outOfRange).toContain('2.5');
   });
 
-  it('never calls the furniture count tralha, which is the other number', () => {
+  it('never calls the furniture count clutter, which is the other number', () => {
     // The two are separate fields and the person has to be able to tell which
     // of them the map got wrong. One shared wording would leave them guessing.
     for (const code of [FURNISHING_NOT_A_NUMBER, FURNISHING_OUT_OF_RANGE] as const) {
-      expect(describeEntry(entry(code, '2.5'))).toContain('mobília');
-      expect(describeEntry(entry(code, '2.5'))).not.toContain('tralha');
+      expect(describeEntry(entry(code, '2.5'))).toContain('furniture');
+      expect(describeEntry(entry(code, '2.5'))).not.toContain('clutter');
     }
     for (const code of [CLUTTER_NOT_A_NUMBER, CLUTTER_OUT_OF_RANGE] as const) {
-      expect(describeEntry(entry(code, '2.5'))).toContain('tralha');
-      expect(describeEntry(entry(code, '2.5'))).not.toContain('mobília');
+      expect(describeEntry(entry(code, '2.5'))).toContain('clutter');
+      expect(describeEntry(entry(code, '2.5'))).not.toContain('furniture');
     }
   });
 
   it('says a refused feature was refused, in the vocabulary word the person used', () => {
-    const sentence = describeEntry(entry(FEATURE_ALSO_EXCLUDED, 'stairs'));
+    const sentence = describeEntry(entry(FEATURE_ALSO_EXCLUDED, 'hearth'));
 
-    expect(sentence).toContain('escada');
-    expect(sentence).not.toContain('stairs');
+    expect(sentence).toContain('fireplace');
+    expect(sentence).not.toContain('hearth');
     // Distinct from the other three ways to lose a feature: each of the four
     // asks something different of the person reading it.
     for (const other of [FEATURE_NOT_IN_PLACE, FEATURE_OVER_BUDGET, FEATURE_NOT_IN_VOCABULARY] as const) {
-      expect(sentence).not.toBe(describeEntry(entry(other, 'stairs')));
+      expect(sentence).not.toBe(describeEntry(entry(other, 'hearth')));
     }
   });
 });
@@ -350,8 +348,8 @@ describe('a failure becomes something to do about it', () => {
   });
 
   it('names the missing key as missing and the rejected key as rejected', () => {
-    expect(describeFailure(new MissingApiKeyError()).title).toContain('Cole a sua chave');
-    expect(describeFailure(new InvalidApiKeyError()).title).toContain('recusada');
+    expect(describeFailure(new MissingApiKeyError()).title).toContain('Paste your Anthropic key');
+    expect(describeFailure(new InvalidApiKeyError()).title).toContain('turned the key down');
   });
 
   it('separates a rate limit from any other refusal', () => {
@@ -359,10 +357,10 @@ describe('a failure becomes something to do about it', () => {
     const refused = describeFailure(new UpstreamError(400, 'invalid_request_error'));
 
     expect(limited.title).not.toBe(refused.title);
-    expect(limited.title).toContain('excesso de chamadas');
+    expect(limited.title).toContain('too many calls');
   });
 
-  it('explains an unplayable scene in Portuguese, not in issue kinds', () => {
+  it('explains an unplayable scene in words, not in issue kinds', () => {
     const failure = describeFailure(
       new SceneValidationError([
         { kind: 'no_door', message: 'the plan has no door' },
@@ -370,8 +368,8 @@ describe('a failure becomes something to do about it', () => {
       ]),
     );
 
-    expect(failure.title).toContain('nenhuma porta');
-    expect(failure.title).toContain('bloqueada');
+    expect(failure.title).toContain('no door');
+    expect(failure.title).toContain('was blocked');
     expect(failure.title).not.toContain('no_door');
   });
 
@@ -383,7 +381,7 @@ describe('a failure becomes something to do about it', () => {
       ]),
     );
 
-    expect(failure.title.match(/bloqueada/g)).toHaveLength(1);
+    expect(failure.title.match(/was blocked/g)).toHaveLength(1);
   });
 
   it('falls back on anything at all rather than showing nothing', () => {
@@ -483,10 +481,10 @@ describe('the line under a finished map', () => {
     conflicts: [],
   };
 
-  it('names the place in Portuguese and carries the seed', () => {
+  it('names the place in words and carries the seed', () => {
     const line = describeResult(params);
 
-    expect(line).toContain('Depósito de taverna');
+    expect(line).toContain('Tavern storeroom');
     expect(line).toContain('4242');
     expect(line).toContain('12×8');
     expect(line).not.toContain('tavern_storeroom');
@@ -521,7 +519,7 @@ describe('the line under a finished map', () => {
 
   it('refuses a place it has no name for, rather than writing "undefined" under the map', () => {
     // The guard the exact `Record` used to make unnecessary. Without it the
-    // line reads "undefined, 12×8 casas, semente 4242" — a place name a person
+    // line reads "undefined, 12×8 squares, seed 4242" — a place name a person
     // cannot tell from a rendering fault, under a map that is otherwise right.
     const place = { building: 'tavern', room: 'crypt' } as Place;
 
@@ -569,23 +567,23 @@ describe('every interpreter failure has a sentence of its own', () => {
 
   it('leaves none of them on the catch-all', () => {
     // The catch-all is right for a type added later and wrong for one that
-    // exists: "a interpretação da descrição falhou" is true of all eleven and
+    // exists: "reading the description failed" is true of all eleven and
     // tells nobody which of them happened, or what to do about it.
     for (const failure of EVERY_FAILURE) {
       expect(describeFailure(failure).title).not.toBe(generic);
     }
-    expect(generic).toBe('A interpretação da descrição falhou.');
+    expect(generic).toBe('Reading the description failed.');
   });
 
   it('names the engine in each of the three unreadable-answer sentences', () => {
     // Three engines can answer with something the schema rejects, and the three
     // sentences are otherwise the same words. Which engine is named is the only
     // thing that separates them, so it is the part that gets pinned.
-    expect(describeFailure(new UnusableResponseError('x')).title).toContain('O modelo respondeu');
+    expect(describeFailure(new UnusableResponseError('x')).title).toContain('The model answered');
     expect(describeFailure(new ClassificationFailedError('x')).title).toContain(
-      'O modelo local respondeu',
+      'The local model answered',
     );
-    expect(describeFailure(new JevUnusableAnswerError('x')).title).toContain('O Jev respondeu');
+    expect(describeFailure(new JevUnusableAnswerError('x')).title).toContain('Jev answered');
   });
 
   it('tells a Jev key that was refused from a Jev that never answered', () => {
@@ -593,11 +591,11 @@ describe('every interpreter failure has a sentence of its own', () => {
     // by pasting another key and the other by waiting, and a single sentence
     // sends half the people to do the wrong thing.
     expect(describeFailure(new JevRejectedKeyError('HTTP 401')).title).toContain(
-      'recusada pelo Jev',
+      'Jev turned the key down',
     );
     expect(describeFailure(new JevRejectedKeyError('HTTP 401')).title).toContain('TypeSafe');
     expect(describeFailure(new JevUnavailableError('502')).title).toContain(
-      'servidor desta página',
+      'a server of this page',
     );
   });
 
@@ -636,25 +634,25 @@ describe('what the status line says while the local model is arriving', () => {
     return describeModelProgress({ kind: 'downloading', file, ratio });
   }
 
-  it('says a different thing at each of the four stages, in Portuguese', () => {
+  it('says a different thing at each of the four stages', () => {
     // Pinned as literals rather than against `UI_TEXT`, the way the feature and
     // place tables above are. The type checks that the field exists; only this
     // checks that the right one was chosen — swapping `ready` for
     // `modelPreparing` satisfies `tsc` and every other test in the project.
-    expect(describeModelProgress({ kind: 'starting' })).toBe('Preparando o modelo local…');
-    expect(downloading('', undefined)).toBe('Baixando o modelo local…');
+    expect(describeModelProgress({ kind: 'starting' })).toBe('Getting the local model ready…');
+    expect(downloading('', undefined)).toBe('Downloading the local model…');
     expect(describeModelProgress({ kind: 'preparing' })).toBe(
-      'Carregando o modelo local na memória…',
+      'Loading the local model into memory…',
     );
     expect(describeModelProgress({ kind: 'ready' })).toBe(
-      'Modelo local pronto, rodando no processador deste navegador. Interpretando a descrição…',
+      'Local model ready, running on this browser’s processor. Reading the description…',
     );
   });
 
   it('does not measure the wait against an option nobody on this page can have', () => {
-    // The sentence used to end "rodando sem GPU — vai demorar mais". The WebGPU
+    // The sentence used to end "running without a GPU — it will take longer". The WebGPU
     // path was removed with the q8 weights — `MODEL_DEVICE` is fixed to `wasm`
-    // and the reasoning is written out there — so "mais" compared the only
+    // and the reasoning is written out there — so "longer" compared the only
     // thing anybody gets against something nobody can get, and left the reader
     // hunting for the setting that cost them the faster one. There is none.
     //
@@ -663,9 +661,9 @@ describe('what the status line says while the local model is arriving', () => {
     const ready = describeModelProgress({ kind: 'ready' });
 
     expect(ready).not.toContain('GPU');
-    // A whole word: a substring test would fall over the next sentence that
-    // happens to contain "demais" or "jamais".
-    expect(ready).not.toMatch(/\bmais\b/);
+    // Whole words: a substring test would trip over an unrelated word that
+    // merely contains one of these.
+    expect(ready).not.toMatch(/\b(longer|slower|faster)\b/);
     expect(ready).not.toMatch(/\d/);
   });
 
@@ -673,7 +671,7 @@ describe('what the status line says while the local model is arriving', () => {
     // The defect this replaces, with the real sizes: `ratio` is per file, and
     // four files arrive. Rendered as a fraction of the whole download it reads
     // 0 100 0 100 0 1 … 99 100 0 1 … 99 100 — the two small configs finish
-    // inside the opening milliseconds, so "Baixando o modelo local… 100%" is on
+    // inside the opening milliseconds, so "Downloading the local model… 100%" is on
     // screen twice before the wait anybody is having has begun.
     //
     // The number still falls back to zero three times, because it is still a
@@ -692,12 +690,12 @@ describe('what the status line says while the local model is arriving', () => {
     ];
 
     expect(written).toEqual([
-      'Baixando o modelo local… config.json, 100%',
-      'Baixando o modelo local… tokenizer_config.json, 100%',
-      'Baixando o modelo local… tokenizer.json, 50%',
-      'Baixando o modelo local… tokenizer.json, 100%',
-      'Baixando o modelo local… model_quantized.onnx, 50%',
-      'Baixando o modelo local… model_quantized.onnx, 100%',
+      'Downloading the local model… config.json, 100%',
+      'Downloading the local model… tokenizer_config.json, 100%',
+      'Downloading the local model… tokenizer.json, 50%',
+      'Downloading the local model… tokenizer.json, 100%',
+      'Downloading the local model… model_quantized.onnx, 50%',
+      'Downloading the local model… model_quantized.onnx, 100%',
     ]);
   });
 
@@ -709,15 +707,15 @@ describe('what the status line says while the local model is arriving', () => {
   });
 
   it('rounds the percentage rather than printing the fraction', () => {
-    expect(downloading('a.bin', 0.426)).toBe('Baixando o modelo local… a.bin, 43%');
-    expect(downloading('a.bin', 0)).toBe('Baixando o modelo local… a.bin, 0%');
-    expect(downloading('a.bin', 1)).toBe('Baixando o modelo local… a.bin, 100%');
+    expect(downloading('a.bin', 0.426)).toBe('Downloading the local model… a.bin, 43%');
+    expect(downloading('a.bin', 0)).toBe('Downloading the local model… a.bin, 0%');
+    expect(downloading('a.bin', 1)).toBe('Downloading the local model… a.bin, 100%');
   });
 
   it('says it is downloading with no percentage when the server sent no length', () => {
     // `readRawProgress` gives `undefined` rather than inventing a fraction, and
     // this is the other half of that decision.
-    expect(downloading('a.bin', undefined)).toBe('Baixando o modelo local… a.bin');
+    expect(downloading('a.bin', undefined)).toBe('Downloading the local model… a.bin');
     expect(downloading('a.bin', undefined)).not.toContain('%');
   });
 
@@ -725,8 +723,8 @@ describe('what the status line says while the local model is arriving', () => {
     // `readRawProgress` puts `''` here when the library sent no `file`, and a
     // sentence with an empty name in the middle of it reads worse than one
     // without a name at all.
-    expect(downloading('', undefined)).toBe('Baixando o modelo local…');
-    expect(downloading('', 0.42)).toBe('Baixando o modelo local… 42%');
+    expect(downloading('', undefined)).toBe('Downloading the local model…');
+    expect(downloading('', 0.42)).toBe('Downloading the local model… 42%');
   });
 
   it('refuses a stage it has never heard of instead of showing nothing', () => {
@@ -785,18 +783,18 @@ describe('what the page promises about where the key goes', () => {
     // fixed: promising less persistence than there is. A person told the key is
     // not kept has no reason to clear it off a machine they share, and it is
     // sitting in `localStorage`.
-    expect(UI_TEXT.apiKeyNote).toMatch(/A chave fica guardada só neste navegador/);
-    expect(UI_TEXT.apiKeyNote).not.toMatch(/não fica guardada/);
+    expect(UI_TEXT.apiKeyNote).toMatch(/The key is kept only in this browser/);
+    expect(UI_TEXT.apiKeyNote).not.toMatch(/not kept/);
   });
 
   it('promises the Jev key is not kept, because it is not', () => {
-    expect(UI_TEXT.apiKeyNoteJev).toMatch(/não fica guardada no navegador/);
-    expect(UI_TEXT.apiKeyNoteJev).not.toMatch(/fica guardada só neste navegador/);
+    expect(UI_TEXT.apiKeyNoteJev).toMatch(/it is not kept in the browser/);
+    expect(UI_TEXT.apiKeyNoteJev).not.toMatch(/kept only in this browser/);
   });
 
   it('says the Claude request reaches the API without a server in between', () => {
-    expect(UI_TEXT.apiKeyNote).toMatch(/vai direto para a API/);
-    expect(UI_TEXT.apiKeyNote).toMatch(/Não passa por servidor nenhum/);
+    expect(UI_TEXT.apiKeyNote).toMatch(/goes straight to the API/);
+    expect(UI_TEXT.apiKeyNote).toMatch(/It passes through no server/);
   });
 
   it('says the Jev request does pass through one, and that it keeps nothing', () => {
@@ -807,31 +805,31 @@ describe('what the page promises about where the key goes', () => {
     // log added on purpose. This pins the words; that pair pins the fact. If
     // the proxy ever gains a log line, that pair is what fails, and this
     // sentence has to come out with it.
-    expect(UI_TEXT.apiKeyNoteJev).toMatch(/passa por um servidor desta página/);
-    expect(UI_TEXT.apiKeyNoteJev).toMatch(/não guarda nem registra nada/);
-    expect(UI_TEXT.apiKeyNoteJev).not.toMatch(/mantém um registro/);
+    expect(UI_TEXT.apiKeyNoteJev).toMatch(/passes through a server of this page/);
+    expect(UI_TEXT.apiKeyNoteJev).toMatch(/keeps and logs nothing/);
+    expect(UI_TEXT.apiKeyNoteJev).not.toMatch(/keeps a log/);
   });
 
   it('promises neither key reaches the address bar', () => {
     // True by construction — no form is built and nothing writes to `location`,
     // which `mount.test.ts` holds — but the sentence is what the person acts
     // on, so the sentence is pinned too.
-    // The negative needs the lookbehind: "não aparece no endereço da página"
-    // contains "aparece no endereço da página", so a plain `not.toContain`
+    // The negative needs the lookbehind: "never appears in the page’s address"
+    // contains "appears in the page’s address", so a plain `not.toContain`
     // fails on the correct sentence — which is the same substring trap these
     // tests exist to catch, and it caught this one first.
     for (const note of [UI_TEXT.apiKeyNote, UI_TEXT.apiKeyNoteJev]) {
-      expect(note).toMatch(/não aparece no endereço da página/);
-      expect(note).not.toMatch(/(?<!não )aparece no endereço da página/);
+      expect(note).toMatch(/never appears in the page’s address/);
+      expect(note).not.toMatch(/(?<!never )appears in the page’s address/);
     }
   });
 
   it('never tells somebody to do a thing that destroys what the thing needs', () => {
-    // The refusal used to end "ou escolha o Claude". Following that advice
+    // The refusal used to end "or pick Claude". Following that advice
     // fires `refreshEngine`, which empties the box — throwing away the key the
     // advice was about. Safe, and self-defeating. It now says the field will be
     // cleared, which is also the only place the page explains that at all.
-    expect(UI_TEXT.anthropicKeyOnJev).toMatch(/não foi enviada/);
-    expect(UI_TEXT.anthropicKeyOnJev).toMatch(/trocar de motor limpa o campo/);
+    expect(UI_TEXT.anthropicKeyOnJev).toMatch(/it was not sent/);
+    expect(UI_TEXT.anthropicKeyOnJev).toMatch(/switching engines empties the field/);
   });
 });
