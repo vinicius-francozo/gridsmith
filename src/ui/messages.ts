@@ -695,9 +695,16 @@ export const UI_TEXT = {
    *
    * Said here rather than left to the status line, which is where it would be
    * discovered by waiting.
+   *
+   * The comparison at the end is exact on purpose. It used to say that telling
+   * what the map lacks "is exactly what Jev can", and Jev cannot, not in that
+   * sense: its one `out_of_vocabulary` question asks whether the *building* is
+   * outside the catalogue (`jev/read.ts`), so an organ asked for in a tavern
+   * goes unreported. Only the Claude engine is asked to list everything the
+   * vocabulary cannot carry (`schema.ts`, `unresolved`).
    */
   engineLocalNote:
-    'The local model downloads about 310 MB the first time and is kept in the browser. After that it works with no network and no key, and it understands less than the other two: it cannot tell what the description asked for and the map does not have, which is exactly what Jev can.',
+    'The local model downloads about 310 MB the first time and is kept in the browser. After that it works with no network and no key, and it understands less than the other two: it never says what the description asked for that the map does not have. Claude does; Jev only says so when the place itself is not one it knows.',
   modelStarting: 'Getting the local model ready…',
   modelDownloading: 'Downloading the local model…',
   /** With a percentage, when the server said how large the file is. */
