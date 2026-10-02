@@ -25,7 +25,7 @@ Once a description has been read, the seed decides everything else: the same rea
 - [Architecture](#architecture)
 - [Running it locally](#running-it-locally)
 - [Deploying](#deploying)
-- [Keys and privacy](#keys-and-privacy)
+- [Keys, privacy and analytics](#keys-privacy-and-analytics)
 - [Licence](#licence)
 
 ---
@@ -176,12 +176,13 @@ The project is set up for Vercel (`vercel.json`). Import the repository and depl
 
 After a deploy, `OPTIONS /api/jev` should answer 204 with `access-control-allow-origin: *`, and a `POST` without a key should answer 401 with a JSON error. Then generate a map with Jev on the real domain.
 
-## Keys and privacy
+## Keys, privacy and analytics
 
 - **The Anthropic key** is stored in this browser's `localStorage` and sent straight to Anthropic. It never touches a server of this project.
 - **The TypeSafe key** is kept in memory for the visit only and travels through `/api/jev`, which forwards it and keeps and logs nothing. The tests spy on every console method across every path of the relay.
 - Neither key is ever put in the URL: no form is built and nothing writes to `location`. Anything shaped like an Anthropic key is blanked out of error text before it is shown.
 - Switching engines empties the key field, and a key that is plainly Anthropic's is refused before it can be sent to TypeSafe.
+- **The deployed site counts page views** with [Vercel Web Analytics](https://vercel.com/docs/analytics/privacy-policy) (`src/main.ts`). Each view records the URL, the referrer, an approximate location, the browser and the device. It uses no third-party cookies, and a visitor is identified only by a hash of the request that is discarded after 24 hours. The description and the key are never in the URL, so neither reaches it. Running locally reports nothing: in development the package only logs to the console.
 
 ## Licence
 
