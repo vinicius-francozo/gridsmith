@@ -266,12 +266,17 @@ const SCENE = `
 
 .gs-hall .gs-prop { position: absolute; z-index: 0; pointer-events: none; width: auto; }
 .gs-hall .gs-vine { position: absolute; top: 0; z-index: 0; width: auto; height: calc(var(--len, 30) * clamp(1.5px, .3vh, 3px)); }
-.gs-hall .gs-window { left: 6%; top: calc(var(--hall-top) + 2px); height: clamp(64px, 12vh, 112px); }
-.gs-moonbeam { position: absolute; z-index: 4; pointer-events: none; left: 5%;
-  top: calc(var(--hall-top) + clamp(30px, 5vh, 50px));
-  width: clamp(140px, 16vw, 240px); height: clamp(260px, 52vh, 520px);
-  background: linear-gradient(to bottom, rgba(196,214,255,.13), rgba(196,214,255,.04) 60%, transparent);
-  clip-path: polygon(14% 0, 46% 0, 100% 100%, 46% 100%); }
+.gs-hall .gs-window { left: 6%; top: calc(var(--hall-top) + 2px); height: clamp(64px, 12vh, 112px);
+  aspect-ratio: 28 / 36; z-index: auto; }
+.gs-window canvas { width: 100%; height: 100%; }
+/* The light falls from the glass itself, so it is measured in the window's own
+   units: the glass is pixels 4–23 of the sprite's 28 across, and ends at row 30
+   of its 36 (14.3%, 85.7% and 86.1%). The beam is three windows wide, so the
+   glass is the first 23.8% of its top edge. */
+.gs-moonbeam { position: absolute; z-index: 4; pointer-events: none;
+  left: 14.3%; top: 86.1%; width: 300%; height: clamp(220px, 46vh, 460px);
+  background: linear-gradient(to bottom, rgba(196,214,255,.14), rgba(196,214,255,.04) 60%, transparent);
+  clip-path: polygon(0 0, 23.8% 0, 100% 100%, 55% 100%); }
 .gs-hall .gs-bat { left: 13%; top: 0; height: clamp(16px, 2.6vh, 26px); transform-origin: 50% 0;
   animation: gs-sway 4.5s ease-in-out infinite; }
 @keyframes gs-sway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
