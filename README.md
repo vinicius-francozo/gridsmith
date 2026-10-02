@@ -6,9 +6,13 @@ Describe a place in plain language and get a top-down battlemap back, aligned to
 
 ![Gridsmith generating a tavern common room](docs/screenshots/desktop-tavern.png)
 
-You write something like *"a dim tavern common room with a bar counter, a fireplace and a pipe organ"*. A language model reads that into a small, closed set of constraints, and a seeded generator builds the room: walls, floor, doors and furniture, all on whole squares. The page then shows you the map, tells you plainly what it could not do (here, the organ), and lets you download it as a PNG at 70 px per square, which is Roll20's default grid.
+<sub>A real map from the generator; the interpreter's answer was stubbed for the screenshot. See [Screenshots](#screenshots).</sub>
 
-The same description with the same seed gives back the same map, so a map can be shared as two lines of text.
+You write something like *"a dim tavern common room with a bar counter, a fireplace and a pipe organ"*. A language model reads that into a small, closed set of constraints, and a seeded generator builds the room: walls, floor, doors and furniture, all on whole squares. The page shows you the map and lets you download it as a PNG at 70 px per square, which is Roll20's default grid.
+
+The organ is in that sentence on purpose. **Gridsmith has no organ:** it is not in the vocabulary, so it is not drawn, and the page says so under the map instead of leaving it out quietly. Everything it *can* draw is listed under [What it does](#what-it-does).
+
+Once a description has been read, the seed decides everything else: the same reading with the same seed always builds the same map.
 
 ---
 
@@ -45,11 +49,11 @@ The same description with the same seed gives back the same map, so a map can be
   | Thieves' den | fence room · escape tunnel |
 
   On top of that, the description controls ten features (bar, hearth, stairs, pillars, alcove, shelving, bunks, bed, weapons, tomb), plus the light (dark, dim, bright), the condition (from tidy to ruined), how much clutter covers the floor and how furnished the room is.
-- **Honest about what it left out.** Whatever the description asked for that the map doesn't have is listed under the map in a sentence. That covers a word the generator doesn't know, a feature that doesn't belong in this kind of room, a feature with no floor space left for it, and a feature that was both asked for and refused. Nothing is dropped in silence.
+- **Honest about what it left out.** What the map doesn't have is listed under it in a sentence. That covers a word the generator doesn't know, a feature that doesn't belong in this kind of room, a feature with no floor space left for it, and a feature that was both asked for and refused. With Claude and Jev, a request outside the vocabulary (the organ) is listed too. The local engine can't notice those, so with it only the generator's own adjustments are reported (see [What it doesn't do yet](#what-it-doesnt-do-yet)).
 - **Playable by construction.** Every map is checked before it is shown. There must be at least one door, no door blocked by furniture, no floor you can't reach, and room to walk between the furniture. A map that fails is thrown away rather than drawn.
 - **Deterministic.** Everything after interpretation is a pure function of the seed. A blank seed gets a random one, which is written back into the field so the map can be found again.
 - **Grid on or off.** The grid toggle redraws the map without generating it again. The PNG is exactly what is on screen, so the download follows the toggle.
-- **No backend for the map.** Interpreting, generating, drawing and encoding all happen in the browser. The only server code is a small relay for one of the three interpreters (see below).
+- **No backend of its own.** Generating, drawing and encoding happen in the browser. Interpreting happens wherever the chosen engine runs: Claude and Jev on their providers' servers, called from the page with your own key, and the local model in the browser itself. The only server code in this project is a small relay that one of the three engines needs (see below).
 
 ## What it doesn't do yet
 
@@ -59,7 +63,7 @@ These are known gaps, not bugs.
 - **One room per map.** There are no multi-room levels, corridors or connections between maps. A room is at most 20 × 20 squares.
 - **Nothing outside the vocabulary.** A request for anything outside the vocabulary (a "pipe organ", a "second floor") is reported in a notice and not drawn. You can't ask for a specific piece of furniture beyond the ten features; the rest comes from the room's own profile.
 - **"No X" only reaches the fixtures.** Saying there are no stairs keeps the staircase out. Exclusions apply to the featured fixtures (bar, hearth, stairs…), but not yet to the loose items on the floor or to the table-and-chair groups.
-- **The interpreters were tuned on Portuguese.** The interface is in English, but the vocabulary each engine was calibrated and measured against is Portuguese: Jev's criteria, the local model's labels and the synonyms that steer it. English descriptions work best with Claude. The local engine's synonym steering only recognises Portuguese words.
+- **The interpreters were tuned on Portuguese.** The interface is in English, but the vocabulary each engine was calibrated and measured against is Portuguese: Jev's criteria, the local model's labels and the synonyms that steer it. English descriptions have not been measured against any engine. Claude is the most likely to cope, and the local engine is the least, since its synonym steering only recognises Portuguese words.
 - **The local engine understands less.** It can't report what a description asked for and the map lacks, and it can't read refusals ("no stairs"). It downloads about 310 MB the first time, and it has never been timed in a browser.
 - **The same seed is not always the same reading.** The seed fixes everything *after* interpretation. A cloud model may read the same sentence slightly differently on two calls, because nothing is cached and the sampling isn't pinned.
 - **The export is only a flat PNG.** There is no tabletop metadata: no walls, doors or light sources for Foundry or Universal VTT, and no dynamic lighting. The light exists only as shading baked into the picture.
@@ -68,6 +72,8 @@ These are known gaps, not bugs.
 - **No browser test suite.** The tests run in Node against a hand-written stand-in for the DOM. The real page has only been checked by hand and with headless screenshots.
 
 ## Screenshots
+
+The maps in these screenshots are real output of the generator and the renderer. The interpreter's side was stubbed: the page's call to the Anthropic API was answered with a fixed set of constraints, including the organ notice above, so that the pictures could be taken without a key. A live call produces the same kind of page, but what it reads into a sentence may differ.
 
 | A crypt, grid switched off | On a phone |
 | --- | --- |
@@ -86,7 +92,7 @@ The interpreter is the only part that needs a model. Each of the three costs som
 | Runs | Anthropic's API (`claude-opus-5`) | TypeSafe's System One API | in your browser (WebAssembly) |
 | Needs | your Anthropic API key | your TypeSafe API key | about 310 MB, downloaded once |
 | Route | straight from the browser | through `/api/jev`, a relay on this site | nowhere; works offline afterwards |
-| Reports what it couldn't draw | yes | yes | no |
+| Reports requests outside the vocabulary | yes | yes | no |
 | Understands refusals ("no stairs") | yes | yes | no |
 
 Why does Jev need a relay? TypeSafe's API answers a browser without an `access-control-allow-origin` header, on both the request and the preflight, so a page can't read the answer. Anthropic publishes an opt-in header for direct browser access, and TypeSafe has no equivalent. `api/jev.ts` stands in the middle and does nothing else:
@@ -110,11 +116,11 @@ flowchart LR
   V -->|unplayable| X["thrown away,<br/>explained"]
 ```
 
-Each stage is a pure function over the types in `src/core/types.ts`. It hands a value to the next stage and reports its shortfalls as **codes** (`feature_not_in_place`, `unsupported_request`…) rather than sentences. Only the interface turns a code into words.
+Every stage hands a value to the next over the types in `src/core/types.ts`, and every stage after `interpret`, which is the only one that talks to a network, is a pure function of its input and the seed. Shortfalls travel as **codes** (`feature_not_in_place`, `unsupported_request`…) rather than sentences. Only the interface turns a code into words.
 
 1. **Interpret** turns text into `Constraints`: the place, the light, the condition, clutter and furnishing (two separate dials), and the requested, excluded and unresolved features. The vocabulary is closed, and validated with `zod`.
 2. **Resolve** turns `Constraints` into `Params`. It settles the footprint and the door count from the seed, and it records conflicts, such as a feature that doesn't belong in the room or was asked for and refused.
-3. **Generate** produces a `Scene` in four stages, each drawing from the same seeded generator:
+3. **Generate** produces a `Scene` in four stages. The first three draw from one seeded generator; the lights are derived from what was placed.
    - **floorplan** (`floorplan.ts`, `shapes.ts`): a rectangle, an L, a T or a room with an alcove, plus doors and pillars;
    - **materials** (`materials.ts`): floor and wall zones;
    - **props** (`props.ts`): wall anchors first, then furniture groups, then loose scatter;
@@ -122,7 +128,7 @@ Each stage is a pure function over the types in `src/core/types.ts`. It hands a 
 4. **Validate** (`validate.ts`) checks for a door, unblocked doors, reachable floor and room to walk.
 5. **Render** builds a plain list of draw commands (`drawlist.ts`), so what is drawn can be tested without a browser. It then executes the list onto a canvas and encodes a PNG.
 
-Every place is one entry in a single registry, `src/generator/profiles.ts`. A building lists its rooms, and each room declares its geometry, its materials, its furniture, and the words it is spoken about in. The exact `Record` types derived from that registry make a forgotten table a compile error, not a missing map.
+Every place lives in one registry, `src/generator/profiles.ts`. A kind of room (a hall, a storeroom, a crypt…) declares its geometry once, and each building that has it fills it in: its materials, its furniture, and the words it is spoken about in. The exact `Record` types derived from that registry make a forgotten table a compile error, not a missing map.
 
 | Path | What lives there |
 | --- | --- |
