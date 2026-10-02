@@ -1,13 +1,17 @@
 /**
- * Everything the person reads, in Portuguese.
+ * Everything the person reads.
  *
- * This is the one module in the project whose strings are not in English, and
- * that is the whole point of it. The rest of the codebase reports its
- * shortfalls as codes — `feature_not_in_place`, `unsupported_request` — because
- * a code has no language and travels through five layers without picking one
- * up. The request that started the map was spoken in Portuguese, so the answer
- * has to come back in Portuguese, and the translation belongs in the only layer
- * that talks to a person.
+ * The rest of the codebase reports its shortfalls as codes —
+ * `feature_not_in_place`, `unsupported_request` — because a code has no
+ * language and travels through five layers without picking one up. Turning a
+ * code into a sentence belongs in the only layer that talks to a person, which
+ * is this one.
+ *
+ * The interface is in English. The interpreters are not: what they are asked —
+ * the Jev criteria, the local model's labels, the synonyms that steer it — is
+ * Portuguese, because that is the vocabulary they were measured against, and it
+ * is not text anybody reads. A description may be written in either language;
+ * the engines were tuned on Portuguese ones.
  *
  * Two shapes recur and both are deliberate.
  *
@@ -75,29 +79,29 @@ function quoted(detail: string): string {
 }
 
 /**
- * The closed feature vocabulary, in Portuguese.
+ * The closed feature vocabulary, as a person would say it.
  *
  * `feature_not_in_place` and `feature_over_budget` both carry a word from
- * `FEATURES`, which is English because the code is English. Shown raw it would
- * be the one English word in a Portuguese sentence, and it is the very word the
- * sentence is about. The `Record<Feature, string>` is exact on purpose: a
- * feature added to the vocabulary stops this file compiling.
+ * `FEATURES`, which is an identifier rather than a word somebody says — `bunks`
+ * reads fine, `hearth` is a fireplace to most people. The
+ * `Record<Feature, string>` is exact on purpose: a feature added to the
+ * vocabulary stops this file compiling.
  */
 const FEATURE_WORDS: Readonly<Record<Feature, string>> = {
-  bar: 'balcão',
-  hearth: 'lareira',
-  stairs: 'escada',
-  pillars: 'pilares',
-  alcove: 'alcova',
-  shelving: 'prateleiras',
-  bunks: 'beliches',
-  bed: 'cama',
-  weapons: 'armas',
-  tomb: 'túmulo',
+  bar: 'bar counter',
+  hearth: 'fireplace',
+  stairs: 'stairs',
+  pillars: 'pillars',
+  alcove: 'alcove',
+  shelving: 'shelves',
+  bunks: 'bunk beds',
+  bed: 'bed',
+  weapons: 'weapons',
+  tomb: 'tomb',
 };
 
 /**
- * A feature detail in Portuguese, or the detail untouched.
+ * A feature detail as a person would say it, or the detail untouched.
  *
  * The fallback is not decoration. `resolve` lowercases and trims before it
  * writes these two codes, so the word should always be in the table — but the
@@ -145,69 +149,69 @@ function placeWord(detail: string): string {
  */
 export const CODE_PHRASES: Readonly<Record<Code, CodePhrase>> = {
   [FEATURE_NOT_IN_VOCABULARY]: {
-    bare: 'Um elemento pedido não existe no vocabulário do gerador e ficou de fora.',
-    detailed: (detail) => `Elemento que o gerador não conhece e deixou de fora: ${quoted(detail)}.`,
+    bare: 'Something the description asked for is not in the generator’s vocabulary, so it was left out.',
+    detailed: (detail) => `Left out, because the generator does not know it: ${quoted(detail)}.`,
   },
   [FEATURE_NOT_IN_PLACE]: {
-    bare: 'Um elemento pedido não cabe neste tipo de lugar e ficou de fora.',
+    bare: 'Something the description asked for does not belong in this kind of place, so it was left out.',
     detailed: (detail) =>
-      `Elemento que não pertence a este tipo de lugar e ficou de fora: ${quoted(featureWord(detail))}.`,
+      `Left out, because it does not belong in this kind of place: ${quoted(featureWord(detail))}.`,
   },
   [FEATURE_OVER_BUDGET]: {
-    bare: 'Um elemento pedido ficou de fora por falta de espaço no piso.',
+    bare: 'Something the description asked for was left out: there was no floor space for it.',
     detailed: (detail) =>
-      `Elemento deixado de fora por falta de espaço no piso: ${quoted(featureWord(detail))}.`,
+      `Left out, for lack of floor space: ${quoted(featureWord(detail))}.`,
   },
   // The description asked for the thing and, in the same breath, asked for it
   // not to be there. The sentence says which of the two was obeyed, because
   // that is the part the person cannot see from the map: an absent staircase
   // looks the same whether it was refused or never fitted.
   [FEATURE_ALSO_EXCLUDED]: {
-    bare: 'A descrição pediu um elemento e, ao mesmo tempo, pediu que ele não existisse; ficou de fora.',
+    bare: 'The description asked for something and also asked for it not to be there, so it was left out.',
     detailed: (detail) =>
-      'A descrição pediu este elemento e também pediu que ele não existisse. ' +
-      `Ficou de fora: ${quoted(featureWord(detail))}.`,
+      'The description asked for this and also asked for it not to be there. ' +
+      `Left out: ${quoted(featureWord(detail))}.`,
   },
   [CLUTTER_NOT_A_NUMBER]: {
-    bare: 'A quantidade de tralha no chão não veio como número; o piso foi gerado sem nada solto.',
+    bare: 'The amount of clutter on the floor did not come back as a number, so the floor was left bare.',
     detailed: (detail) =>
-      'A quantidade de tralha no chão não veio como número; o piso foi gerado sem nada solto. ' +
-      `Valor recebido: ${quoted(detail)}.`,
+      'The amount of clutter on the floor did not come back as a number, so the floor was left bare. ' +
+      `Value received: ${quoted(detail)}.`,
   },
   [CLUTTER_OUT_OF_RANGE]: {
-    bare: 'A quantidade de tralha no chão estava fora da faixa de 0 a 1 e foi trazida para o limite mais próximo.',
+    bare: 'The amount of clutter on the floor was outside the range 0 to 1 and was brought to the nearest end of it.',
     detailed: (detail) =>
-      'A quantidade de tralha no chão estava fora da faixa de 0 a 1 e foi trazida para o limite mais próximo. ' +
-      `Valor pedido: ${quoted(detail)}.`,
+      'The amount of clutter on the floor was outside the range 0 to 1 and was brought to the nearest end of it. ' +
+      `Value asked for: ${quoted(detail)}.`,
   },
-  // Named as furniture, never as "tralha": the two are separate fields now, and
+  // Named as furniture, never as "clutter": the two are separate fields now, and
   // a person who reads the same words for both has no way to tell which of the
   // two numbers the map got wrong.
   [FURNISHING_NOT_A_NUMBER]: {
-    bare: 'A quantidade de mobília não veio como número; o lugar foi gerado sem móveis.',
+    bare: 'The amount of furniture did not come back as a number, so the place was generated unfurnished.',
     detailed: (detail) =>
-      'A quantidade de mobília não veio como número; o lugar foi gerado sem móveis. ' +
-      `Valor recebido: ${quoted(detail)}.`,
+      'The amount of furniture did not come back as a number, so the place was generated unfurnished. ' +
+      `Value received: ${quoted(detail)}.`,
   },
   [FURNISHING_OUT_OF_RANGE]: {
-    bare: 'A quantidade de mobília estava fora da faixa de 0 a 1 e foi trazida para o limite mais próximo.',
+    bare: 'The amount of furniture was outside the range 0 to 1 and was brought to the nearest end of it.',
     detailed: (detail) =>
-      'A quantidade de mobília estava fora da faixa de 0 a 1 e foi trazida para o limite mais próximo. ' +
-      `Valor pedido: ${quoted(detail)}.`,
+      'The amount of furniture was outside the range 0 to 1 and was brought to the nearest end of it. ' +
+      `Value asked for: ${quoted(detail)}.`,
   },
   [UNSUPPORTED_REQUEST]: {
-    bare: 'A descrição pediu algo que este mapa não tem como representar.',
-    detailed: (detail) => `Pedido que este mapa não tem como representar: ${quoted(detail)}.`,
+    bare: 'The description asked for something this map has no way to show.',
+    detailed: (detail) => `Asked for, but this map has no way to show it: ${quoted(detail)}.`,
   },
   // Said as a map that was drawn, not as a failure: the person gets a place,
   // and what they need to know is that it is the nearest one rather than the
   // one they described. Same posture as the codes above, which leave a feature
   // out and say so instead of refusing to draw.
   [PLACE_NOT_IN_VOCABULARY]: {
-    bare: 'A descrição não parece ser nenhum dos lugares que o gerador conhece; o mapa é o mais próximo deles.',
+    bare: 'The description does not look like any of the places the generator knows; the map is the nearest of them.',
     detailed: (detail) =>
-      'A descrição não parece ser nenhum dos lugares que o gerador conhece. ' +
-      `Desenhei o mais próximo: ${quoted(placeWord(detail))}.`,
+      'The description does not look like any of the places the generator knows. ' +
+      `This is the nearest one: ${quoted(placeWord(detail))}.`,
   },
 };
 
@@ -248,7 +252,7 @@ export function describeEntry(value: string): string {
   const phrase = isKnownCode(code) ? CODE_PHRASES[code] : undefined;
 
   if (phrase === undefined) {
-    return redactKeys(`Aviso que esta tela não sabe explicar: ${quoted(value)}.`);
+    return redactKeys(`A notice this page does not know how to explain: ${quoted(value)}.`);
   }
   return redactKeys(detail === '' ? phrase.bare : phrase.detailed(detail));
 }
@@ -259,18 +263,18 @@ export function describeEntries(entries: readonly string[]): string[] {
 }
 
 /**
- * The rules a generated scene can break, in Portuguese.
+ * The rules a generated scene can break, as a person reads them.
  *
  * `SceneValidationError` should never reach a person — the generator upholds
  * these by construction and throws only when it has failed to. When it does,
- * the message is still screen text, so it is still Portuguese. The exact
- * `Record` means a new issue kind stops this file compiling.
+ * the message is still screen text, so it is still worded for a person. The
+ * exact `Record` means a new issue kind stops this file compiling.
  */
 const SCENE_ISSUES: Readonly<Record<SceneIssueKind, string>> = {
-  no_door: 'o lugar saiu sem nenhuma porta',
-  door_blocked: 'uma porta ficou bloqueada por um móvel',
-  isolated_floor: 'parte do piso ficou sem como ser alcançada',
-  circulation_pinch: 'faltou espaço para circular entre os móveis',
+  no_door: 'the place came out with no door',
+  door_blocked: 'a door was blocked by furniture',
+  isolated_floor: 'part of the floor could not be reached',
+  circulation_pinch: 'there was no room to walk between the furniture',
 };
 
 /**
@@ -314,16 +318,15 @@ export function looksLikeAnthropicKey(key: string): boolean {
 
 /** A failure, as a headline and an optional technical line under it. */
 export type Failure = {
-  /** What happened and what to do about it, in Portuguese. */
+  /** What happened and what to do about it. */
   title: string;
   /**
    * The upstream wording, when there is one worth showing.
    *
-   * It is the only text on screen that may not be Portuguese: it is written by
-   * the API or the SDK, it names the thing that actually went wrong, and
-   * translating it would mean inventing a Portuguese sentence for a fault this
-   * code does not understand. It is shown as a secondary line, never as the
-   * headline.
+   * It is the only text on screen this file did not write: it comes from the
+   * API or the SDK, it names the thing that actually went wrong, and rewording
+   * it would mean inventing a sentence for a fault this code does not
+   * understand. It is shown as a secondary line, never as the headline.
    */
   detail?: string;
 };
@@ -340,30 +343,30 @@ export function describeFailure(error: unknown): Failure {
   if (error instanceof MissingApiKeyError) {
     return {
       title:
-        'Falta a chave da API. Cole a sua chave da Anthropic no campo de chave para que a descrição possa ser interpretada.',
+        'The API key is missing. Paste your Anthropic key into the key field so the description can be read.',
     };
   }
   if (error instanceof InvalidApiKeyError) {
     return {
       title:
-        'A chave foi recusada pela API. Confira se ela é uma chave da Anthropic e se ainda está ativa.',
+        'The API turned the key down. Check that it is an Anthropic key and that it is still active.',
     };
   }
   if (error instanceof NetworkError) {
     return {
-      title: 'Não foi possível chegar até a API da Anthropic. Verifique a conexão e tente de novo.',
+      title: 'Could not reach the Anthropic API. Check your connection and try again.',
     };
   }
   if (error instanceof CorsError) {
     return {
       title:
-        'O navegador bloqueou a resposta da API. Algo entre esta página e a API está removendo os cabeçalhos de origem cruzada — costuma ser um proxy da rede ou uma extensão do navegador.',
+        'The browser blocked the API’s answer. Something between this page and the API is stripping the cross-origin headers — usually a network proxy or a browser extension.',
     };
   }
   if (error instanceof UnusableResponseError) {
     return {
       title:
-        'O modelo respondeu algo que não dá para ler como um conjunto de restrições. Tente de novo, ou reescreva a descrição.',
+        'The model answered with something that cannot be read as a set of constraints. Try again, or reword the description.',
       detail: redactKeys(error.message),
     };
   }
@@ -371,8 +374,8 @@ export function describeFailure(error: unknown): Failure {
     return {
       title:
         error.status === 429
-          ? 'A API recusou o pedido por excesso de chamadas. Espere alguns segundos e tente de novo.'
-          : 'A API da Anthropic recusou o pedido.',
+          ? 'The API turned the request down: too many calls. Wait a few seconds and try again.'
+          : 'The Anthropic API turned the request down.',
       detail: redactKeys(error.message),
     };
   }
@@ -381,29 +384,29 @@ export function describeFailure(error: unknown): Failure {
   // Three types rather than one because each asks something different, which is
   // the same reason the four above it are separate. They are matched before the
   // `InterpreterError` catch-all at the bottom, which is where they used to
-  // land: "a interpretação da descrição falhou" is true of all three and tells
+  // land: "reading the description failed" is true of all three and tells
   // nobody which of them happened.
   if (error instanceof JevRejectedKeyError) {
     return {
       title:
-        'A chave foi recusada pelo Jev. Confira se ela é uma chave da TypeSafe e se ainda está ativa.',
+        'Jev turned the key down. Check that it is a TypeSafe key and that it is still active.',
     };
   }
   if (error instanceof JevUnavailableError) {
     // The proxy is named, because it is the part of this that the person may be
     // running themselves and the part that can be down on its own. Pointing
-    // them at "a conexão" alone sends somebody to check a connection that is
+    // them at "the connection" alone sends somebody to check a connection that is
     // fine.
     return {
       title:
-        'Não foi possível falar com o Jev. O pedido passa por um servidor desta página antes de chegar à TypeSafe, e um dos dois não respondeu. Verifique a conexão e tente de novo.',
+        'Could not reach Jev. The request goes through a server of this page before it gets to TypeSafe, and one of the two did not answer. Check your connection and try again.',
       detail: redactKeys(error.message),
     };
   }
   if (error instanceof JevUnusableAnswerError) {
     return {
       title:
-        'O Jev respondeu algo que não dá para ler como um conjunto de restrições. Tente de novo, ou reescreva a descrição.',
+        'Jev answered with something that cannot be read as a set of constraints. Try again, or reword the description.',
       detail: redactKeys(error.message),
     };
   }
@@ -420,14 +423,14 @@ export function describeFailure(error: unknown): Failure {
     // this browser can load, and no number of retries changes that.
     return {
       title:
-        'O modelo local não pôde ser carregado. São cerca de 310 MB e ele precisa de um navegador com memória para rodá-lo — tente de novo, ou escolha o Claude ou o Jev, que não baixam nada.',
+        'The local model could not be loaded. It is about 310 MB and needs a browser with the memory to run it — try again, or pick Claude or Jev, which download nothing.',
       detail: redactKeys(error.message),
     };
   }
   if (error instanceof ClassificationFailedError) {
     return {
       title:
-        'O modelo local respondeu algo que não dá para ler como um conjunto de restrições. Tente de novo, ou reescreva a descrição.',
+        'The local model answered with something that cannot be read as a set of constraints. Try again, or reword the description.',
       detail: redactKeys(error.message),
     };
   }
@@ -435,7 +438,7 @@ export function describeFailure(error: unknown): Failure {
   if (error instanceof SceneValidationError) {
     const reasons = error.issues.map((issue) => SCENE_ISSUES[issue.kind]);
     return {
-      title: `O mapa gerado saiu impraticável e foi descartado: ${unique(reasons).join('; ')}. Gere de novo com outra semente.`,
+      title: `The generated map was unplayable and was thrown away: ${unique(reasons).join('; ')}. Generate again with another seed.`,
     };
   }
   if (error instanceof InterpreterError) {
@@ -443,10 +446,10 @@ export function describeFailure(error: unknown): Failure {
     // `errors.ts`, two in `local/errors.ts`, three in `jev/errors.ts` — so this
     // catches one added later, and says the true thing rather than blaming the
     // network. `messages.test.ts` holds it to that by naming all eleven.
-    return { title: 'A interpretação da descrição falhou.', detail: redactKeys(error.message) };
+    return { title: 'Reading the description failed.', detail: redactKeys(error.message) };
   }
   return {
-    title: 'Algo deu errado ao montar o mapa.',
+    title: 'Something went wrong while building the map.',
     detail: redactKeys(error instanceof Error ? error.message : String(error)),
   };
 }
@@ -463,7 +466,7 @@ function unique(values: readonly string[]): string[] {
  * is the same for every file it is attached to, so it carries nothing and costs
  * width on a line that is already long. The name itself is left in English: it
  * is a filename rather than prose, the same way the `detail` line of a failure
- * is left in whatever language the API wrote it.
+ * is left as the API wrote it.
  */
 function fileName(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1);
@@ -486,7 +489,7 @@ function fileName(path: string): string {
  * ```
  *
  * — three falls back to zero, the first two of them inside the opening
- * milliseconds, so "Baixando o modelo local… 100%" appears twice before the
+ * milliseconds, so "Downloading the local model… 100%" appears twice before the
  * download anybody is waiting for has moved at all. A percentage that goes
  * backwards with nothing to explain it reads as a stall, and the thing a person
  * does about a stall is reload the page, which throws away the download in
@@ -552,7 +555,7 @@ export function describeModelProgress(progress: ModelProgress): string {
 }
 
 /**
- * The Portuguese name for a pair, or nothing.
+ * The name a person reads for a pair, or nothing.
  *
  * **The names are not written here any more.** They live on the room's own
  * entry in the registry (`BUILDINGS` in `generator/profiles.ts`), beside the
@@ -583,7 +586,7 @@ function placeName(building: string, room: string): string | undefined {
  * @throws {TypeError} if the registry has no name for the pair. This is the
  *                     guard standing in for the type the `building_room` string
  *                     never had — see `placeName`. Without it the line reads
- *                     "undefined, 17×15 casas", which
+ *                     "undefined, 17×15 squares", which
  *                     is a place name a person cannot tell from a rendering
  *                     bug, under a map that is otherwise correct.
  */
@@ -592,19 +595,23 @@ export function describeResult(params: Params): string {
   if (name === undefined) {
     throw new TypeError(`no name for the place '${params.place.building}_${params.place.room}'`);
   }
-  return `${name}, ${String(params.size.w)}×${String(params.size.h)} casas, semente ${String(params.seed)}.`;
+  return `${name}, ${String(params.size.w)}×${String(params.size.h)} squares, seed ${String(params.seed)}.`;
 }
 
 /** The fixed labels and headings of the interface. */
 export const UI_TEXT = {
   title: 'Gridsmith',
-  tagline: 'Descreva o lugar e receba um battlemap alinhado ao grid.',
-  descriptionLabel: 'Descrição do lugar',
-  descriptionPlaceholder: 'um salão de taverna, luz baixa, móveis derrubados',
-  apiKeyLabel: 'Chave da API da Anthropic',
+  tagline: 'Describe the place and get a battlemap aligned to the grid.',
+  descriptionLabel: 'Describe the place',
+  /**
+   * An example in Portuguese, on purpose: it is the language the interpreters
+   * were tuned on, and the example is the first hint of what to write.
+   */
+  descriptionPlaceholder: 'e.g. um salão de taverna, luz baixa, móveis derrubados',
+  apiKeyLabel: 'Anthropic API key',
   apiKeyPlaceholder: 'sk-ant-...',
   apiKeyNote:
-    'A chave fica guardada só neste navegador e vai direto para a API. Não passa por servidor nenhum e não aparece no endereço da página.',
+    'The key is kept only in this browser and goes straight to the API. It passes through no server and never appears in the page’s address.',
   // The same field, worded for the other engine that reads it. Both halves have
   // to change together: the Anthropic label would send somebody to the wrong
   // dashboard for a key, and the Anthropic note would promise something the Jev
@@ -614,7 +621,7 @@ export const UI_TEXT = {
   // project has no documented one to show and inventing it would be a guess on
   // screen.
   //
-  // **"não guarda nem registra nada" is this file promising another file's
+  // **"keeps and logs nothing" is this file promising another file's
   // behaviour**, and the only sentence here that does. What holds it up is
   // `test/api/jev.test.ts`, "writes nothing to the console at all, on any path",
   // which spies every console method across every path rather than grepping the
@@ -622,46 +629,46 @@ export const UI_TEXT = {
   // any log somebody adds deliberately. If that pair ever goes, this sentence
   // goes with it. The tests below pin the words; that pair is what makes the
   // words true.
-  apiKeyLabelJev: 'Chave da API do Jev (TypeSafe)',
-  apiKeyPlaceholderJev: 'a sua chave da TypeSafe',
+  apiKeyLabelJev: 'Jev API key (TypeSafe)',
+  apiKeyPlaceholderJev: 'your TypeSafe key',
   apiKeyNoteJev:
-    'A chave vale para esta visita: não fica guardada no navegador e não aparece no endereço da página. Ela passa por um servidor desta página, que só a repassa para a TypeSafe e não guarda nem registra nada.',
-  seedLabel: 'Semente',
-  seedPlaceholder: 'em branco, sorteia uma',
-  seedNote: 'A mesma descrição com a mesma semente devolve o mesmo mapa.',
-  generate: 'Gerar mapa',
-  generating: 'Gerando…',
-  download: 'Baixar PNG',
-  unresolvedHeading: 'O que a descrição pediu e o mapa não tem',
-  conflictsHeading: 'O que o gerador teve de ajustar',
-  emptyDescription: 'Escreva uma descrição do lugar antes de gerar.',
+    'The key lasts for this visit: it is not kept in the browser and never appears in the page’s address. It passes through a server of this page, which only hands it on to TypeSafe and keeps and logs nothing.',
+  seedLabel: 'Seed',
+  seedPlaceholder: 'leave blank for a random one',
+  seedNote: 'The same description with the same seed gives back the same map.',
+  generate: 'Generate map',
+  generating: 'Generating…',
+  download: 'Download PNG',
+  unresolvedHeading: 'What the description asked for and the map does not have',
+  conflictsHeading: 'What the generator had to adjust',
+  emptyDescription: 'Write a description of the place before generating.',
   /**
    * Said instead of making the request, and it leads with the one thing that
    * decides what the person has to do next.
    *
-   * "Não foi enviada" is the headline because the alternative sentence — the
-   * one this replaces — was `JevRejectedKeyError`'s "confira se ela é uma
-   * chave da TypeSafe", which sends somebody to fetch another key and says
+   * "It was not sent" is the headline because the alternative sentence — the
+   * one this replaces — was `JevRejectedKeyError`'s "check that it is a
+   * TypeSafe key", which sends somebody to fetch another key and says
    * nothing about the key they just handed to a third party. A disclosed
    * credential has to be rotated and a refused one does not, so which of the
    * two happened is the whole message.
    */
   anthropicKeyOnJev:
-    'A chave no campo é uma chave da Anthropic e o motor escolhido é o Jev, então ela não foi enviada. Cole a sua chave da TypeSafe. Para gerar com o Claude, troque o motor e cole a chave dele de novo: trocar de motor limpa o campo, de propósito.',
-  seedNotAnInteger: 'A semente precisa ser um número inteiro. Deixe em branco para sortear uma.',
-  seedOutOfRange: 'A semente precisa estar entre 0 e 4294967295. Deixe em branco para sortear uma.',
-  interpreting: 'Interpretando a descrição…',
-  drawing: 'Desenhando o mapa…',
-  done: 'Mapa pronto.',
+    'The key in the field is an Anthropic key and the engine picked is Jev, so it was not sent. Paste your TypeSafe key. To generate with Claude, switch the engine and paste its key again: switching engines empties the field, on purpose.',
+  seedNotAnInteger: 'The seed has to be a whole number. Leave it blank for a random one.',
+  seedOutOfRange: 'The seed has to be between 0 and 4294967295. Leave it blank for a random one.',
+  interpreting: 'Reading the description…',
+  drawing: 'Drawing the map…',
+  done: 'Map ready.',
 
   // --- The two boards, and the tools over the map ----------------------------
-  createTitle: 'Criar mapa',
-  previewTitle: 'Prévia do mapa',
-  previewEmpty: 'O mapa aparece aqui depois de gerado.',
+  createTitle: 'Create a map',
+  previewTitle: 'Map preview',
+  previewEmpty: 'The map shows up here once it is generated.',
   /** The button that rules the grid over the map, or takes it off. The PNG follows it. */
   gridToggle: 'Grid',
-  zoomIn: 'Aumentar zoom',
-  zoomOut: 'Diminuir zoom',
+  zoomIn: 'Zoom in',
+  zoomOut: 'Zoom out',
 
   // --- The interpreter picker, and the local model's own progress -----------
   //
@@ -669,10 +676,10 @@ export const UI_TEXT = {
   // saying they belonged here and that the front which wrote them could not add
   // to this file. That is no longer true of anyone, so they are here, and
   // `mount.ts` is back to holding no wording at all.
-  engineLabel: 'Interpretador',
-  engineClaude: 'Claude — na nuvem, com a sua chave',
-  engineJev: 'Jev — na nuvem, com a sua chave da TypeSafe',
-  engineLocal: 'Modelo local — neste navegador, sem chave',
+  engineLabel: 'Interpreter',
+  engineClaude: 'Claude — in the cloud, with your key',
+  engineJev: 'Jev — in the cloud, with your TypeSafe key',
+  engineLocal: 'Local model — in this browser, no key',
   /**
    * The figure here is the whole first visit, not the model on its own.
    *
@@ -690,13 +697,13 @@ export const UI_TEXT = {
    * discovered by waiting.
    */
   engineLocalNote:
-    'O modelo local baixa cerca de 310 MB na primeira vez e fica guardado no navegador. Depois disso funciona sem rede e sem chave, e entende menos do que os outros dois: não sabe dizer o que a descrição pediu e o mapa não tem, que é justamente o que o Jev sabe.',
-  modelStarting: 'Preparando o modelo local…',
-  modelDownloading: 'Baixando o modelo local…',
+    'The local model downloads about 310 MB the first time and is kept in the browser. After that it works with no network and no key, and it understands less than the other two: it cannot tell what the description asked for and the map does not have, which is exactly what Jev can.',
+  modelStarting: 'Getting the local model ready…',
+  modelDownloading: 'Downloading the local model…',
   /** With a percentage, when the server said how large the file is. */
-  modelDownloadingAt: (percent: number) => `Baixando o modelo local… ${String(percent)}%`,
+  modelDownloadingAt: (percent: number) => `Downloading the local model… ${String(percent)}%`,
   /** With the file, when the library said which one it is. */
-  modelDownloadingFile: (file: string) => `Baixando o modelo local… ${file}`,
+  modelDownloadingFile: (file: string) => `Downloading the local model… ${file}`,
   /**
    * Both, and the reason the percentage is worth saying twice over.
    *
@@ -705,16 +712,16 @@ export const UI_TEXT = {
    * was. `describeModelProgress` has the measurement.
    */
   modelDownloadingFileAt: (file: string, percent: number) =>
-    `Baixando o modelo local… ${file}, ${String(percent)}%`,
-  modelPreparing: 'Carregando o modelo local na memória…',
+    `Downloading the local model… ${file}, ${String(percent)}%`,
+  modelPreparing: 'Loading the local model into memory…',
   /**
    * The only one there is, now that `local/pipeline.ts` fixes `MODEL_DEVICE` to
    * `wasm`.
    *
-   * It used to end "rodando sem GPU — vai demorar mais", picked between two
+   * It used to end "running without a GPU — it will take longer", picked between two
    * sentences by reading `progress.backend`. The WebGPU path is gone — the q8
    * weights go through `DequantizeLinear`, whose open bug on that path returns
-   * wrong numbers rather than failing — so "mais" was a comparison against an
+   * wrong numbers rather than failing — so "longer" was a comparison against an
    * option nobody on this page can have, and the reader is left to wonder which
    * setting of theirs cost them the faster one. There is no setting.
    *
@@ -724,5 +731,5 @@ export const UI_TEXT = {
    * nothing in this project has ever been timed in a browser.
    */
   modelReady:
-    'Modelo local pronto, rodando no processador deste navegador. Interpretando a descrição…',
+    'Local model ready, running on this browser’s processor. Reading the description…',
 } as const;

@@ -260,8 +260,8 @@ function mountPage(overrides: Parameters<typeof mountApp>[1] = {}): Page {
     description: byId(root, 'gs-description'),
     apiKey: byId(root, 'gs-api-key'),
     seed: byId(root, 'gs-seed'),
-    generate: buttonLabelled(root, 'Gerar mapa'),
-    download: buttonLabelled(root, 'Baixar PNG'),
+    generate: buttonLabelled(root, 'Generate map'),
+    download: buttonLabelled(root, 'Download PNG'),
   };
 }
 

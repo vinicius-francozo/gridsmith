@@ -419,8 +419,8 @@ function mountHarness(options: HarnessOptions = {}): Harness {
       (node) => node.className === 'gs-note',
     )[0],
     seed: byId(root, 'gs-seed'),
-    generate: buttonLabelled(root, 'Gerar mapa'),
-    download: buttonLabelled(root, 'Baixar PNG'),
+    generate: buttonLabelled(root, 'Generate map'),
+    download: buttonLabelled(root, 'Download PNG'),
     status: byClass(root, 'gs-status'),
     failure: byClass(root, 'gs-failure'),
     text: () => shownText(root),
@@ -576,7 +576,7 @@ describe('the key stays on this machine', () => {
 
     expect(logged).toEqual([]);
     expect(app.saved).toEqual([]);
-    expect(app.text()).toContain('Algo deu errado');
+    expect(app.text()).toContain('Something went wrong');
   });
 });
 
@@ -636,7 +636,7 @@ describe('asking for a map', () => {
     });
   }
 
-  it('says what it built, in Portuguese and with the seed', async () => {
+  it('says what it built, in words and with the seed', async () => {
     const app = mountHarness();
     app.description.value = 'um salão de taverna';
     app.seed.value = '4242';
@@ -644,8 +644,8 @@ describe('asking for a map', () => {
     app.generate.click();
     await settle();
 
-    expect(app.text()).toContain('Salão de taverna');
-    expect(app.text()).toContain('semente 4242');
+    expect(app.text()).toContain('Tavern common room');
+    expect(app.text()).toContain('seed 4242');
   });
 
   it('draws a seed when the field is blank, and shows it so the map can be found again', async () => {
@@ -719,7 +719,7 @@ describe('asking for a map', () => {
 });
 
 describe('what the map could not be', () => {
-  it('shows an unresolved request as a Portuguese sentence', async () => {
+  it('shows an unresolved request as a sentence', async () => {
     const app = mountHarness({
       answer: constraintsFor({ unresolved: ['unsupported_request:um segundo andar'] }),
     });
@@ -728,8 +728,8 @@ describe('what the map could not be', () => {
     app.generate.click();
     await settle();
 
-    expect(app.text()).toContain('O que a descrição pediu e o mapa não tem');
-    expect(app.text()).toContain('Pedido que este mapa não tem como representar: “um segundo andar”.');
+    expect(app.text()).toContain('What the description asked for and the map does not have');
+    expect(app.text()).toContain('Asked for, but this map has no way to show it: “um segundo andar”.');
     expect(app.text()).not.toContain('unsupported_request');
   });
 
@@ -744,8 +744,8 @@ describe('what the map could not be', () => {
     app.generate.click();
     await settle();
 
-    expect(app.text()).toContain('O que o gerador teve de ajustar');
-    expect(app.text()).toContain('balcão');
+    expect(app.text()).toContain('What the generator had to adjust');
+    expect(app.text()).toContain('bar counter');
     expect(app.text()).not.toContain('feature_not_in_place');
   });
 
@@ -788,7 +788,7 @@ describe('what the map could not be', () => {
 
     expect(app.download.disabled).toBe(false);
     expect(app.text()).toContain('um segundo andar');
-    expect(app.text()).toContain('Escreva uma descrição');
+    expect(app.text()).toContain('Write a description');
   });
 
   it('keeps them through a seed it cannot use either', async () => {
@@ -821,7 +821,7 @@ describe('what the map could not be', () => {
     app.generate.click();
     await settle();
 
-    expect(app.text()).toContain('O que a descrição pediu e o mapa não tem');
+    expect(app.text()).toContain('What the description asked for and the map does not have');
     expect(app.text()).not.toContain(key);
     expect(app.text()).not.toContain('segredo');
     expect(app.text()).toContain('sk-ant-***');
@@ -834,8 +834,8 @@ describe('what the map could not be', () => {
     app.generate.click();
     await settle();
 
-    expect(app.text()).not.toContain('O que a descrição pediu');
-    expect(app.text()).not.toContain('O que o gerador teve de ajustar');
+    expect(app.text()).not.toContain('What the description asked for');
+    expect(app.text()).not.toContain('What the generator had to adjust');
   });
 });
 
@@ -856,7 +856,7 @@ describe('when it goes wrong', () => {
     }
 
     expect(new Set(shown).size).toBe(4);
-    expect(shown[0]).toContain('Cole a sua chave');
+    expect(shown[0]).toContain('Paste your Anthropic key');
   });
 
   it('leaves the download shut when the map never got drawn', async () => {
@@ -877,7 +877,7 @@ describe('when it goes wrong', () => {
     app.generate.click();
     await settle();
 
-    expect(app.text()).toContain('Escreva uma descrição');
+    expect(app.text()).toContain('Write a description');
     expect(app.asked).toEqual([]);
   });
 
@@ -889,7 +889,7 @@ describe('when it goes wrong', () => {
     app.generate.click();
     await settle();
 
-    expect(app.text()).toContain('número inteiro');
+    expect(app.text()).toContain('whole number');
     expect(app.asked).toEqual([]);
   });
 
@@ -910,13 +910,13 @@ describe('when it goes wrong', () => {
     app.description.value = '';
     app.generate.click();
     await settle();
-    expect(app.text()).toContain('Escreva uma descrição');
+    expect(app.text()).toContain('Write a description');
 
     app.description.value = 'um salão de taverna';
     app.generate.click();
     await settle();
 
-    expect(app.text()).not.toContain('Escreva uma descrição');
+    expect(app.text()).not.toContain('Write a description');
   });
 
   it('shows why a seed could not be drawn, instead of leaving a blank page', async () => {
@@ -937,7 +937,7 @@ describe('when it goes wrong', () => {
     });
 
     expect(logged).toEqual([]);
-    expect(app.text()).toContain('Algo deu errado');
+    expect(app.text()).toContain('Something went wrong');
     expect(app.generate.disabled).toBe(false);
     expect(app.asked).toEqual([]);
   });
@@ -950,7 +950,7 @@ describe('when it goes wrong', () => {
     await settle();
 
     expect(app.generate.disabled).toBe(false);
-    expect(app.generate.textContent).toBe('Gerar mapa');
+    expect(app.generate.textContent).toBe('Generate map');
   });
 });
 
@@ -1004,7 +1004,7 @@ describe('what the page says it is doing', () => {
     await settle();
 
     expect(app.status.textContent).toContain(UI_TEXT.done);
-    expect(app.status.textContent).toContain('semente 4242');
+    expect(app.status.textContent).toContain('seed 4242');
   });
 
   it('puts the status line and the failure in live regions', () => {
@@ -1078,7 +1078,7 @@ describe('saving the map that was encoded', () => {
 
     expect(app.saved).toHaveLength(1);
     expect(app.saved[0].filename).toContain('4242');
-    expect(app.text()).not.toContain('Algo deu errado');
+    expect(app.text()).not.toContain('Something went wrong');
     expect(app.generate.disabled).toBe(false);
     expect(app.download.disabled).toBe(false);
   });
@@ -1107,7 +1107,7 @@ describe('saving the map that was encoded', () => {
     await settle();
     expect(app.saved).toHaveLength(0);
     expect(app.failure.hidden).toBe(false);
-    expect(app.text()).toContain('Algo deu errado ao montar o mapa.');
+    expect(app.text()).toContain('Something went wrong while building the map.');
 
     app.download.click();
     await settle();
@@ -1115,7 +1115,7 @@ describe('saving the map that was encoded', () => {
     expect(app.saved).toHaveLength(1);
     expect(app.failure.hidden).toBe(true);
     expect(app.failure.children).toEqual([]);
-    expect(app.text()).not.toContain('Algo deu errado ao montar o mapa.');
+    expect(app.text()).not.toContain('Something went wrong while building the map.');
   });
 });
 
@@ -1194,24 +1194,24 @@ describe('choosing which interpreter reads the description', () => {
   });
 
   it('stops promising a route the Jev request does not take', () => {
-    // The note under the field says the key "não passa por servidor nenhum",
+    // The note under the field says the key "passes through no server",
     // which is true of Claude and false of Jev: that request goes through the
     // proxy in `api/jev.ts`, because TypeSafe answers a browser without
     // `access-control-allow-origin` and the response is thrown away. Left
     // alone, the page would state the opposite of what it does with a secret.
     const app = mountHarness();
-    expect(app.apiKeyNote.textContent).toContain('Não passa por servidor nenhum');
+    expect(app.apiKeyNote.textContent).toContain('It passes through no server');
 
     app.pick('jev');
-    expect(app.apiKeyNote.textContent).not.toContain('Não passa por servidor nenhum');
-    expect(app.apiKeyNote.textContent).toContain('servidor desta página');
+    expect(app.apiKeyNote.textContent).not.toContain('It passes through no server');
+    expect(app.apiKeyNote.textContent).toContain('a server of this page');
     // And it must not promise storage either. A Jev key is deliberately not
     // kept — the one slot has to stay attributable — so "fica guardada" would
     // be the second false promise about a secret in the same two sentences.
-    expect(app.apiKeyNote.textContent).toContain('não fica guardada');
+    expect(app.apiKeyNote.textContent).toContain('not kept');
 
     app.pick('claude');
-    expect(app.apiKeyNote.textContent).toContain('Não passa por servidor nenhum');
+    expect(app.apiKeyNote.textContent).toContain('It passes through no server');
   });
 
   it('gives no placeholder that a TypeSafe key has to look like', () => {
@@ -1364,16 +1364,16 @@ describe('what the page says while the local model is arriving', () => {
     const { app, report } = await localRun();
 
     report({ kind: 'starting' });
-    expect(app.status.textContent).toBe('Preparando o modelo local…');
+    expect(app.status.textContent).toBe('Getting the local model ready…');
 
     report({ kind: 'downloading', file: 'onnx/model_quantized.onnx', ratio: 0.42 });
-    expect(app.status.textContent).toBe('Baixando o modelo local… model_quantized.onnx, 42%');
+    expect(app.status.textContent).toBe('Downloading the local model… model_quantized.onnx, 42%');
 
     report({ kind: 'preparing' });
-    expect(app.status.textContent).toBe('Carregando o modelo local na memória…');
+    expect(app.status.textContent).toBe('Loading the local model into memory…');
 
     report({ kind: 'ready' });
-    expect(app.status.textContent).toContain('Modelo local pronto');
+    expect(app.status.textContent).toContain('Local model ready');
   });
 
   it('says which file each percentage belongs to, over the whole sequence', async () => {
@@ -1396,12 +1396,12 @@ describe('what the page says while the local model is arriving', () => {
     }
 
     expect(writes).toEqual([
-      'Baixando o modelo local… config.json, 100%',
-      'Baixando o modelo local… tokenizer_config.json, 100%',
-      'Baixando o modelo local… tokenizer.json, 0%',
-      'Baixando o modelo local… tokenizer.json, 100%',
-      'Baixando o modelo local… model_quantized.onnx, 0%',
-      'Baixando o modelo local… model_quantized.onnx, 100%',
+      'Downloading the local model… config.json, 100%',
+      'Downloading the local model… tokenizer_config.json, 100%',
+      'Downloading the local model… tokenizer.json, 0%',
+      'Downloading the local model… tokenizer.json, 100%',
+      'Downloading the local model… model_quantized.onnx, 0%',
+      'Downloading the local model… model_quantized.onnx, 100%',
     ]);
   });
 
@@ -1426,7 +1426,7 @@ describe('what the page says while the local model is arriving', () => {
       });
     }
 
-    expect(writes).toEqual(['Baixando o modelo local… model_quantized.onnx, 42%']);
+    expect(writes).toEqual(['Downloading the local model… model_quantized.onnx, 42%']);
   });
 
   it('writes again as soon as the sentence does change', async () => {
@@ -1443,10 +1443,10 @@ describe('what the page says while the local model is arriving', () => {
     report({ kind: 'preparing' });
 
     expect(writes).toEqual([
-      'Baixando o modelo local… tokenizer.json, 42%',
-      'Baixando o modelo local… tokenizer.json, 43%',
-      'Baixando o modelo local… model_quantized.onnx, 43%',
-      'Carregando o modelo local na memória…',
+      'Downloading the local model… tokenizer.json, 42%',
+      'Downloading the local model… tokenizer.json, 43%',
+      'Downloading the local model… model_quantized.onnx, 43%',
+      'Loading the local model into memory…',
     ]);
   });
 
@@ -1458,10 +1458,10 @@ describe('what the page says while the local model is arriving', () => {
     report({ kind: 'preparing' });
     const writes = watchText(app.status);
 
-    app.status.textContent = 'Interpretando a descrição…';
+    app.status.textContent = 'Reading the description…';
     report({ kind: 'preparing' });
 
-    expect(writes).toEqual(['Interpretando a descrição…', 'Carregando o modelo local na memória…']);
+    expect(writes).toEqual(['Reading the description…', 'Loading the local model into memory…']);
   });
 });
 
@@ -1472,8 +1472,8 @@ describe('one provider never gets the other provider’s key', () => {
   // shape of a key: the proxy relays what it is handed and `JevInterpreter`
   // only checks it is not empty. So a return visit opened on Claude, switched
   // to Jev and clicked would put `sk-ant-…` in `x-typesafe-key` and send it to
-  // TypeSafe — and what the person would then read is "confira se ela é uma
-  // chave da TypeSafe", which sends them for another key and never says the
+  // TypeSafe — and what the person would then read is "check that it is a
+  // TypeSafe key", which sends them for another key and never says the
   // Anthropic one now needs rotating.
 
   it('empties the box when the engine that reads it changes', async () => {
@@ -1537,10 +1537,10 @@ describe('one provider never gets the other provider’s key', () => {
     expect(app.jevKeysSeen).toEqual([]);
     expect(app.asked).toEqual([]);
     expect(app.store.items.has(API_KEY_ITEM)).toBe(false);
-    // "Não foi enviada" is the load-bearing half: a disclosed key has to be
+    // "It was not sent" is the load-bearing half: a disclosed key has to be
     // rotated and a refused one does not, so the sentence has to say which
     // happened rather than sending the person for another key.
-    expect(app.text()).toContain('não foi enviada');
+    expect(app.text()).toContain('it was not sent');
   });
 
   it('refuses it before it draws a seed, the way an empty description is refused', async () => {
@@ -1614,8 +1614,8 @@ describe('the refusal of a wrong-provider key, on the page', () => {
     app.generate.click();
     await settle();
 
-    expect(app.text()).toContain('não foi enviada');
-    expect(app.text()).toContain('trocar de motor limpa o campo');
+    expect(app.text()).toContain('it was not sent');
+    expect(app.text()).toContain('switching engines empties the field');
 
     // And it is true: following the advice does empty it.
     app.pick('claude');

@@ -27,11 +27,9 @@ function slug(value: string): string {
 /**
  * What to call the PNG of `params`.
  *
- * Every word in it is English, like the rest of the code. `messages.ts` is the
- * one module that speaks Portuguese, because it is the one whose strings a
- * person reads as a sentence; a file name is read by a shell, sorted by a file
- * manager and typed at a prompt, and half of one in each language is a name
- * that reads as neither.
+ * Every word in it is English, like the rest of the code and the page: a file
+ * name is read by a shell, sorted by a file manager and typed at a prompt, so
+ * it is made of identifiers rather than of the sentence under the map.
  *
  * The seed is written as an unsigned decimal. A negative seed would otherwise
  * open the name with a hyphen, which some shells read as the start of a flag.

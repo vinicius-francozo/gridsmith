@@ -525,8 +525,10 @@ type RoomGeometry = {
 };
 
 /**
- * The Portuguese a pair is spoken about in, everywhere a person or a model
- * reads it.
+ * The words a pair is spoken about in, everywhere a person or a model reads
+ * it: the name in English, because a person reads it on the page, and the
+ * criterion and the label in Portuguese, because those are what the two
+ * engines were measured against.
  *
  * **These three words used to live in three files that no compiler held to the
  * room list**, and that is why they are here. `ROOM_CRITERIA`
@@ -545,7 +547,7 @@ type RoomGeometry = {
  * language model through JSON, which no type reaches.
  */
 type RoomWords = {
-  /** The line under a finished map, capitalised. Read by `ui/messages.ts`. */
+  /** The line under a finished map, capitalised, in English. Read by `ui/messages.ts`. */
   name: string;
   /** The criterion Jev is asked to choose rooms by. Read by `jev/questions.ts`. */
   criterion: string;
@@ -1400,7 +1402,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['bedding'], weight: 1 },
         ],
         words: {
-          name: 'Salão de taverna',
+          name: 'Tavern common room',
           criterion: 'Salão comum da taverna, com mesas, balcão e fregueses',
           label: 'salão de taverna',
         },
@@ -1432,7 +1434,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['bedding'], weight: 1 },
         ],
         words: {
-          name: 'Quarto de taverna',
+          name: 'Tavern guest room',
           criterion: 'Quarto de hóspedes da taverna, com cama',
           label: 'quarto de taverna',
         },
@@ -1461,7 +1463,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['clutter', 'stone'], weight: 2 },
         ],
         words: {
-          name: 'Depósito de taverna',
+          name: 'Tavern storeroom',
           criterion: 'Depósito, porão ou adega da taverna, com barris e mantimentos',
           // `synonyms.ts` steers "porão" and "adega" toward `STOREROOM_WORD` in
           // `local/templates.ts`, and this label has to start with that same
@@ -1509,7 +1511,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['grime'], weight: 1 },
         ],
         words: {
-          name: 'Salão da masmorra',
+          name: 'Dungeon guard hall',
           criterion: 'Sala comum ou da guarda da masmorra',
           label: 'salão da masmorra',
         },
@@ -1579,7 +1581,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['grime'], weight: 1 },
         ],
         words: {
-          name: 'Cela da masmorra',
+          name: 'Dungeon cell',
           criterion: 'Cela ou quarto da masmorra, com catre',
           label: 'cela da masmorra',
         },
@@ -1603,7 +1605,7 @@ export const BUILDING_REGISTRY = {
         ],
         assetTags: ['weapons', 'dungeon', 'stone'],
         words: {
-          name: 'Arsenal da masmorra',
+          name: 'Dungeon armoury',
           criterion: 'Arsenal ou depósito da masmorra, com armas e caixotes',
           label: 'arsenal da masmorra',
         },
@@ -1722,7 +1724,7 @@ export const BUILDING_REGISTRY = {
         // `dungeon` picks the guard room's piece every time.
         assetTags: ['tomb', 'stone'],
         words: {
-          name: 'Cripta da masmorra',
+          name: 'Dungeon crypt',
           // **Measured, and the other three criteria were left alone because
           // measuring said to.** The corpus is 15 sentences — six of a crypt,
           // nine controls of the other three rooms — in `corpus-cripta-jev.md`,
@@ -1803,7 +1805,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['masonry'], weight: 2 },
         ],
         words: {
-          name: 'Forja da ferraria',
+          name: 'Smithy forge',
           criterion: 'A forja da ferraria: a oficina com a fornalha, a bigorna e as ferramentas',
           label: 'forja da ferraria',
         },
@@ -1834,7 +1836,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['storage'], weight: 1 },
         ],
         words: {
-          name: 'Loja da ferraria',
+          name: 'Smithy shopfront',
           criterion: 'A frente de loja da ferraria, com as lâminas à mostra e o balcão de venda',
           label: 'loja da ferraria',
         },
@@ -1896,7 +1898,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['bedding'], weight: 1 },
         ],
         words: {
-          name: 'Nave do templo',
+          name: 'Temple nave',
           // **Pending measurement.** The building question's wording for
           // `temple` was measured and failed — it takes three crypt sentences,
           // one at 0.93 — and the repair the user approved touches the
@@ -1932,7 +1934,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['bedding'], weight: 1 },
         ],
         words: {
-          name: 'Sacristia do templo',
+          name: 'Temple sacristy',
           criterion: 'A sacristia do templo, onde se guardam os paramentos e as alfaias',
           label: 'sacristia do templo',
         },
@@ -1975,7 +1977,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['clutter', 'stone'], weight: 1 },
         ],
         words: {
-          name: 'Sala de leitura da biblioteca',
+          name: 'Library reading room',
           criterion: 'A sala de leitura da biblioteca, com as estantes, o atril e as mesas de estudo',
           // Three words, because four is the ceiling the bench measured and
           // "sala de leitura da biblioteca" is five. The building is carried by
@@ -2006,7 +2008,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['bedding'], weight: 1 },
         ],
         words: {
-          name: 'Arquivo da biblioteca',
+          name: 'Library archive',
           criterion: 'O arquivo da biblioteca: os pergaminhos e os registros guardados nas estantes altas',
           label: 'arquivo da biblioteca',
         },
@@ -2044,7 +2046,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['masonry'], weight: 1 },
         ],
         words: {
-          name: 'Laboratório da torre',
+          name: 'Wizard’s tower laboratory',
           criterion: 'O laboratório da torre, com o círculo de invocação e os instrumentos de estudo',
           label: 'laboratório da torre',
         },
@@ -2065,7 +2067,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['bedding'], weight: 1 },
         ],
         words: {
-          name: 'Observatório da torre',
+          name: 'Wizard’s tower observatory',
           criterion: 'O observatório no alto da torre, com a esfera armilar e as cartas celestes',
           label: 'observatório da torre',
         },
@@ -2125,7 +2127,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['grime'], weight: 2 },
         ],
         words: {
-          name: 'Galeria da mina',
+          name: 'Mine gallery',
           criterion: 'A galeria de escavação da mina, com o carrinho de minério e a rocha cortada',
           label: 'galeria da mina',
         },
@@ -2154,7 +2156,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['grime'], weight: 1 },
         ],
         words: {
-          name: 'Casa de guincho da mina',
+          name: 'Mine winch house',
           criterion: 'A casa de guincho da mina, com o sarilho e o poço por onde sobe o minério',
           label: 'casa de guincho',
         },
@@ -2212,7 +2214,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['iron'], weight: 1 },
         ],
         words: {
-          name: 'Porão do navio',
+          name: 'Ship’s cargo hold',
           criterion: 'O porão de carga do navio, com os canhões e a carga estivada',
           label: 'porão do navio',
         },
@@ -2238,7 +2240,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['bedding'], weight: 1 },
         ],
         words: {
-          name: 'Camarote do navio',
+          name: 'Ship’s captain’s cabin',
           criterion: 'O camarote do capitão, com a mesa de cartas e o beliche à popa',
           label: 'camarote do capitão',
         },
@@ -2297,7 +2299,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['crockery'], weight: 1 },
         ],
         words: {
-          name: 'Destilaria da botica',
+          name: 'Apothecary distillery',
           criterion: 'A destilaria da botica, com o alambique sobre a fornalha e os frascos nas estantes',
           label: 'destilaria da botica',
         },
@@ -2332,7 +2334,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['crockery'], weight: 1 },
         ],
         words: {
-          name: 'Estufa da botica',
+          name: 'Apothecary herb room',
           criterion: 'A estufa da botica, com os canteiros de ervas e os vasos sob o vidro',
           label: 'estufa da botica',
         },
@@ -2383,7 +2385,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['grime'], weight: 1 },
         ],
         words: {
-          name: 'Receptação do antro',
+          name: 'Thieves’ den fence room',
           criterion: 'A sala de receptação do antro, onde a mercadoria roubada é avaliada e guardada',
           label: 'receptação do antro',
         },
@@ -2412,7 +2414,7 @@ export const BUILDING_REGISTRY = {
           { tags: ['bedding'], weight: 1 },
         ],
         words: {
-          name: 'Túnel do antro',
+          name: 'Thieves’ den escape tunnel',
           criterion: 'O túnel de fuga do antro, com o alçapão e a passagem escavada para fora',
           label: 'túnel de fuga',
         },
@@ -2442,7 +2444,7 @@ export function roomsFor(building: Building): readonly RoomKind[] {
 }
 
 /**
- * The Portuguese `building` speaks about `room` in, or nothing.
+ * The words `building` speaks about `room` in, or nothing.
  *
  * Both arguments are bare strings, because the three callers are all answering
  * a pair that arrived from outside the type system — a model's JSON, or the
